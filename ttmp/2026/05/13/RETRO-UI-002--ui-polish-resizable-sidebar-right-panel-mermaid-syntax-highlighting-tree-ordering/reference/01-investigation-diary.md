@@ -98,3 +98,119 @@ Key evidence files and their relevant lines:
 | `vault.go:228–260` | `FileTree()` | No sort call |
 | `index.css:500–506` | `.hljs` overrides | CSS ready for highlighting |
 | `resizable.tsx` | Full file | Unused panel wrapper |
+
+## Step 1: Implemented all five UI polish features
+
+Implemented all five features from the design guide across backend and frontend, with storybook stories backing up the changed components.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Execute the phased implementation plan from the design guide.
+
+**Inferred user intent:** Deliver working, storybook-backed code for all five features.
+
+**Commit (code):** 5a4fbc2 — Sort file tree folders-first alphabetically
+**Commit (code):** 34bb49c — Resizable sidebar and right panel toggle
+**Commit (code):** 3760cfb — Add syntax highlighting and mermaid rendering
+
+### What I did
+
+**Phase 1 — Tree sorting:**
+- Added `sortTree()` recursive function to `backend/internal/vault/vault.go`.
+- Folders first, then files, each sorted case-insensitively alphabetically.
+- Added `TestFileTreeSortedFoldersFirstAlpha` in `vault_test.go`.
+
+**Phase 2 — Resizable left sidebar:**
+- Replaced fixed `w-56` flex layout in `VaultLayout.tsx` with `ResizablePanelGroup` / `ResizablePanel` / `ResizableHandle` from the existing `resizable.tsx` wrapper.
+- Sidebar panel: `defaultSize={20}`, `minSize={12}`, `maxSize={40}`.
+- Added `retro-resize-handle` CSS class for retro-styled drag handles.
+- Removed `w-56` from `Sidebar.tsx` (width now comes from the resizable panel).
+- Added `VaultLayout.stories.tsx` with Default, SidebarCollapsed, NarrowSidebar.
+
+**Phase 3 — Right panel toggle:**
+- Added `rightPanelOpen` and `toggleRightPanel` / `setRightPanelOpen` to `uiSlice.ts`.
+- Added a `panel-right` menubar button in `VaultLayout.tsx`.
+- Made the right `<aside>` in `NotePage.tsx` conditional on `rightPanelOpen`.
+- Added `panel-right` icon to `Icon.tsx` (lucide `PanelRight`).
+
+**Phase 4 — Syntax highlighting:**
+- Added `hljs` post-render effect in `NoteRenderer.tsx`.
+- Uses `hljs.highlightElement()` on `<pre><code>` blocks (skipping mermaid).
+- Skips already-highlighted blocks via `data-highlighted` attribute.
+- Extended `.hljs` retro CSS theme in `index.css` with more token types.
+
+**Phase 5 — Mermaid rendering:**
+- Installed `mermaid@11.15.0` via pnpm.
+- Added mermaid post-render effect in `NoteRenderer.tsx` (runs before hljs).
+- Initializes mermaid with retro-matching `base` theme.
+- Replaces `<pre><code class="language-mermaid">` blocks with rendered SVG.
+- Added mermaid CSS overrides in `index.css`.
+- Updated `NoteRenderer.stories.tsx` with `WithMermaid`, `WithMultipleLanguages`, and `WithMermaidAndCode` stories.
+
+**Phase 6 — Rebuild and restart:**
+- Rebuilt web dist, restaged embedded assets, rebuilt binary, restarted server for `go-go-parc`.
+- Verified tree sorting: folders-first ordering confirmed via `/api/tree`.
+- Verified home page loads and app shell serves.
+
+### Why
+
+All five features address concrete pain points when using the real `go-go-parc` vault.
+
+### What worked
+
+- The `react-resizable-panels` wrapper was already in the codebase, so Phase 2 was a drop-in.
+- Mermaid tree-shakes well into lazy chunks via Vite.
+- The existing `.hljs` CSS overrides needed extension but the pattern was already established.
+
+### What didn't work
+
+Nothing broke during implementation.
+
+### What I learned
+
+- Mermaid `render()` is async; must call it before hljs to avoid hljs trying to highlight mermaid source.
+- `react-resizable-panels` handles panel collapse/expand transitions gracefully.
+- The `highlight.js` full bundle is ~1.9 MB in the main chunk; selective language imports would reduce this, but it's acceptable for now.
+
+### What was tricky to build
+
+- The mermaid + hljs ordering: mermaid must consume its `<code class="language-mermaid">` blocks first, or hljs will try to highlight them as code. Solved by running the mermaid effect before the hljs effect (React effects run in order).
+- The mermaid `render()` API returns a promise; replacing DOM nodes inside React's `dangerouslySetInnerHTML` container is safe because React only reconciles on the next render cycle, not on DOM mutations.
+
+### What warrants a second pair of eyes
+
+- The mermaid DOM replacement (`pre.replaceWith(container)`) — verify React doesn't clobber it on re-renders (e.g., when `resolvedHtml` changes).
+- The hljs `data-highlighted` guard — confirm it prevents double-highlighting on re-renders.
+
+### What should be done in the future
+
+- Use selective highlight.js language imports to reduce bundle size.
+- Add a `Copy code` button to code blocks.
+- Add a `Full screen` toggle for mermaid diagrams.
+- Consider server-side highlighting via goldmark-highlighting if bundle size becomes an issue.
+
+### Code review instructions
+
+Review:
+- `backend/internal/vault/vault.go` — `sortTree()`
+- `backend/internal/vault/vault_test.go` — tree sorting test
+- `web/src/components/pages/VaultLayout/VaultLayout.tsx` — resizable panels
+- `web/src/components/organisms/Sidebar/Sidebar.tsx` — removed w-56
+- `web/src/store/uiSlice.ts` — rightPanelOpen
+- `web/src/components/pages/NotePage/NotePage.tsx` — conditional right panel
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` — hljs + mermaid effects
+- `web/src/index.css` — retro resize handle, hljs extensions, mermaid styling
+- `web/src/components/atoms/Icon/Icon.tsx` — panel-right icon
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.stories.tsx` — new stories
+- `web/src/components/pages/VaultLayout/VaultLayout.stories.tsx` — new story
+
+Validate:
+```bash
+cd backend && go test ./...
+pnpm --dir web check
+pnpm --dir web build
+curl -fsS http://127.0.0.1:8080/api/tree | python3 -c '...' # verify folders-first
+open http://127.0.0.1:8080/
+```
