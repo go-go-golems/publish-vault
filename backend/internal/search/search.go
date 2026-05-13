@@ -3,11 +3,13 @@ package search
 
 import (
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
+	bq "github.com/blevesearch/bleve/v2/search/query"
 
 	"retro-obsidian-publish/backend/internal/vault"
 )
@@ -104,6 +106,7 @@ func (si *Index) Delete(slug string) error {
 }
 
 // Search performs a full-text query and returns ranked results.
+// Uses fuzzy matching for partial words and prefix matching for short queries.
 func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -112,8 +115,35 @@ func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 		limit = 20
 	}
 
-	q := bleve.NewQueryStringQuery(query)
-	req := bleve.NewSearchRequestOptions(q, limit, 0, false)
+	// Tokenize the query into words
+	words := tokenizeQuery(query)
+	if len(words) == 0 {
+		return []SearchResult{}, nil
+	}
+
+	var bleveQuery bq.Query
+
+	if len(words) == 1 && len(words[0]) <= 3 {
+		// Short single word: use prefix wildcard (e.g., "goj" -> "goj*")
+		bleveQuery = bleve.NewPrefixQuery(words[0])
+	} else {
+		// Multi-word or longer single word: use fuzzy match queries
+		// MatchQuery with Fuzziness handles partial words automatically
+		var disjuncts []bq.Query
+		for _, w := range words {
+			mq := bleve.NewMatchQuery(w)
+			mq.SetFuzziness(1)
+			disjuncts = append(disjuncts, mq)
+		}
+		if len(disjuncts) == 1 {
+			bleveQuery = disjuncts[0]
+		} else {
+			// All words must match (AND)
+			bleveQuery = bleve.NewConjunctionQuery(disjuncts...)
+		}
+	}
+
+	req := bleve.NewSearchRequestOptions(bleveQuery, limit, 0, false)
 	req.Fields = []string{"title", "excerpt", "tags"}
 	req.Highlight = bleve.NewHighlight()
 
@@ -140,6 +170,21 @@ func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 		hits = append(hits, sr)
 	}
 	return hits, nil
+}
+
+// tokenizeQuery splits a search query into lowercase words.
+func tokenizeQuery(q string) []string {
+	q = strings.TrimSpace(strings.ToLower(q))
+	if q == "" {
+		return nil
+	}
+	var tokens []string
+	for _, w := range strings.Fields(q) {
+		if w != "" {
+			tokens = append(tokens, w)
+		}
+	}
+	return tokens
 }
 
 // buildMapping creates the bleve index mapping with English analyzer.
