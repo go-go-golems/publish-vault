@@ -207,7 +207,8 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 	return "", false
 }
 
-// rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs.
+// rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs
+// and display text replaced with target note titles.
 // This must be called after buildWikiLinkIndex so links point to actual notes.
 func (v *Vault) rebuildHTML() {
 	for _, note := range v.notes {
@@ -216,6 +217,12 @@ func (v *Vault) rebuildHTML() {
 				return resolved
 			}
 			return target
+		})
+		note.HTML = parser.ReplaceWikiLinkDisplay(note.HTML, func(slug string) string {
+			if n, ok := v.notes[slug]; ok {
+				return n.Title
+			}
+			return ""
 		})
 	}
 }

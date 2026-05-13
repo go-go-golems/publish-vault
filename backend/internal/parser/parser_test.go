@@ -103,6 +103,39 @@ func TestCalloutWithTitle(t *testing.T) {
 	}
 }
 
+func TestWikiLinkDataRaw(t *testing.T) {
+	parsed, err := Parse([]byte("# Test\n\nSee [[Tribal/App-Auth]] and [[Fundamentals/Access|Custom Alias]].\n"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !contains(parsed.HTML, `data-raw="Tribal/App-Auth"`) {
+		t.Fatalf("HTML should contain data-raw for first link, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `data-raw="Custom Alias"`) {
+		t.Fatalf("HTML should contain data-raw for aliased link, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, ">Tribal/App-Auth</a>") {
+		t.Fatalf("HTML should display raw target for first link, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, ">Custom Alias</a>") {
+		t.Fatalf("HTML should display alias for second link, got: %s", parsed.HTML)
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+func TestWikiLinkDataRawRealFormat(t *testing.T) {
+	src := []byte("# Test\n\nSee [[Fundamentals/access-control-models]] here.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !contains(parsed.HTML, `data-raw="Fundamentals/access-control-models"`) {
+		t.Fatalf("HTML should contain data-raw, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, ">Fundamentals/access-control-models</a>") {
+		t.Fatalf("HTML should display raw target, got: %s", parsed.HTML)
+	}
 }

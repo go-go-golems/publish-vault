@@ -153,13 +153,13 @@ func replaceWikiLinks(src []byte) []byte {
 			display = target
 		}
 		if isEmbed {
-			return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `"></div>`)
+			return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
 		}
 		href := "/note/" + slug
 		if heading != "" {
 			href += "#" + slugify(heading)
 		}
-		return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `">` + display + `</a>`)
+		return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + display + `">` + display + `</a>`)
 	})
 }
 
@@ -177,6 +177,7 @@ func slugify(s string) string {
 var (
 	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
 	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"]+)"`)
+	dataRawRe    = regexp.MustCompile(`data-raw="([^"]*)"`)
 )
 
 func ReplaceWikiLinksString(html string, resolver func(string) string) string {
@@ -195,6 +196,35 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 		}
 		resolved := resolver(sub[1])
 		return `href="/note/` + resolved + `"`
+	})
+	return html
+}
+
+// ReplaceWikiLinkDisplay replaces the display text of wiki links when the
+// resolved target differs from the raw text. The titleResolver maps a
+// resolved slug to its note title (or "" if unknown).
+func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) string {
+	// Match <a ... data-raw="X" ...>Y</a> — replace Y with the resolved title
+	// We do this by finding each wiki-link anchor and replacing its content.
+	wikiLinkRe := regexp.MustCompile(`<a([^>]*?)class="wiki-link"([^>]*?)data-raw="([^"]*?)"([^>]*?)>([^<]*?)</a>`)
+	html = wikiLinkRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := wikiLinkRe.FindStringSubmatch(match)
+		if len(sub) < 6 {
+			return match
+		}
+		rawDisplay := sub[5]
+		// Extract data-target to get the resolved slug
+		targetSub := dataTargetRe.FindStringSubmatch(match)
+		if len(targetSub) < 2 {
+			return match
+		}
+		title := titleResolver(targetSub[1])
+		if title == "" || title == rawDisplay {
+			return match
+		}
+		// Rebuild the anchor with the new display text
+		prefix := sub[1] + `class="wiki-link"` + sub[2] + `data-raw="` + sub[3] + `"` + sub[4] + ">"
+		return prefix + title + "</a>"
 	})
 	return html
 }
