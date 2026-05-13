@@ -500,10 +500,37 @@
   /* ── Highlight.js retro overrides ── */
   .hljs { background: var(--color-ink) !important; color: var(--color-paper) !important; }
   .hljs-keyword, .hljs-selector-tag { color: #aaddff; font-weight: bold; }
-  .hljs-string, .hljs-attr { color: #aaffaa; }
-  .hljs-comment { color: #888; font-style: italic; }
+  .hljs-string, .hljs-attr, .hljs-template-variable { color: #aaffaa; }
+  .hljs-comment, .hljs-doctag { color: #888; font-style: italic; }
   .hljs-number, .hljs-literal { color: #ffddaa; }
-  .hljs-title, .hljs-name { color: #ffaaaa; }
+  .hljs-title, .hljs-name, .hljs-function { color: #ffaaaa; }
+  .hljs-type, .hljs-built_in { color: #ddaaff; }
+  .hljs-variable, .hljs-params { color: #faf8f4; }
+  .hljs-meta { color: #aaa; }
+  .hljs-symbol, .hljs-bullet { color: #ffddaa; }
+  .hljs-addition { color: #aaffaa; background: rgba(0,255,0,0.05); }
+  .hljs-deletion { color: #ffaaaa; background: rgba(255,0,0,0.05); }
+  .hljs-link { color: #aaddff; text-decoration: underline; }
+
+  /* ── Mermaid SVG retro styling ── */
+  .mermaid-svg svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid-svg .node rect,
+  .mermaid-svg .node circle,
+  .mermaid-svg .node polygon {
+    stroke: var(--color-ink) !important;
+    stroke-width: 1px !important;
+  }
+  .mermaid-svg .edgePath .path {
+    stroke: var(--color-ink) !important;
+    stroke-width: 1px !important;
+  }
+  .mermaid-svg .edgeLabel {
+    font-size: 11px !important;
+    font-family: system-ui, Chicago, sans-serif !important;
+  }
 
   /* ── Animations ── */
   @keyframes retro-blink {
