@@ -1,0 +1,104 @@
+// Package watcher monitors the vault directory for file changes and triggers re-indexing.
+package watcher
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+
+	"retro-obsidian-publish/backend/internal/vault"
+)
+
+// VaultWatcher wraps fsnotify and debounces rapid file events.
+type VaultWatcher struct {
+	vault   *vault.Vault
+	watcher *fsnotify.Watcher
+	done    chan struct{}
+}
+
+// New creates and starts a VaultWatcher for the given vault.
+func New(v *vault.Vault) (*VaultWatcher, error) {
+	fw, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+
+	vw := &VaultWatcher{
+		vault:   v,
+		watcher: fw,
+		done:    make(chan struct{}),
+	}
+
+	// Watch the vault root and all subdirectories
+	if err := filepath.Walk(v.Root(), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return fw.Add(path)
+		}
+		return nil
+	}); err != nil {
+		fw.Close()
+		return nil, err
+	}
+
+	go vw.loop()
+	return vw, nil
+}
+
+// Close stops the watcher.
+func (vw *VaultWatcher) Close() {
+	close(vw.done)
+	vw.watcher.Close()
+}
+
+// loop processes fsnotify events with debouncing.
+func (vw *VaultWatcher) loop() {
+	pending := map[string]fsnotify.Op{}
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-vw.done:
+			return
+
+		case event, ok := <-vw.watcher.Events:
+			if !ok {
+				return
+			}
+			if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
+				continue
+			}
+			pending[event.Name] = event.Op
+
+		case err, ok := <-vw.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("watcher error: %v", err)
+
+		case <-ticker.C:
+			if len(pending) == 0 {
+				continue
+			}
+			for path, op := range pending {
+				if op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+					log.Printf("vault: removing %s", path)
+					vw.vault.RemoveNote(path)
+				} else {
+					log.Printf("vault: reloading %s", path)
+					if err := vw.vault.ReloadNote(path); err != nil {
+						log.Printf("vault: reload error: %v", err)
+					}
+				}
+			}
+			pending = map[string]fsnotify.Op{}
+		}
+	}
+}

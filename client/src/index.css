@@ -1,0 +1,526 @@
+/*
+ * DESIGN PHILOSOPHY: Retro System 1 (Macintosh 1984)
+ * =====================================================
+ * Movement: Early Macintosh / Chicago / Susan Kare pixel aesthetic
+ * Core Principles:
+ *   1. Monochrome foundation — near-black ink on warm paper-white
+ *   2. Chicago-style bitmap-inspired typography (system-ui fallback)
+ *   3. Hard 1px borders, no border-radius (square windows)
+ *   4. Subtle colour accents ONLY for interactive/functional UI elements
+ *      (links = deep blue, active = deep blue, destructive = deep red)
+ * Color Philosophy:
+ *   - Background: warm off-white #f0ede8 (aged paper)
+ *   - Ink: near-black #1a1a1a
+ *   - Accent blue: #0000cc (classic Mac link blue)
+ *   - Accent red: #cc0000 (destructive)
+ *   - Muted: #888 (secondary text, borders)
+ *   - Selection: #000 bg / #fff text (inverted)
+ * Layout Paradigm: Asymmetric sidebar + content pane, fixed chrome
+ * Signature Elements:
+ *   - Inset box shadows (sunken panels)
+ *   - Dithered/hatched pattern backgrounds for inactive areas
+ *   - Pixel-crisp 1px borders everywhere
+ * Typography: Chicago (system-ui), Monaco (monospace), no web fonts
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ── Design Tokens ─────────────────────────────────────────────── */
+@theme inline {
+  /* Radius — zero for retro square look */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius: 0px;
+
+  /* Color mappings */
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-popover:            var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-destructive:        var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-ring:               var(--ring);
+  --color-sidebar:            var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary:    var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:     var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:     var(--sidebar-border);
+  --color-sidebar-ring:       var(--sidebar-ring);
+
+  /* Retro-specific tokens */
+  --color-ink:          #1a1a1a;
+  --color-paper:        #f0ede8;
+  --color-link:         #0000cc;
+  --color-link-visited: #551a8b;
+  --color-selection-bg: #1a1a1a;
+  --color-selection-fg: #f0ede8;
+  --color-panel:        #e8e4de;
+  --color-panel-dark:   #d0ccc6;
+  --color-chrome:       #c8c4be;
+  --color-active:       #0000cc;
+  --color-destructive-accent: #cc0000;
+  --color-tag:          #005500;
+}
+
+:root {
+  --background:           #f0ede8;
+  --foreground:           #1a1a1a;
+  --card:                 #e8e4de;
+  --card-foreground:      #1a1a1a;
+  --popover:              #f0ede8;
+  --popover-foreground:   #1a1a1a;
+  --primary:              #1a1a1a;
+  --primary-foreground:   #f0ede8;
+  --secondary:            #e8e4de;
+  --secondary-foreground: #1a1a1a;
+  --muted:                #d8d4ce;
+  --muted-foreground:     #666660;
+  --accent:               #0000cc;
+  --accent-foreground:    #f0ede8;
+  --destructive:          #cc0000;
+  --destructive-foreground: #f0ede8;
+  --border:               #1a1a1a;
+  --input:                #f0ede8;
+  --ring:                 #0000cc;
+  --sidebar:              #e8e4de;
+  --sidebar-foreground:   #1a1a1a;
+  --sidebar-primary:      #1a1a1a;
+  --sidebar-primary-foreground: #f0ede8;
+  --sidebar-accent:       #d8d4ce;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border:       #1a1a1a;
+  --sidebar-ring:         #0000cc;
+}
+
+/* ── Base Styles ───────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 14px;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    image-rendering: pixelated;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Chicago", "Charcoal", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  /* Monospace — Monaco/Courier style */
+  code, kbd, pre, samp {
+    font-family: "Monaco", "Courier New", "Lucida Console", monospace;
+    font-size: 12px;
+  }
+
+  /* Selection */
+  ::selection {
+    background: var(--color-selection-bg);
+    color: var(--color-selection-fg);
+  }
+
+  /* Links — accent blue only */
+  a {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  a:visited {
+    color: var(--color-link-visited);
+  }
+  a:hover {
+    text-decoration: none;
+    background: var(--color-link);
+    color: #fff;
+  }
+
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Chicago", "Charcoal", system-ui, sans-serif;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+
+  /* Scrollbar — thin, retro */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: var(--color-panel); border-left: 1px solid var(--color-ink); }
+  ::-webkit-scrollbar-thumb { background: var(--color-ink); border: 2px solid var(--color-panel); }
+  ::-webkit-scrollbar-thumb:hover { background: #333; }
+  ::-webkit-scrollbar-corner { background: var(--color-panel); }
+
+  /* Cursor */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* ── Component Utilities ───────────────────────────────────────── */
+@layer components {
+  /* Container */
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .container { padding-left: 1.5rem; padding-right: 1.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .container { padding-left: 2rem; padding-right: 2rem; max-width: 1280px; }
+  }
+
+  .flex { min-height: 0; min-width: 0; }
+
+  /* ── Retro Window Chrome ── */
+  .retro-window {
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+    box-shadow: 2px 2px 0 var(--color-ink);
+  }
+
+  .retro-window-title {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 3px 8px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+
+  /* Title bar stripes (classic Mac drag lines) */
+  .retro-titlebar-stripes {
+    flex: 1;
+    height: 8px;
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0px,
+      transparent 1px,
+      var(--color-paper) 1px,
+      var(--color-paper) 3px
+    );
+    opacity: 0.3;
+  }
+
+  /* ── Inset / Sunken Panel ── */
+  .retro-inset {
+    border: 1px solid var(--color-ink);
+    box-shadow: inset 1px 1px 0 rgba(0,0,0,0.3);
+    background: var(--color-paper);
+  }
+
+  /* ── Raised Button ── */
+  .retro-btn {
+    border: 1px solid var(--color-ink);
+    background: var(--color-panel);
+    box-shadow: 1px 1px 0 var(--color-ink);
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    transition: box-shadow 80ms, transform 80ms;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .retro-btn:hover {
+    background: var(--color-chrome);
+  }
+  .retro-btn:active {
+    box-shadow: none;
+    transform: translate(1px, 1px);
+  }
+  .retro-btn-primary {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    box-shadow: 1px 1px 0 #555;
+  }
+  .retro-btn-primary:hover {
+    background: #333;
+    color: var(--color-paper);
+  }
+
+  /* ── Hatch pattern (inactive/disabled areas) ── */
+  .retro-hatch {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.06) 2px,
+      rgba(0,0,0,0.06) 4px
+    );
+  }
+
+  /* ── Menu Bar ── */
+  .retro-menubar {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-bottom: 1px solid var(--color-ink);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    height: 28px;
+    gap: 0;
+    user-select: none;
+  }
+
+  .retro-menubar-item {
+    padding: 0 10px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .retro-menubar-item:hover {
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+
+  .retro-menubar-separator {
+    width: 1px;
+    height: 16px;
+    background: rgba(255,255,255,0.25);
+    margin: 0 4px;
+  }
+
+  /* ── Sidebar tree item ── */
+  .retro-tree-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .retro-tree-item:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .retro-tree-item.active {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-weight: 700;
+  }
+
+  /* ── Tag pill ── */
+  .retro-tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-tag);
+    color: var(--color-tag);
+    font-size: 11px;
+    padding: 0 5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    text-decoration: none;
+    background: transparent;
+  }
+  .retro-tag:hover {
+    background: var(--color-tag);
+    color: #fff;
+  }
+
+  /* ── Search input ── */
+  .retro-search {
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    width: 100%;
+    outline: none;
+    box-shadow: inset 1px 1px 0 rgba(0,0,0,0.15);
+  }
+  .retro-search:focus {
+    outline: 2px solid var(--color-active);
+    outline-offset: -1px;
+  }
+
+  /* ── Wiki link ── */
+  a.wiki-link {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-style: normal;
+  }
+  a.wiki-link:hover {
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
+  a.wiki-link.broken {
+    color: var(--color-destructive-accent);
+    text-decoration: underline dotted;
+  }
+
+  /* ── Note content prose ── */
+  .note-prose {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-ink);
+    max-width: 72ch;
+  }
+  .note-prose h1 { font-size: 1.5rem; margin: 0 0 0.6em; border-bottom: 1px solid var(--color-ink); padding-bottom: 4px; }
+  .note-prose h2 { font-size: 1.25rem; margin: 1.4em 0 0.4em; border-bottom: 1px dotted var(--color-chrome); padding-bottom: 2px; }
+  .note-prose h3 { font-size: 1.05rem; margin: 1em 0 0.3em; }
+  .note-prose h4 { font-size: 0.95rem; margin: 0.8em 0 0.2em; font-style: italic; }
+  .note-prose p  { margin: 0 0 0.8em; }
+  .note-prose ul, .note-prose ol { margin: 0 0 0.8em 1.4em; }
+  .note-prose li { margin: 0.2em 0; }
+  .note-prose blockquote {
+    border-left: 3px solid var(--color-ink);
+    margin: 0.8em 0;
+    padding: 4px 12px;
+    background: var(--color-panel);
+    font-style: italic;
+  }
+  .note-prose pre {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 0.8em 0;
+    border: 1px solid var(--color-ink);
+  }
+  .note-prose code {
+    background: var(--color-panel);
+    border: 1px solid var(--color-chrome);
+    padding: 1px 4px;
+    font-size: 12px;
+  }
+  .note-prose pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--color-paper);
+  }
+  .note-prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+    font-size: 12px;
+  }
+  .note-prose th, .note-prose td {
+    border: 1px solid var(--color-ink);
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .note-prose th { background: var(--color-ink); color: var(--color-paper); font-weight: 700; }
+  .note-prose tr:nth-child(even) td { background: var(--color-panel); }
+  .note-prose hr { border: none; border-top: 1px solid var(--color-ink); margin: 1.2em 0; }
+  .note-prose img { max-width: 100%; border: 1px solid var(--color-ink); }
+  .note-prose a { color: var(--color-link); }
+  .note-prose a:hover { background: var(--color-link); color: #fff; text-decoration: none; }
+
+  /* ── Scrollable area ── */
+  .retro-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ── Divider ── */
+  .retro-divider {
+    border: none;
+    border-top: 1px solid var(--color-ink);
+    margin: 0;
+  }
+
+  /* ── Badge ── */
+  .retro-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-ink);
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Graph canvas ── */
+  .retro-graph-canvas {
+    background: var(--color-paper);
+    border: 1px solid var(--color-ink);
+  }
+
+  /* ── Highlight.js retro overrides ── */
+  .hljs { background: var(--color-ink) !important; color: var(--color-paper) !important; }
+  .hljs-keyword, .hljs-selector-tag { color: #aaddff; font-weight: bold; }
+  .hljs-string, .hljs-attr { color: #aaffaa; }
+  .hljs-comment { color: #888; font-style: italic; }
+  .hljs-number, .hljs-literal { color: #ffddaa; }
+  .hljs-title, .hljs-name { color: #ffaaaa; }
+
+  /* ── Animations ── */
+  @keyframes retro-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .retro-cursor::after {
+    content: "▋";
+    animation: retro-blink 1s step-end infinite;
+    color: var(--color-ink);
+  }
+
+  @keyframes retro-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .retro-fade-in {
+    animation: retro-fade-in 120ms ease-out forwards;
+  }
+}
