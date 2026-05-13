@@ -139,3 +139,31 @@ func TestWikiLinkDataRawRealFormat(t *testing.T) {
 		t.Fatalf("HTML should display raw target, got: %s", parsed.HTML)
 	}
 }
+
+func TestCollapsibleCallout(t *testing.T) {
+	src := []byte("# Test\n\n> [!warning]- Collapsed Warning\n> Hidden body.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !contains(parsed.HTML, `callout-collapsible`) {
+		t.Fatalf("HTML should contain callout-collapsible class, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `callout-toggle`) {
+		t.Fatalf("HTML should contain callout-toggle, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `style="display:none"`) {
+		t.Fatalf("Collapsed body should be hidden, got: %s", parsed.HTML)
+	}
+}
+
+func TestOpenCallout(t *testing.T) {
+	src := []byte("# Test\n\n> [!tip]+ Always Open\n> Visible body.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if contains(parsed.HTML, `callout-collapsible`) {
+		t.Fatalf("[!type]+ should NOT be collapsible, got: %s", parsed.HTML)
+	}
+}

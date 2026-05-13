@@ -233,19 +233,18 @@ func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) stri
 // renderCallouts transforms Obsidian-style callout blockquotes into styled divs.
 // Goldmark renders `> [!type] Title` as `<blockquote><p>[!type] Title<br/>...</p></blockquote>`.
 // This function detects that pattern and replaces it with a styled callout div.
-var calloutRe = regexp.MustCompile(`<blockquote>\s*<p>\[!(\w+)\]([\s\S]*?)</blockquote>`)
+var calloutRe = regexp.MustCompile(`<blockquote>\s*<p>\[!(\w+)\]([+-])?([\s\S]*?)</blockquote>`)
 
 func renderCallouts(html string) string {
 	return calloutRe.ReplaceAllStringFunc(html, func(match string) string {
 		sub := calloutRe.FindStringSubmatch(match)
-		if len(sub) < 3 {
+		if len(sub) < 4 {
 			return match
 		}
 		calloutType := strings.ToLower(sub[1])
-		// Extract content: everything between [!type] and </blockquote>
-		// The content may contain multiple <p> tags
-		content := sub[2]
-		// Remove trailing </p> if present (goldmark wraps in <p> for single-paragraph)
+		foldChar := sub[2] // "+" = default open, "-" = default closed, "" = default open
+		content := sub[3]
+		// Remove trailing </p> if present
 		content = strings.TrimSuffix(content, "</p>")
 		content = strings.TrimSuffix(content, "</p>\n")
 		content = strings.TrimSpace(content)
@@ -291,9 +290,17 @@ func renderCallouts(html string) string {
 		}
 
 		var b strings.Builder
-		b.WriteString(`<div class="callout callout-` + calloutType + `">`)
+		collapsible := foldChar == "-"
+		b.WriteString(`<div class="callout callout-` + calloutType)
+		if collapsible {
+			b.WriteString(` callout-collapsible`)
+		}
+		b.WriteString(`">`)
 		b.WriteString(`<div class="callout-title">`)
 		b.WriteString(`<span class="callout-icon">` + calloutIcon(calloutType) + `</span> `)
+		if collapsible {
+			b.WriteString(`<span class="callout-toggle">\u25BC</span> `)
+		}
 		if title != "" {
 			b.WriteString(title)
 		} else {
@@ -301,7 +308,11 @@ func renderCallouts(html string) string {
 		}
 		b.WriteString(`</div>`)
 		if body != "" {
-			b.WriteString(`<div class="callout-body">`)
+			b.WriteString(`<div class="callout-body"`)
+			if collapsible {
+				b.WriteString(` style="display:none"`)
+			}
+			b.WriteString(">\n")
 			b.WriteString(body)
 			b.WriteString(`</div>`)
 		}

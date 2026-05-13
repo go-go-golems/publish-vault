@@ -570,6 +570,22 @@
   .callout-info { border-color: #555; }
   .callout-info .callout-title { background: #555; }
 
+  /* ── Collapsible callouts ── */
+  .callout-collapsible .callout-title {
+    cursor: pointer;
+  }
+  .callout-collapsible .callout-title:hover {
+    opacity: 0.85;
+  }
+  .callout-toggle {
+    font-size: 10px;
+    display: inline-block;
+    transition: transform 0.15s;
+  }
+  .callout-collapsible .callout-title:hover .callout-toggle {
+    transform: translateX(1px);
+  }
+
   /* ── Highlight.js retro overrides ── */
   .hljs { background: var(--color-ink) !important; color: var(--color-paper) !important; }
   .hljs-keyword, .hljs-selector-tag { color: #aaddff; font-weight: bold; }

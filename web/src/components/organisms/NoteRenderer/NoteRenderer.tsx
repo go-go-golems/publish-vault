@@ -46,6 +46,21 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
   const handleClick = useCallback(
     (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+
+      // Collapsible callout toggle
+      const titleEl = target.closest(".callout-collapsible .callout-title");
+      if (titleEl) {
+        const callout = titleEl.closest(".callout");
+        const body = callout?.querySelector(".callout-body");
+        const toggle = titleEl.querySelector(".callout-toggle");
+        if (body instanceof HTMLElement) {
+          const isHidden = body.style.display === "none";
+          body.style.display = isHidden ? "" : "none";
+          if (toggle) toggle.textContent = isHidden ? "\u25BC" : "\u25B6";
+        }
+        return;
+      }
+
       const anchor = target.closest("a");
       if (!anchor) return;
 
