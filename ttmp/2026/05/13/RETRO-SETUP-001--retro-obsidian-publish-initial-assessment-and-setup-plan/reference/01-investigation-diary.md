@@ -1099,3 +1099,126 @@ Validate and run the specific route:
 curl -fsS http://127.0.0.1:8080/api/notes/research/institute/guidelines/code-review-with-go-minitrace | jq .backlinks
 open http://127.0.0.1:8080/note/research/institute/guidelines/code-review-with-go-minitrace
 ```
+
+## Step 9: Fixed remaining null collection crashes and dynamic home-note selection
+
+Real `go-go-parc` data exposed two more assumptions from the demo-vault era. First, `/` and the titlebar home button assumed the vault had a note with slug `index`, but `go-go-parc` uses `projects/00-project-index-repos-and-concepts` as its index-like note. Second, more API collection fields could serialize as `null`, including graph `edges` and note `frontmatter`, which crashed graph/frontmatter rendering.
+
+I fixed the frontend home route to choose an index-like note from the actual note list and normalized/guarded the problematic collection fields so the UI can render real vault data without null collection crashes.
+
+### Prompt Context
+
+**User prompt (verbatim):** "XHRGET
+http://127.0.0.1:8080/api/notes/index
+[HTTP/1.1 404 Not Found 0ms]
+
+
+
+can we address that?"
+
+Follow-up error context from user:
+
+```text
+Uncaught TypeError: can't access property "map", a.edges is null
+...
+Uncaught TypeError: can't convert null to object
+...
+Isn't protobuf supposed to help us here? did we already introduce protobuf?
+```
+
+**Assistant interpretation:** The real vault has no `index` slug, graph payloads can have `edges: null`, and some notes can have `frontmatter: null`. The app should choose a real home note and normalize JSON collection/object fields.
+
+**Inferred user intent:** Make the UI robust against realistic backend payloads and clarify whether protobuf/schema generation is already in place.
+
+**Commit (code):** pending at time of diary entry.
+
+### What I did
+
+- Updated `web/src/App.tsx`:
+  - `/` now loads the note list and chooses a home slug dynamically.
+  - Selection preference is exact `index`, then slug ending `/index`, title/path index matches, any index-like note, then first note.
+  - Empty note lists show a clear empty state.
+- Updated `web/src/components/pages/VaultLayout/VaultLayout.tsx`:
+  - titlebar home button now navigates to `/` instead of hard-coding `/note/index`.
+- Updated backend JSON normalization:
+  - `vault.loadNote` now initializes `frontmatter` to `{}` when nil.
+  - `vault.loadNote` now initializes `tags` and `wikiLinks` to empty slices when nil.
+  - `api.getGraph` now initializes `edges` to an empty slice.
+  - graph node and note list tags are normalized to empty slices.
+- Updated frontend defensive guards:
+  - `FrontmatterPanel` treats nullish frontmatter as `{}` and tags as `[]`.
+  - `GraphView` treats nullish nodes/edges as `[]`.
+- Extended tests:
+  - vault test now verifies `backlinks`, `tags`, and `wikiLinks` encode as `[]`, and `frontmatter` encodes as `{}`.
+  - API graph test verifies empty `edges` encodes as `[]`, not `null`.
+- Rebuilt web assets, restaged embedded assets, rebuilt the binary, and restarted the `go-go-parc` server.
+
+### Why
+
+TypeScript interfaces documented arrays/objects, but the Go JSON encoder emitted `null` for nil slices/maps. Protobuf can help by making schemas explicit, but this project does not currently use protobuf. The immediate fix is to normalize backend JSON and add frontend guards where external/older payloads might still violate the contract.
+
+### What worked
+
+Validation passed:
+
+```bash
+cd backend && go test ./...
+pnpm --dir web check
+pnpm --dir web build
+cd backend && BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+```
+
+Runtime checks on the restarted server showed normalized shapes:
+
+```text
+/api/graph -> edges: list len 0, nodes: list len 513
+reported note -> frontmatter: dict, backlinks: list, tags: list, wikiLinks: list
+```
+
+### What didn't work
+
+The app still had several demo-vault assumptions:
+
+- `HomeRedirect` always requested `api/notes/index`.
+- The titlebar home button always navigated to `index`.
+- Client components trusted TypeScript types even though backend JSON could return `null` for arrays/maps.
+
+### What I learned
+
+The current JSON API needs contract normalization tests. Go nil slices/maps and TypeScript arrays/objects are a common sharp edge. Protobuf was not introduced in this repo, so there is no generated schema boundary yet.
+
+### What was tricky to build
+
+The home-note fix needed to be generic because not every vault has a canonical `Index.md` at root. The heuristic now picks the best index-like note but still falls back to the first note so `/` always renders something useful for non-empty vaults.
+
+### What warrants a second pair of eyes
+
+- Review the home-note heuristic in `web/src/App.tsx`; a future explicit backend `/api/home` or config setting may be better.
+- Review graph edges: the current `go-go-parc` graph returned zero edges, likely because wiki-link targets are not normalized the same way as slugs. That is separate from the null crash.
+- Decide whether to introduce protobuf or another schema/codegen layer for Go/TypeScript JSON contracts.
+
+### What should be done in the future
+
+- Add a `/api/meta` or `/api/home` endpoint for explicit vault home note selection.
+- Normalize wiki-link target slugs so graph edges are populated for real vaults.
+- Consider protobuf/schema-first payloads if this API grows.
+
+### Code review instructions
+
+Review:
+
+- `web/src/App.tsx`
+- `web/src/components/pages/VaultLayout/VaultLayout.tsx`
+- `web/src/components/molecules/FrontmatterPanel/FrontmatterPanel.tsx`
+- `web/src/components/organisms/GraphView/GraphView.tsx`
+- `backend/internal/vault/vault.go`
+- `backend/internal/api/api.go`
+
+Validate reported routes after hard refresh:
+
+```bash
+open http://127.0.0.1:8080/
+open http://127.0.0.1:8080/note/research/institute/department-report-april-2026
+open http://127.0.0.1:8080/note/projects/2026/05/03/article-postmortem-jellyfin-truenas-nfs-power-outage
+```

@@ -74,3 +74,14 @@ Fixed null backlinks crash by serializing empty backlinks as [] and defensively 
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — Backlinks now reset to empty slices
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/pages/NotePage/NotePage.tsx — Defensive backlink rendering
 
+
+## 2026-05-13
+
+Fixed real-vault home selection and normalized null collection/object payloads for graph/frontmatter/note arrays; clarified protobuf is not yet used.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/api/api.go — Graph edges and tag arrays normalized
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — Note map/slice fields normalized
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/App.tsx — Dynamic home note selection
+

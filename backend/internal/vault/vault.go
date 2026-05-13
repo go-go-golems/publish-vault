@@ -118,7 +118,16 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		title = strings.TrimSuffix(info.Name(), ".md")
 	}
 
-	var wikiRefs []WikiLinkRef
+	frontmatter := parsed.Frontmatter
+	if frontmatter == nil {
+		frontmatter = map[string]interface{}{}
+	}
+	tags := parsed.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
+	wikiRefs := []WikiLinkRef{}
 	for _, wl := range parsed.WikiLinks {
 		wikiRefs = append(wikiRefs, WikiLinkRef{
 			Target:  wl.Target,
@@ -132,8 +141,8 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Slug:        slug,
 		Title:       title,
 		Path:        relPath,
-		Frontmatter: parsed.Frontmatter,
-		Tags:        parsed.Tags,
+		Frontmatter: frontmatter,
+		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
 		WikiLinks:   wikiRefs,

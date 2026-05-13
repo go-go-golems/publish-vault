@@ -61,7 +61,7 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 		items = append(items, NoteListItem{
 			Slug:    n.Slug,
 			Title:   n.Title,
-			Tags:    n.Tags,
+			Tags:    nonNilStrings(n.Tags),
 			Excerpt: n.Excerpt,
 			ModTime: n.ModTime.Format("2006-01-02"),
 			Path:    n.Path,
@@ -161,13 +161,13 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nodes := make([]GraphNode, 0, len(notes))
-	var edges []GraphEdge
+	edges := []GraphEdge{}
 
 	for _, n := range notes {
 		nodes = append(nodes, GraphNode{
 			ID:    n.Slug,
 			Title: n.Title,
-			Tags:  n.Tags,
+			Tags:  nonNilStrings(n.Tags),
 		})
 		for _, wl := range n.WikiLinks {
 			if slugSet[wl.Target] {
@@ -188,4 +188,11 @@ func jsonResponse(w http.ResponseWriter, v interface{}) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, `{"error":"encoding failed"}`, http.StatusInternalServerError)
 	}
+}
+
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }

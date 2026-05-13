@@ -26,6 +26,15 @@ func TestBacklinksMarshalAsEmptyArray(t *testing.T) {
 	if note.Backlinks == nil {
 		t.Fatal("Backlinks is nil, want empty slice")
 	}
+	if note.Tags == nil {
+		t.Fatal("Tags is nil, want empty slice")
+	}
+	if note.WikiLinks == nil {
+		t.Fatal("WikiLinks is nil, want empty slice")
+	}
+	if note.Frontmatter == nil {
+		t.Fatal("Frontmatter is nil, want empty object")
+	}
 	data, err := json.Marshal(note)
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
@@ -33,7 +42,16 @@ func TestBacklinksMarshalAsEmptyArray(t *testing.T) {
 	if strings.Contains(string(data), `"backlinks":null`) {
 		t.Fatalf("backlinks marshaled as null: %s", string(data))
 	}
-	if !strings.Contains(string(data), `"backlinks":[]`) {
-		t.Fatalf("backlinks did not marshal as []: %s", string(data))
+	jsonText := string(data)
+	for _, field := range []string{"backlinks", "tags", "wikiLinks"} {
+		if strings.Contains(jsonText, `"`+field+`":null`) {
+			t.Fatalf("%s marshaled as null: %s", field, jsonText)
+		}
+		if !strings.Contains(jsonText, `"`+field+`":[]`) {
+			t.Fatalf("%s did not marshal as []: %s", field, jsonText)
+		}
+	}
+	if !strings.Contains(jsonText, `"frontmatter":{}`) {
+		t.Fatalf("frontmatter did not marshal as {}: %s", jsonText)
 	}
 }

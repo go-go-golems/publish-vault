@@ -72,8 +72,8 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
         <button
           type="button"
           className="retro-menubar-item font-bold tracking-widest"
-          onClick={() => handleNavigate("index")}
-          aria-label="Go to vault index"
+          onClick={() => navigate("/")}
+          aria-label="Go to vault home"
         >
           &#9670; {vaultName}
         </button>

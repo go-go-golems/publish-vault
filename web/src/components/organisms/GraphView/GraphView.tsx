@@ -56,18 +56,21 @@ export const GraphView: React.FC<GraphViewProps> = ({
   // Build adjacency for spring forces
   const edgeSet = useRef<Set<string>>(new Set());
 
+  const nodesData = data.nodes ?? [];
+  const edgesData = data.edges ?? [];
+
   // Initialize nodes
   useEffect(() => {
-    if (!data.nodes.length) return;
+    if (!nodesData.length) return;
 
     edgeSet.current = new Set(
-      data.edges.map((e) => `${e.source}|${e.target}`)
+      edgesData.map((e) => `${e.source}|${e.target}`)
     );
 
     const cx = width / 2;
     const cy = height / 2;
-    nodesRef.current = data.nodes.map((n, i) => {
-      const angle = (i / data.nodes.length) * 2 * Math.PI;
+    nodesRef.current = nodesData.map((n, i) => {
+      const angle = (i / nodesData.length) * 2 * Math.PI;
       const r = Math.min(width, height) * 0.3;
       return {
         id: n.id,
@@ -82,9 +85,9 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
     // Pre-warm
     for (let i = 0; i < ITERATIONS; i++) {
-      tick(nodesRef.current, data.edges, edgeSet.current, width, height);
+      tick(nodesRef.current, edgesData, edgeSet.current, width, height);
     }
-  }, [data, activeNodeId, width, height]);
+  }, [nodesData, edgesData, activeNodeId, width, height]);
 
   // Animation loop
   const draw = useCallback(() => {
@@ -94,7 +97,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
     if (!ctx) return;
 
     const nodes = nodesRef.current;
-    tick(nodes, data.edges, edgeSet.current, width, height);
+    tick(nodes, edgesData, edgeSet.current, width, height);
 
     ctx.clearRect(0, 0, width, height);
 
@@ -106,7 +109,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
     ctx.strokeStyle = "#1a1a1a";
     ctx.lineWidth = 0.5;
     ctx.globalAlpha = 0.3;
-    for (const edge of data.edges) {
+    for (const edge of edgesData) {
       const src = nodes.find((n) => n.id === edge.source);
       const tgt = nodes.find((n) => n.id === edge.target);
       if (!src || !tgt) continue;
@@ -155,7 +158,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
     }
 
     animRef.current = requestAnimationFrame(draw);
-  }, [data, activeNodeId, hoveredId, width, height]);
+  }, [edgesData, activeNodeId, hoveredId, width, height]);
 
   useEffect(() => {
     animRef.current = requestAnimationFrame(draw);

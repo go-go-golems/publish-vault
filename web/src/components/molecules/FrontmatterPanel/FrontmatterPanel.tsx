@@ -28,7 +28,9 @@ export const FrontmatterPanel: React.FC<FrontmatterPanelProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
 
-  const entries = Object.entries(frontmatter).filter(
+  const safeFrontmatter = frontmatter ?? {};
+  const safeTags = tags ?? [];
+  const entries = Object.entries(safeFrontmatter).filter(
     ([k]) => !EXCLUDED_KEYS.has(k)
   );
 
@@ -55,11 +57,11 @@ export const FrontmatterPanel: React.FC<FrontmatterPanelProps> = ({
             </div>
           )}
 
-          {tags && tags.length > 0 && (
+          {safeTags.length > 0 && (
             <div className="flex gap-2 items-start">
               <span className="font-mono text-[var(--color-muted-foreground)] w-20 shrink-0">tags</span>
               <div className="flex flex-wrap gap-1">
-                {tags.map((t) => (
+                {safeTags.map((t) => (
                   <Tag key={t} label={t} onClick={onTagClick ? () => onTagClick(t) : undefined} />
                 ))}
               </div>
@@ -77,7 +79,7 @@ export const FrontmatterPanel: React.FC<FrontmatterPanelProps> = ({
             </div>
           ))}
 
-          {entries.length === 0 && !tags?.length && !modTime && (
+          {entries.length === 0 && safeTags.length === 0 && !modTime && (
             <span className="text-[var(--color-muted-foreground)] italic">No properties</span>
           )}
         </div>
