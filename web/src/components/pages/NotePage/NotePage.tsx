@@ -1,6 +1,6 @@
 /**
  * PAGE: NotePage
- * Design: Retro System 1 — note content + right panel with backlinks + graph.
+ * Design: Retro System 1 — note content + resizable right panel with backlinks + graph.
  * Fetches note by slug via RTK Query.
  */
 import React, { useMemo, useCallback } from "react";
@@ -10,6 +10,11 @@ import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
 import { GraphView } from "../../organisms/GraphView/GraphView";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "../../ui/resizable";
 import {
   useGetNoteQuery,
   useListNotesQuery,
@@ -97,9 +102,62 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     );
   }
 
-  return (
-    <div className="flex h-full">
+  const rightPanelContent = (
+    <>
+      {/* Graph */}
+      {graphVisible && graphData && (
+        <div className="border-b border-[var(--color-ink)]">
+          <div className="retro-window-title bg-[var(--color-ink)] text-[var(--color-paper)] text-[10px] font-bold uppercase tracking-widest px-2 py-1 flex items-center gap-1">
+            <Icon name="graph" size={10} />
+            Graph
+          </div>
+          <GraphView
+            data={graphData}
+            activeNodeId={slug}
+            onNodeClick={handleNavigate}
+            width={224}
+            height={200}
+          />
+        </div>
+      )}
+
+      {/* Backlinks */}
+      <div className="flex-1 overflow-hidden">
+        <BacklinksPanel
+          backlinks={backlinkEntries}
+          onNavigate={handleNavigate}
+          maxHeight="100%"
+        />
+      </div>
+    </>
+  );
+
+  return rightPanelOpen ? (
+    <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* Note content */}
+      <ResizablePanel defaultSize={75} minSize={40} order={1}>
+        <ScrollArea className="h-full p-6">
+          <NoteRenderer
+            note={note}
+            allSlugs={allSlugs}
+            onNavigate={handleNavigate}
+            onTagClick={handleTagClick}
+            className="max-w-4xl"
+          />
+        </ScrollArea>
+      </ResizablePanel>
+
+      <ResizableHandle withHandle className="retro-resize-handle" />
+
+      {/* Right panel */}
+      <ResizablePanel defaultSize={25} minSize={12} maxSize={40} order={2}>
+        <aside className="h-full border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
+          {rightPanelContent}
+        </aside>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  ) : (
+    <div className="flex h-full">
       <ScrollArea className="flex-1 p-6">
         <NoteRenderer
           note={note}
@@ -109,37 +167,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
           className="max-w-4xl"
         />
       </ScrollArea>
-
-      {/* Right panel */}
-      {rightPanelOpen && (
-        <aside className="w-56 shrink-0 border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
-          {/* Graph */}
-          {graphVisible && graphData && (
-            <div className="border-b border-[var(--color-ink)]">
-              <div className="retro-window-title bg-[var(--color-ink)] text-[var(--color-paper)] text-[10px] font-bold uppercase tracking-widest px-2 py-1 flex items-center gap-1">
-                <Icon name="graph" size={10} />
-                Graph
-              </div>
-              <GraphView
-                data={graphData}
-                activeNodeId={slug}
-                onNodeClick={handleNavigate}
-                width={224}
-                height={200}
-              />
-            </div>
-          )}
-
-          {/* Backlinks */}
-          <div className="flex-1 overflow-hidden">
-            <BacklinksPanel
-              backlinks={backlinkEntries}
-              onNavigate={handleNavigate}
-              maxHeight="100%"
-            />
-          </div>
-        </aside>
-      )}
     </div>
   );
 };
