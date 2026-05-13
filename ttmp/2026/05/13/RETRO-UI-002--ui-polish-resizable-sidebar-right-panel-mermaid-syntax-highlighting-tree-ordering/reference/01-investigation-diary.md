@@ -214,3 +214,73 @@ pnpm --dir web build
 curl -fsS http://127.0.0.1:8080/api/tree | python3 -c '...' # verify folders-first
 open http://127.0.0.1:8080/
 ```
+
+## Step 2: Fixed wiki-link resolution — short Obsidian paths now resolve to full vault slugs
+
+Wiki links like `[[Tribal/application-native-authorization]]` in the Goja Sites proposal were generating `href="/note/tribal/application-native-authorization"` which 404'd because the actual slug is `research/kb/tribal/application-native-authorization`. This also meant backlinks weren't being recorded.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Tribal/application-native-authorization: in http://127.0.0.1:8080/note/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service should link to the actual documents. So should backlinks appear as well."
+
+**Assistant interpretation:** Wiki links in notes reference short Obsidian paths but the vault stores notes by their full relative filesystem path. Links and backlinks need to resolve correctly.
+
+**Inferred user intent:** Make wiki links navigate to real documents and make backlinks work.
+
+**Commit (code):** 2c20742 — Resolve wiki links to full vault slugs with suffix-based index
+
+### What I did
+
+- Added `wikiLinkIndex` map to `Vault` struct — maps short slugified targets to full vault slugs.
+- Added `buildWikiLinkIndex()` — builds suffix-based lookup: for a note at `Research/KB/Tribal/App.md`, it registers `app`, `tribal/app`, `kb/tribal/app`, `research/kb/tribal/app` all pointing to the full slug.
+- Added `ResolveWikiLink()` — public method for resolving wiki link targets.
+- Added `rebuildHTML()` — after building the index, re-renders all note HTML to replace short `data-target` and `href` values with resolved full slugs using `parser.ReplaceWikiLinksString()`.
+- Added `ReplaceWikiLinksString()` to parser — uses regex to replace `data-target` and `href="/note/..."` attributes with resolved slugs.
+- Updated `buildBacklinks()` — now uses `ResolveWikiLink()` instead of exact/title matching.
+- Updated `ReloadNote()` and `RemoveNote()` — rebuild wiki-link index on changes.
+- Added `TestWikiLinkResolution` — verifies short target resolves, backlinks connect, and HTML contains correct href/data-target.
+
+### Why
+
+Obsidian wiki links reference notes by short paths (e.g., `Tribal/App-Auth`), but the vault's slug system uses the full relative path (`research/kb/tribal/app-auth`). Without resolution, links 404 and backlinks don't connect.
+
+### What worked
+
+The suffix-based index handles all common Obsidian link patterns:
+- `[[Tribal/App-Auth]]` → matches `Research/KB/Tribal/App-Auth.md`
+- `[[App-Auth]]` → matches by filename suffix
+- Exact slug match always takes priority
+
+### What didn't work
+
+N/A
+
+### What I learned
+
+Obsidian wiki links use a shortest-unique-path convention. The suffix-based index correctly handles the ambiguity by preferring the longest match (most specific path).
+
+### What was tricky to build
+
+The `ReplaceWikiLinksString` regex approach — needed to be careful about matching `data-target` and `href` attributes without breaking other HTML. The regex `data-target="([^"]+)"` and `href="/note/([^"]+)"` are specific enough.
+
+### What warrants a second pair of eyes
+
+- The suffix-based index could produce ambiguous matches if two notes share the same short path (e.g., two `Index.md` files in different folders). The current "first registered wins" behavior may need to be improved to prefer the closest match.
+- The `rebuildHTML()` regex approach runs on every `LoadAll()` — verify performance on large vaults.
+
+### What should be done in the future
+
+- Add ambiguity detection: if multiple notes match a short wiki link target, prefer the one in the closest directory.
+- Consider caching the resolved HTML to avoid re-running `ReplaceWikiLinksString` on every load.
+
+### Code review instructions
+
+Review:
+- `backend/internal/vault/vault.go` — `buildWikiLinkIndex()`, `ResolveWikiLink()`, `rebuildHTML()`, updated `buildBacklinks()`
+- `backend/internal/parser/parser.go` — `ReplaceWikiLinksString()`
+- `backend/internal/vault/vault_test.go` — `TestWikiLinkResolution`
+
+Validate:
+```bash
+curl -fsS http://127.0.0.1:8080/api/notes/research/kb/tribal/application-native-authorization | jq .backlinks
+```

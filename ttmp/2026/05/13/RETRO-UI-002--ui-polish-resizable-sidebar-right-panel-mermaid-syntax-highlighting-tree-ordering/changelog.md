@@ -25,3 +25,13 @@ Implemented all 5 UI polish features: tree sorting, resizable sidebar, right pan
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/pages/VaultLayout/VaultLayout.tsx — ResizablePanelGroup
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/store/uiSlice.ts — rightPanelOpen
 
+
+## 2026-05-13
+
+Fixed wiki-link resolution: short Obsidian paths now resolve to full vault slugs, enabling correct navigation and backlinks.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/parser/parser.go — ReplaceWikiLinksString
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — buildWikiLinkIndex
+
