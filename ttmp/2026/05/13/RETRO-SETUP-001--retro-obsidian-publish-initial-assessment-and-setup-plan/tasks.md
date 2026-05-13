@@ -85,11 +85,11 @@
 
 ## Follow-up Phase 8: Container and CI hardening
 
-- [ ] Verify `docker build -f backend/Dockerfile -t retro-obsidian-publish .`.
-- [ ] Verify container runtime with a mounted vault.
-- [ ] Decide CI shape for web check/build, Go tests, build-web fallback, and embedded Go build.
-- [ ] Add CI workflow if desired.
-- [ ] Decide whether generated embedded assets should remain ignored or be committed.
+- [x] Verify `docker build -f backend/Dockerfile -t retro-obsidian-publish .`.
+- [x] Verify container runtime with a mounted vault.
+- [x] Decide CI shape for web check/build, Go tests, build-web fallback, embedded Go build, plugin smoke test, and Docker image build.
+- [x] Add CI workflow.
+- [x] Decide that generated embedded assets remain ignored and are rebuilt by `build web`.
 
 ## Follow-up Phase 9: Release polish
 

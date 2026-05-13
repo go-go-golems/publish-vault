@@ -1,0 +1,17 @@
+.git
+.gitignore
+.devctl
+.ttmp.yaml
+ttmp
+
+web/node_modules
+web/dist
+web/.manus-logs
+web/public/__manus__/version.json
+
+backend/bin
+backend/internal/web/embed/public/*
+!backend/internal/web/embed/public/.gitkeep
+
+**/*.log
+.DS_Store

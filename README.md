@@ -237,6 +237,18 @@ curl -fsS http://127.0.0.1:8080/
 
 ---
 
+## Generated assets policy
+
+`web/dist/` and `backend/internal/web/embed/public/*` are generated build outputs and are intentionally ignored. A production embedded binary should be built by running:
+
+```bash
+cd backend
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+```
+
+This keeps frontend build artifacts out of code review while preserving reproducible single-binary builds.
+
 ## Known follow-up
 
-The file watcher reloads notes in the in-memory vault, but the search index is not yet updated on file changes. Live search results may therefore lag behind edits until the server restarts.
+The watcher now updates the Bleve search index for file reload/remove events. Remaining correctness work is mostly test expansion and release hardening.

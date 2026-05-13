@@ -12,12 +12,13 @@ ENV VITE_VAULT_NAME=$VITE_VAULT_NAME
 RUN pnpm build
 
 FROM golang:1.25-alpine AS go-builder
+RUN apk add --no-cache build-base
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend ./
 COPY --from=web-builder /src/web/dist ./internal/web/embed/public
-RUN go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+RUN CGO_ENABLED=1 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates

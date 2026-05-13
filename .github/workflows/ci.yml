@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install web dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
+      - name: Type-check web
+        run: pnpm --dir web check
+
+      - name: Build web
+        run: pnpm --dir web build
+
+      - name: Test devctl plugin handshake
+        run: python3 -m unittest plugins/test_retro_plugin.py
+
+      - name: Test backend
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build web assets for embedding using local fallback
+        working-directory: backend
+        env:
+          BUILD_WEB_LOCAL: '1'
+        run: go run ./cmd/retro-obsidian-publish build web --local
+
+      - name: Build embedded binary
+        working-directory: backend
+        run: go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+
+      - name: Build Docker image
+        run: docker build -f backend/Dockerfile -t retro-obsidian-publish .
