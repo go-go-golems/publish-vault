@@ -1,98 +1,177 @@
 # Retro Obsidian Publish
 
-A retro macOS 1–inspired Obsidian vault publishing system. Publish your Obsidian vault as a website with cross-linking, full-text search, backlinks, and a link graph — all with a monochrome Chicago-aesthetic UI.
+A retro macOS 1–inspired Obsidian vault publishing system. It serves an Obsidian vault as a web app with cross-linking, full-text search, backlinks, and a link graph — all with a monochrome Chicago-aesthetic UI.
 
 ---
 
 ## Architecture
 
-```
+```text
 retro-obsidian-publish/
-├── backend/                    # Go backend
-│   ├── cmd/server/main.go      # Entry point (--vault, --port flags)
+├── backend/                                   # Go module and single-binary app
+│   ├── cmd/retro-obsidian-publish/            # Glazed/Cobra CLI
+│   │   ├── main.go
+│   │   └── commands/
+│   │       ├── root.go
+│   │       ├── serve/serve.go                 # serve verb
+│   │       └── build/web.go                   # build web verb
 │   ├── internal/
-│   │   ├── parser/parser.go    # Markdown + frontmatter + wiki-link parser
-│   │   ├── vault/vault.go      # Vault index, backlink graph, file tree
-│   │   ├── search/search.go    # Bleve full-text search index
-│   │   ├── watcher/watcher.go  # fsnotify file watcher (hot reload)
-│   │   └── api/api.go          # REST API handlers
-│   └── vault-example/          # Sample vault for testing
+│   │   ├── api/api.go                         # REST API handlers
+│   │   ├── parser/parser.go                   # Markdown/frontmatter/wiki-link parser
+│   │   ├── search/search.go                   # Bleve full-text search index
+│   │   ├── server/server.go                   # API + SPA HTTP runtime
+│   │   ├── vault/vault.go                     # Vault index, backlinks, tree
+│   │   ├── watcher/watcher.go                 # fsnotify hot reload
+│   │   └── web/                               # embedded web assets + SPA handler
+│   └── vault-example/                         # Sample vault for testing
 │
-├── client/src/
-│   ├── components/
-│   │   ├── atoms/              # Button, Icon, Tag, Badge, Divider, Input, Checkbox, ScrollArea
-│   │   ├── molecules/          # SearchBar, NoteCard, FileTreeItem, BreadcrumbBar, BacklinkItem, FrontmatterPanel
-│   │   ├── organisms/          # Sidebar, NoteRenderer, BacklinksPanel, GraphView
-│   │   └── pages/              # VaultLayout, NotePage, SearchPage
-│   ├── store/
-│   │   ├── vaultApi.ts         # RTK Query API slice
-│   │   ├── uiSlice.ts          # UI state (sidebar, search, graph)
-│   │   └── store.ts            # Redux store
-│   ├── hooks/redux.ts          # Typed useAppDispatch / useAppSelector
-│   ├── lib/wikiLinks.ts        # Frontend wiki-link resolver
-│   └── index.css               # Retro macOS 1 design tokens + utilities
+├── web/                                       # React/Vite frontend package
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── vite.config.ts
+│   ├── index.html
+│   ├── public/
+│   └── src/
+│       ├── components/                        # Atomic Design UI components
+│       ├── store/vaultApi.ts                  # RTK Query API/static mode slice
+│       ├── lib/wikiLinks.ts
+│       └── index.css                          # Retro macOS design tokens
 │
-├── .storybook/                 # Storybook configuration
-└── ideas.md                    # Design philosophy documentation
+├── plugins/retro-obsidian-publish.py          # devctl plugin
+├── .devctl.yaml                               # devctl wiring
+├── Makefile                                   # convenience wrappers
+└── ideas.md                                   # design philosophy
 ```
+
+The production target is a **single Go binary**. The `retro-obsidian-publish build web` verb builds `web/` and copies `web/dist` into `backend/internal/web/embed/public`; `go build -tags embed` then embeds those assets into the binary.
 
 ---
 
 ## Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Backend language | Go 1.23 |
+|-------|------------|
+| Backend language | Go |
+| CLI framework | Glazed + Cobra |
 | Markdown parsing | goldmark + goldmark-meta |
 | Full-text search | Bleve v2 |
 | File watching | fsnotify |
 | HTTP router | gorilla/mux |
-| CORS | rs/cors |
 | Frontend framework | React 19 + Vite 7 |
 | State management | Redux Toolkit + RTK Query |
 | Styling | Tailwind CSS 4 |
-| Component docs | Storybook 10 |
-| Component library | Radix UI + shadcn/ui |
-| Icons | Lucide React |
+| Package manager | pnpm |
+| Build bundling | Dagger with local pnpm fallback |
+| Local orchestration | devctl |
 
 ---
 
-## Getting Started
+## Getting started
 
-### 1. Build the Go backend
+### 1. Install web dependencies
+
+```bash
+pnpm --dir web install --frozen-lockfile
+```
+
+### 2. Build the web bundle for embedding
+
+Dagger-first, with automatic local fallback if the Dagger engine is unavailable:
 
 ```bash
 cd backend
-go build -o bin/server ./cmd/server/
+go run ./cmd/retro-obsidian-publish build web
 ```
 
-### 2. Start the backend
+Force local pnpm mode:
 
 ```bash
-# Point at your Obsidian vault directory
-./backend/bin/server --vault /path/to/your/vault --port 8080
-
-# Or use the example vault
-./backend/bin/server --vault ./backend/vault-example --port 8080
-
-# Or via environment variable
-VAULT_DIR=/path/to/vault ./backend/bin/server
+cd backend
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
 ```
 
-### 3. Start the frontend dev server
+### 3. Build the single binary
 
 ```bash
-# Set the API URL (defaults to http://localhost:8080)
-VITE_API_URL=http://localhost:8080 pnpm dev
+cd backend
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 ```
 
-The app will be available at `http://localhost:3000`.
-
-### 4. Run Storybook
+### 4. Run the app
 
 ```bash
-pnpm storybook
-# Opens at http://localhost:6006
+cd backend
+./bin/retro-obsidian-publish serve --vault ./vault-example --port 8080
+```
+
+Open:
+
+- Web app: <http://127.0.0.1:8080>
+- API: <http://127.0.0.1:8080/api/notes>
+
+You can also use `VAULT_DIR`:
+
+```bash
+VAULT_DIR=/path/to/your/vault ./bin/retro-obsidian-publish serve --port 8080
+```
+
+---
+
+## Development with devctl
+
+The repo includes a devctl plugin that validates tools and launches both the backend API and Vite dev server.
+
+```bash
+devctl plugins list
+devctl plan
+devctl up --force
+devctl status --tail-lines 10
+devctl logs --service backend --stderr
+devctl logs --service web --stderr
+devctl down
+```
+
+Development URLs:
+
+- Backend API: <http://127.0.0.1:8080/api/notes>
+- Vite web app: <http://127.0.0.1:3000>
+
+The devctl backend service runs the same single-binary CLI with `go run ./cmd/retro-obsidian-publish serve`, while Vite is used for fast frontend iteration.
+
+---
+
+## CLI reference
+
+```bash
+cd backend
+go run ./cmd/retro-obsidian-publish help
+go run ./cmd/retro-obsidian-publish serve --help
+go run ./cmd/retro-obsidian-publish build web --help
+```
+
+Primary verbs:
+
+- `serve` — scans the vault, builds an in-memory search index, exposes `/api/*`, watches markdown files, and serves the SPA when enabled.
+- `build web` — builds `web/` and stages the result for Go embedding.
+
+Examples:
+
+```bash
+cd backend
+go run ./cmd/retro-obsidian-publish serve --vault ./vault-example --port 8080
+go run ./cmd/retro-obsidian-publish serve --vault ./vault-example --port 8080 --serve-web=false
+go run ./cmd/retro-obsidian-publish build web --local
+```
+
+---
+
+## Web development commands
+
+```bash
+pnpm --dir web check
+pnpm --dir web build
+VITE_API_URL=http://127.0.0.1:8080 pnpm --dir web dev
+pnpm --dir web storybook
 ```
 
 ---
@@ -101,20 +180,22 @@ pnpm storybook
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_URL` | `http://localhost:8080` | Go backend URL |
+| `VAULT_DIR` | — | Vault directory, used when `--vault` is omitted |
+| `VITE_API_URL` | unset | Frontend backend URL; when unset, the frontend uses static/demo data |
 | `VITE_VAULT_NAME` | `My Vault` | Display name in the UI |
-| `VAULT_DIR` | — | Vault directory (env alternative to `--vault`) |
+| `BUILD_WEB_LOCAL` | unset | Set to `1` to force local pnpm web builds |
+| `WEB_BUILDER_IMAGE` | `node:22` | Optional Dagger builder image override |
 
 ---
 
-## API Reference
+## API reference
 
 All endpoints return JSON. CORS is open (`*`) for development.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/notes` | List all notes (slug, title, tags, excerpt, modTime) |
-| `GET` | `/api/notes/{slug}` | Full note (html, frontmatter, wikiLinks, backlinks) |
+| `GET` | `/api/notes` | List all notes |
+| `GET` | `/api/notes/{slug}` | Full note |
 | `GET` | `/api/tree` | Hierarchical file tree |
 | `GET` | `/api/search?q={query}` | Full-text search |
 | `GET` | `/api/tags` | All tags with counts |
@@ -122,71 +203,40 @@ All endpoints return JSON. CORS is open (`*`) for development.
 
 ---
 
-## Markdown Features
+## Markdown features
 
-The parser supports the full Obsidian Markdown dialect:
+The parser supports the core Obsidian Markdown dialect:
 
-- **Frontmatter** — YAML between `---` delimiters; `title`, `tags`, and arbitrary fields
-- **Wiki links** — `[[Note Title]]`, `[[Note Title|Alias]]`, `[[Note#Heading]]`
-- **Embeds** — `![[Note]]` (rendered as embed placeholder)
-- **GFM** — tables, task lists, strikethrough, footnotes
-- **Code blocks** — syntax highlighting via highlight.js
-- **Backlinks** — automatically computed from wiki-link graph
-
----
-
-## Component Architecture
-
-Components follow the **Atomic Design** methodology:
-
-```
-atoms/       ← Smallest indivisible UI elements (Button, Tag, Icon…)
-molecules/   ← Composed atoms with single responsibility (SearchBar, NoteCard…)
-organisms/   ← Complex UI sections (Sidebar, NoteRenderer, GraphView…)
-pages/       ← Full page layouts wired to data (VaultLayout, NotePage…)
-```
-
-Each component lives in its own folder with a `ComponentName.tsx` and `ComponentName.stories.tsx`.
+- frontmatter between `---` delimiters;
+- wiki links such as `[[Note Title]]`, `[[Note Title|Alias]]`, and `[[Note#Heading]]`;
+- embeds such as `![[Note]]` as embed placeholders;
+- GFM tables, task lists, strikethrough, and footnotes;
+- code blocks with highlight.js-compatible markup;
+- automatically computed backlinks.
 
 ---
 
-## Design Philosophy
-
-**Retro System 1 (Macintosh 1984)**
-
-- Monochrome foundation: near-black ink on warm aged paper
-- Colour accents only for interactive/functional elements: links = `#0000cc`, tags = `#005500`, destructive = `#cc0000`
-- Zero border-radius, hard 1px borders, inset box-shadows
-- System-UI/Chicago font stack — no web fonts, pixel-crisp rendering
-- Instant state changes — no smooth colour transitions
-
----
-
-## Development
+## Validation checklist
 
 ```bash
-# Type-check
-pnpm check
+pnpm --dir web check
+pnpm --dir web build
+cd backend
+go test ./...
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+./bin/retro-obsidian-publish serve --vault ./vault-example --port 8080
+```
 
-# Build for production
-pnpm build
+Then in another shell:
 
-# Format code
-pnpm format
+```bash
+curl -fsS http://127.0.0.1:8080/api/notes
+curl -fsS http://127.0.0.1:8080/
 ```
 
 ---
 
-## Deployment
+## Known follow-up
 
-**Frontend**: Deploy the `dist/public/` directory to any static host (Netlify, Vercel, Cloudflare Pages, etc.). Set `VITE_API_URL` at build time.
-
-**Backend**: Build the Go binary and run it on any Linux server. The binary is self-contained with no runtime dependencies.
-
-```bash
-# Production build
-cd backend && go build -o bin/server ./cmd/server/
-
-# Run with systemd, Docker, or any process manager
-VAULT_DIR=/path/to/vault ./bin/server --port 8080
-```
+The file watcher reloads notes in the in-memory vault, but the search index is not yet updated on file changes. Live search results may therefore lag behind edits until the server restarts.

@@ -1,0 +1,6 @@
+plugins:
+  - id: retro-obsidian-publish
+    path: python3
+    args:
+      - ./plugins/retro-obsidian-publish.py
+    priority: 10
