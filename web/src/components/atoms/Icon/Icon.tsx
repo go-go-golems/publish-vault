@@ -25,6 +25,7 @@ import {
   Check,
   ExternalLink,
   Home,
+  PanelRight,
 } from "lucide-react";
 
 export const ICON_MAP = {
@@ -47,6 +48,7 @@ export const ICON_MAP = {
   check: Check,
   "external-link": ExternalLink,
   home: Home,
+  "panel-right": PanelRight,
 } as const;
 
 export type IconName = keyof typeof ICON_MAP;

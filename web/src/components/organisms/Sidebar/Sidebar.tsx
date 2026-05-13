@@ -35,7 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside
       className={clsx(
         "retro-window flex flex-col h-full",
-        "w-56 shrink-0",
+        "shrink-0",
         className
       )}
     >

@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface UIState {
   sidebarOpen: boolean;
+  rightPanelOpen: boolean;
   searchQuery: string;
   activeNoteSlug: string | null;
   graphVisible: boolean;
@@ -9,6 +10,7 @@ interface UIState {
 
 const initialState: UIState = {
   sidebarOpen: true,
+  rightPanelOpen: true,
   searchQuery: "",
   activeNoteSlug: null,
   graphVisible: false,
@@ -23,6 +25,12 @@ const uiSlice = createSlice({
     },
     setSidebarOpen(state, action: PayloadAction<boolean>) {
       state.sidebarOpen = action.payload;
+    },
+    toggleRightPanel(state) {
+      state.rightPanelOpen = !state.rightPanelOpen;
+    },
+    setRightPanelOpen(state, action: PayloadAction<boolean>) {
+      state.rightPanelOpen = action.payload;
     },
     setSearchQuery(state, action: PayloadAction<string>) {
       state.searchQuery = action.payload;
@@ -39,6 +47,8 @@ const uiSlice = createSlice({
 export const {
   toggleSidebar,
   setSidebarOpen,
+  toggleRightPanel,
+  setRightPanelOpen,
   setSearchQuery,
   setActiveNote,
   toggleGraph,

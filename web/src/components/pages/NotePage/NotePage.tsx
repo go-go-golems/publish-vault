@@ -26,6 +26,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const dispatch = useAppDispatch();
   const [, navigate] = useLocation();
   const graphVisible = useAppSelector((s) => s.ui.graphVisible);
+  const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
 
   const handleNavigate = useCallback(
     (targetSlug: string) => {
@@ -110,33 +111,35 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
       </ScrollArea>
 
       {/* Right panel */}
-      <aside className="w-56 shrink-0 border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
-        {/* Graph */}
-        {graphVisible && graphData && (
-          <div className="border-b border-[var(--color-ink)]">
-            <div className="retro-window-title bg-[var(--color-ink)] text-[var(--color-paper)] text-[10px] font-bold uppercase tracking-widest px-2 py-1 flex items-center gap-1">
-              <Icon name="graph" size={10} />
-              Graph
+      {rightPanelOpen && (
+        <aside className="w-56 shrink-0 border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
+          {/* Graph */}
+          {graphVisible && graphData && (
+            <div className="border-b border-[var(--color-ink)]">
+              <div className="retro-window-title bg-[var(--color-ink)] text-[var(--color-paper)] text-[10px] font-bold uppercase tracking-widest px-2 py-1 flex items-center gap-1">
+                <Icon name="graph" size={10} />
+                Graph
+              </div>
+              <GraphView
+                data={graphData}
+                activeNodeId={slug}
+                onNodeClick={handleNavigate}
+                width={224}
+                height={200}
+              />
             </div>
-            <GraphView
-              data={graphData}
-              activeNodeId={slug}
-              onNodeClick={handleNavigate}
-              width={224}
-              height={200}
+          )}
+
+          {/* Backlinks */}
+          <div className="flex-1 overflow-hidden">
+            <BacklinksPanel
+              backlinks={backlinkEntries}
+              onNavigate={handleNavigate}
+              maxHeight="100%"
             />
           </div>
-        )}
-
-        {/* Backlinks */}
-        <div className="flex-1 overflow-hidden">
-          <BacklinksPanel
-            backlinks={backlinkEntries}
-            onNavigate={handleNavigate}
-            maxHeight="100%"
-          />
-        </div>
-      </aside>
+        </aside>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 /**
  * PAGE: VaultLayout
- * Design: Retro System 1 — fixed menubar at top, sidebar left, content pane right.
+ * Design: Retro System 1 — fixed menubar at top, resizable sidebar left, content pane right.
  * Navigation is handled internally via Wouter's useLocation hook.
  *
  * Retro macOS 1 design language:
@@ -13,10 +13,16 @@ import { useLocation } from "wouter";
 import { clsx } from "clsx";
 import { Sidebar } from "../../organisms/Sidebar/Sidebar";
 import { Icon } from "../../atoms/Icon/Icon";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "../../ui/resizable";
 import { useGetTreeQuery } from "../../../store/vaultApi";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
 import {
   toggleSidebar,
+  toggleRightPanel,
   setSearchQuery,
   setActiveNote,
   toggleGraph,
@@ -34,6 +40,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
   const dispatch = useAppDispatch();
   const [, navigate] = useLocation();
   const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
+  const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
   const graphVisible = useAppSelector((s) => s.ui.graphVisible);
   const activeSlug = useAppSelector((s) => s.ui.activeNoteSlug);
   const { data: tree, isLoading: treeLoading } = useGetTreeQuery();
@@ -94,6 +101,18 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           type="button"
           className={clsx(
             "retro-menubar-item",
+            rightPanelOpen && "bg-[var(--color-paper)] text-[var(--color-ink)]"
+          )}
+          onClick={() => dispatch(toggleRightPanel())}
+          title="Toggle right panel"
+        >
+          <Icon name="panel-right" size={13} />
+        </button>
+
+        <button
+          type="button"
+          className={clsx(
+            "retro-menubar-item",
             graphVisible && "bg-[var(--color-paper)] text-[var(--color-ink)]"
           )}
           onClick={() => dispatch(toggleGraph())}
@@ -107,25 +126,41 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
         </span>
       </header>
 
-      {/* ── Body ── */}
+      {/* ── Body with resizable panels ── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <Sidebar
-            tree={tree ?? null}
-            activeSlug={activeSlug ?? undefined}
-            onSelectNote={handleNavigate}
-            onSearch={handleSearch}
-            vaultName={vaultName}
-            isLoading={treeLoading}
-            className="border-r border-[var(--color-ink)] shrink-0"
-          />
-        )}
+        {sidebarOpen ? (
+          <ResizablePanelGroup direction="horizontal" className="flex-1">
+            <ResizablePanel
+              defaultSize={20}
+              minSize={12}
+              maxSize={40}
+              order={1}
+              className="flex flex-col overflow-hidden"
+            >
+              <Sidebar
+                tree={tree ?? null}
+                activeSlug={activeSlug ?? undefined}
+                onSelectNote={handleNavigate}
+                onSearch={handleSearch}
+                vaultName={vaultName}
+                isLoading={treeLoading}
+                className="border-r border-[var(--color-ink)] h-full"
+              />
+            </ResizablePanel>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto retro-scroll">
-          {children}
-        </main>
+            <ResizableHandle withHandle className="retro-resize-handle" />
+
+            <ResizablePanel defaultSize={80} order={2}>
+              <main className="h-full overflow-y-auto retro-scroll">
+                {children}
+              </main>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        ) : (
+          <main className="flex-1 overflow-y-auto retro-scroll">
+            {children}
+          </main>
+        )}
       </div>
     </div>
   );

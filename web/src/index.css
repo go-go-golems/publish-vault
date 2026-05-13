@@ -523,4 +523,22 @@
   .retro-fade-in {
     animation: retro-fade-in 120ms ease-out forwards;
   }
+
+  /* ── Resizable handle (retro) ── */
+  .retro-resize-handle {
+    background: var(--color-ink) !important;
+    width: 2px !important;
+  transition: width 0.1s;
+  }
+  .retro-resize-handle:hover,
+  .retro-resize-handle[data-resize-handle-active] {
+    width: 4px !important;
+    background: var(--color-link) !important;
+  }
+  .retro-resize-handle > div {
+    /* Grip dots */
+    background: var(--color-paper) !important;
+    border: 1px solid var(--color-ink) !important;
+    border-radius: 0 !important;
+  }
 }
