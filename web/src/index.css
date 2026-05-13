@@ -497,6 +497,27 @@
     border: 1px solid var(--color-ink);
   }
 
+  /* ── Copy code button ── */
+  .note-prose pre { position: relative; }
+  .copy-code-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .note-prose pre:hover .copy-code-btn,
+  .copy-code-btn:focus {
+    opacity: 1;
+  }
+
   /* ── Callouts (admonitions) ── */
   .callout {
     border: 1px solid var(--color-ink);

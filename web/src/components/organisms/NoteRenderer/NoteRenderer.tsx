@@ -139,6 +139,26 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         block.dataset.highlighted = "true";
       }
     });
+
+    // Add copy buttons to pre blocks that don't already have one
+    const pres = el.querySelectorAll<HTMLElement>("pre");
+    pres.forEach((pre) => {
+      if (pre.querySelector(".copy-code-btn")) return;
+      const btn = document.createElement("button");
+      btn.className = "copy-code-btn";
+      btn.title = "Copy code";
+      btn.textContent = "⎘";
+      btn.addEventListener("click", () => {
+        const code = pre.querySelector("code");
+        if (!code) return;
+        navigator.clipboard.writeText(code.textContent ?? "").then(() => {
+          btn.textContent = "✓";
+          setTimeout(() => { btn.textContent = "⎘"; }, 1500);
+        });
+      });
+      pre.style.position = "relative";
+      pre.appendChild(btn);
+    });
   }, [resolvedHtml]);
 
   // Build breadcrumb from path
