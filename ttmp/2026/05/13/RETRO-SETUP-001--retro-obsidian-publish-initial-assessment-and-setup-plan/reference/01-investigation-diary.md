@@ -904,3 +904,89 @@ Phase 8 commit:
 ```text
 cf6c8a483e468bccaaef6c6bff45c0e3c9fcd012 Add CI and harden Docker build
 ```
+
+## Step 7: Fixed embedded UI defaulting to demo/static vault data
+
+After running the app against `/home/manuel/code/wesen/go-go-golems/go-go-parc`, the API returned the real vault data but the UI still showed the bundled demo vault. I traced this to frontend mode detection in `web/src/store/vaultApi.ts`: when `VITE_API_URL` was unset, the frontend assumed static/demo mode and imported `staticVault`. That behavior is wrong for the single-binary embedded app, where the API is available on the same origin and `VITE_API_URL` should not be required.
+
+I changed the default behavior so the frontend uses same-origin `/api/*` calls unless `VITE_STATIC_VAULT=true` is explicitly set. This preserves a static demo deployment mode while making embedded single-binary builds use the real served vault by default.
+
+### Prompt Context
+
+**User prompt (verbatim):** "this still seems to serve the demo vault in the UI, although the json seems to show the real info?"
+
+**Assistant interpretation:** The server API is correctly serving the requested vault, but the embedded frontend bundle is using its static demo data path instead of calling the backend API.
+
+**Inferred user intent:** The user wants the browser UI and JSON API to show the same real vault content.
+
+**Commit (code):** pending at time of diary entry.
+
+### What I did
+
+- Updated `web/src/store/vaultApi.ts`:
+  - `API_BASE` now defaults to `""`, which makes `fetchBaseQuery` call same-origin `/api/*` endpoints.
+  - `IS_STATIC` is now controlled only by `VITE_STATIC_VAULT === "true"`.
+  - Updated comments to document backend/default versus static demo mode.
+- Rebuilt and restaged embedded web assets:
+  - `pnpm --dir web check`
+  - `pnpm --dir web build`
+  - `cd backend && BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local`
+  - `go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish`
+- Restarted the running app for `/home/manuel/code/wesen/go-go-golems/go-go-parc` on port `8080`.
+
+### Why
+
+A same-origin embedded app should not require `VITE_API_URL`. The previous logic treated an unset `VITE_API_URL` as static/demo mode, which was reasonable for static hosting but incorrect for the single-binary default.
+
+### What worked
+
+- Frontend type-check and build passed.
+- Embedded asset staging passed.
+- Restarted server loaded the real vault:
+
+```text
+Loading vault from /home/manuel/code/wesen/go-go-golems/go-go-parc
+Loaded 513 notes
+Server listening on http://localhost:8080
+```
+
+- `curl http://127.0.0.1:8080/api/notes` still returns go-go-parc notes.
+- The rebuilt Vite output no longer emits a separate `staticVault-*.js` chunk in normal embedded mode, which confirms the static vault path is no longer the default bundle path.
+
+### What didn't work
+
+- The original embedded frontend behavior was misleading: API smoke tests passed, but the browser UI still used static demo data because of frontend mode detection.
+
+### What I learned
+
+- Static demo mode needs an explicit build-time flag now: `VITE_STATIC_VAULT=true`.
+- Same-origin API mode is the correct default for the single-binary application.
+
+### What was tricky to build
+
+The bug was not in the backend or embedded file serving; it was a frontend build-time mode decision. Because the API and HTML were both served correctly, the mismatch only appeared when the React app decided where to fetch data from.
+
+### What warrants a second pair of eyes
+
+- Confirm whether static demo deployments are still needed. If yes, document `VITE_STATIC_VAULT=true` wherever static hosting is described.
+
+### What should be done in the future
+
+- Add a small browser/e2e smoke test that verifies the UI issues `/api/notes` in embedded mode.
+
+### Code review instructions
+
+Review:
+
+- `web/src/store/vaultApi.ts`
+
+Validate:
+
+```bash
+pnpm --dir web check
+pnpm --dir web build
+cd backend
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+./bin/retro-obsidian-publish serve --vault ~/code/wesen/go-go-golems/go-go-parc --port 8080
+```

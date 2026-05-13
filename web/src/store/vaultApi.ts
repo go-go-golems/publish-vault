@@ -2,9 +2,10 @@
  * RTK Query API slice for the Obsidian vault.
  *
  * Strategy:
- *   - If VITE_API_URL is set → fetch from the Go backend.
- *   - Otherwise (demo / static deploy) → serve data from the in-browser
- *     staticVault module which parses the bundled Markdown files.
+ *   - By default, fetch from the Go backend on the same origin via /api/*.
+ *   - If VITE_API_URL is set, fetch from that explicit backend origin.
+ *   - If VITE_STATIC_VAULT=true, serve data from the in-browser staticVault
+ *     module for standalone demo/static deployments.
  */
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
@@ -24,8 +25,8 @@ import type {
 export type { Note, NoteListItem, FileNode, SearchResult, TagCount, GraphData, WikiLinkRef, GraphNode, GraphEdge };
 
 // ── Mode detection ────────────────────────────────────────────────
-const API_BASE = import.meta.env.VITE_API_URL as string | undefined;
-const IS_STATIC = !API_BASE;
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || "";
+const IS_STATIC = import.meta.env.VITE_STATIC_VAULT === "true";
 
 // Lazy-load the static vault only in demo mode (tree-shaken in backend mode)
 async function getStatic() {
@@ -50,7 +51,7 @@ function notFound(): { error: FetchBaseQueryError } {
 export const vaultApi = createApi({
   reducerPath: "vaultApi",
   // baseQuery is used only in backend mode; static mode uses queryFn
-  baseQuery: fetchBaseQuery({ baseUrl: API_BASE ?? "/" }),
+  baseQuery: fetchBaseQuery({ baseUrl: API_BASE }),
   tagTypes: ["Note", "Notes", "Tree", "Tags", "Graph"],
   endpoints: (builder) => ({
 

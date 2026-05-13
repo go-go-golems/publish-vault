@@ -80,6 +80,7 @@
 - [x] Add CLI smoke tests for help output and required vault handling.
 - [x] Add devctl plugin syntax/handshake smoke test.
 - [x] Remove or gate analytics placeholders in `web/index.html` to eliminate Vite warnings.
+- [x] Default embedded frontend builds to same-origin API mode, with `VITE_STATIC_VAULT=true` reserved for static demo deployments.
 - [x] Validate frontend, backend, single-binary build, and devctl after fixes.
 - [x] Commit Phase 7 implementation and diary updates.
 

@@ -55,3 +55,12 @@ Completed Phase 8: verified Docker build/runtime, fixed CGO-enabled container bu
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/ci.yml — CI workflow for web/backend/plugin/embed/docker validation
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/Dockerfile — CGO-enabled single-binary Docker build
 
+
+## 2026-05-13
+
+Fixed embedded frontend data mode so same-origin /api is the default and static demo mode requires VITE_STATIC_VAULT=true.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/store/vaultApi.ts — Frontend API/static mode detection fix
+
