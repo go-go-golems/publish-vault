@@ -64,3 +64,13 @@ Fixed embedded frontend data mode so same-origin /api is the default and static 
 
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/store/vaultApi.ts — Frontend API/static mode detection fix
 
+
+## 2026-05-13
+
+Fixed null backlinks crash by serializing empty backlinks as [] and defensively handling missing backlinks in NotePage.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — Backlinks now reset to empty slices
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/pages/NotePage/NotePage.tsx — Defensive backlink rendering
+

@@ -990,3 +990,112 @@ BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 ./bin/retro-obsidian-publish serve --vault ~/code/wesen/go-go-golems/go-go-parc --port 8080
 ```
+
+## Step 8: Fixed null backlinks crash in the real-vault UI
+
+The real `go-go-parc` vault exposed another API/client contract issue. Some notes have no backlinks, and the backend was serializing their `Backlinks` field as JSON `null`. The frontend type expects `backlinks: string[]` and `NotePage` called `note.backlinks.map(...)`, so notes without incoming links crashed the UI.
+
+I fixed this on both sides: the backend now initializes backlinks to an empty slice so JSON emits `[]`, and the frontend defensively treats missing/null backlinks as `[]`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "3Uncaught TypeError: can't access property \"map\", y.backlinks is null
+    R http://127.0.0.1:8080/assets/index-DKU-z52U.js:180
+    Ud http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    useMemo http://127.0.0.1:8080/assets/index-DKU-z52U.js:25
+    Yp http://127.0.0.1:8080/assets/index-DKU-z52U.js:180
+    Rr http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    $r http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    dm http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    Ym http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    gv http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    vs http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    Bm http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    nh http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    Wa http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    Im http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+    Tv http://127.0.0.1:8080/assets/index-DKU-z52U.js:48
+ on http://127.0.0.1:8080/note/research/institute/guidelines/code-review-with-go-minitrace"
+
+**Assistant interpretation:** The embedded UI is now using real API data, but note payloads can contain `backlinks: null`, which crashes the React backlink mapping code.
+
+**Inferred user intent:** Make the real vault UI robust for notes without backlinks.
+
+**Commit (code):** pending at time of diary entry.
+
+### What I did
+
+- Updated `backend/internal/vault/vault.go`:
+  - `buildBacklinks` now resets `Backlinks` to `[]string{}` instead of `nil`.
+  - This makes JSON encode backlinks as `[]` rather than `null`.
+- Added `backend/internal/vault/vault_test.go`:
+  - verifies notes without incoming links have non-nil `Backlinks`;
+  - verifies JSON contains `"backlinks":[]`, not `"backlinks":null`.
+- Updated `web/src/components/pages/NotePage/NotePage.tsx`:
+  - backlink rendering now uses `(note.backlinks ?? []).map(...)` as a defensive client-side guard.
+- Rebuilt frontend and embedded assets.
+- Rebuilt the embedded binary and restarted the `go-go-parc` server on port `8080`.
+
+### Why
+
+Backend JSON should match the frontend contract: arrays should be arrays, even when empty. The frontend guard is still useful for older API payloads, failed migrations, or third-party data.
+
+### What worked
+
+Validation passed:
+
+```bash
+cd backend && go test ./...
+pnpm --dir web check
+pnpm --dir web build
+cd backend && BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+```
+
+Runtime verification for the reported note showed `backlinks` is now an array:
+
+```text
+list []
+```
+
+The reported route also serves the rebuilt app shell:
+
+```text
+curl -fsS http://127.0.0.1:8080/note/research/institute/guidelines/code-review-with-go-minitrace >/tmp/note-page.html
+367351 /tmp/note-page.html
+```
+
+### What didn't work
+
+The crash was caused by a realistic vault shape that the sample/static vault did not expose: notes without backlinks had `null`, not `[]`.
+
+### What I learned
+
+Go nil slices marshal as JSON `null`. For API contracts consumed as arrays in TypeScript, backend code should initialize empty slices explicitly or normalize response payloads before encoding.
+
+### What was tricky to build
+
+The API issue only appeared after fixing the frontend to use real backend data. This shows why the demo/static path can mask backend contract problems.
+
+### What warrants a second pair of eyes
+
+- Search for other slice fields that may serialize as `null` while TypeScript expects arrays, especially `tags`, `wikiLinks`, graph nodes/edges, and file tree children.
+
+### What should be done in the future
+
+- Add API normalization tests for every JSON array field in `Note`, `NoteListItem`, `GraphData`, and `FileNode`.
+
+### Code review instructions
+
+Review:
+
+- `backend/internal/vault/vault.go`
+- `backend/internal/vault/vault_test.go`
+- `web/src/components/pages/NotePage/NotePage.tsx`
+
+Validate and run the specific route:
+
+```bash
+curl -fsS http://127.0.0.1:8080/api/notes/research/institute/guidelines/code-review-with-go-minitrace | jq .backlinks
+open http://127.0.0.1:8080/note/research/institute/guidelines/code-review-with-go-minitrace
+```

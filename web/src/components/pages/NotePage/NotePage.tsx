@@ -57,7 +57,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   // Build backlink entries from note backlinks + allNotes index
   const backlinkEntries = useMemo(() => {
     if (!note || !allNotes) return [];
-    return note.backlinks
+    return (note.backlinks ?? [])
       .map((bSlug) => {
         const found = allNotes.find((n) => n.slug === bSlug);
         return found

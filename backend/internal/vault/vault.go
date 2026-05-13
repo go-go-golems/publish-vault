@@ -143,9 +143,10 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 
 // buildBacklinks populates the Backlinks field for every note.
 func (v *Vault) buildBacklinks() {
-	// Reset
+	// Reset to an empty slice, not nil, so JSON clients always receive [] instead
+	// of null and can safely treat backlinks as an array.
 	for _, n := range v.notes {
-		n.Backlinks = nil
+		n.Backlinks = []string{}
 	}
 	for slug, note := range v.notes {
 		for _, wl := range note.WikiLinks {
