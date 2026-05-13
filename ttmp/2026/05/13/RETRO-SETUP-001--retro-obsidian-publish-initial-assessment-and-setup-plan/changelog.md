@@ -33,3 +33,14 @@ Uploaded final implementation-complete ticket bundle to reMarkable.
 ### Related Files
 
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/13/RETRO-SETUP-001--retro-obsidian-publish-initial-assessment-and-setup-plan/tasks.md — Marked final upload complete
+
+## 2026-05-13
+
+Completed Phase 7 items 1-4: reviewed migration, fixed watcher/search sync, added parser/API/SPA/CLI/devctl tests, and removed Vite analytics placeholder warnings (commit 8f865db).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/watcher/watcher.go — Watcher now updates search index on reload/remove
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/web/static_test.go — SPA fallback and API exclusion tests
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/index.html — Removed analytics placeholders causing Vite warnings
+

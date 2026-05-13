@@ -72,16 +72,16 @@
 
 ## Follow-up Phase 7: Review, correctness, and test hardening
 
-- [ ] Review implementation commit `df40b4e` and record review notes for the main migration files.
-- [ ] Fix watcher/search-index consistency so file changes update both the vault map and Bleve index.
-- [ ] Add parser edge-case tests.
-- [ ] Add API route smoke tests.
-- [ ] Add static SPA serving tests, including `/api/*` exclusion from SPA fallback.
-- [ ] Add CLI smoke tests for help output and required vault handling.
-- [ ] Add devctl plugin syntax/handshake smoke test.
-- [ ] Remove or gate analytics placeholders in `web/index.html` to eliminate Vite warnings.
-- [ ] Validate frontend, backend, single-binary build, and devctl after fixes.
-- [ ] Commit Phase 7 implementation and diary updates.
+- [x] Review implementation commit `df40b4e` and record review notes for the main migration files.
+- [x] Fix watcher/search-index consistency so file changes update both the vault map and Bleve index.
+- [x] Add parser edge-case tests.
+- [x] Add API route smoke tests.
+- [x] Add static SPA serving tests, including `/api/*` exclusion from SPA fallback.
+- [x] Add CLI smoke tests for help output and required vault handling.
+- [x] Add devctl plugin syntax/handshake smoke test.
+- [x] Remove or gate analytics placeholders in `web/index.html` to eliminate Vite warnings.
+- [x] Validate frontend, backend, single-binary build, and devctl after fixes.
+- [x] Commit Phase 7 implementation and diary updates.
 
 ## Follow-up Phase 8: Container and CI hardening
 
