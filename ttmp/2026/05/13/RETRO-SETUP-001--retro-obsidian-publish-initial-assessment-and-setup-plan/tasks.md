@@ -70,8 +70,31 @@
 - [x] Upload final docs to reMarkable.
 - [x] Commit final docs/cleanup.
 
-## Follow-up correctness tasks
+## Follow-up Phase 7: Review, correctness, and test hardening
 
+- [ ] Review implementation commit `df40b4e` and record review notes for the main migration files.
 - [ ] Fix watcher/search-index consistency so file changes update both the vault map and Bleve index.
-- [ ] Add tests for parser edge cases, route smoke tests, and static file serving behavior.
-- [ ] Investigate Vite warnings for `%VITE_ANALYTICS_ENDPOINT%` and `%VITE_ANALYTICS_WEBSITE_ID%` placeholders in `web/index.html`.
+- [ ] Add parser edge-case tests.
+- [ ] Add API route smoke tests.
+- [ ] Add static SPA serving tests, including `/api/*` exclusion from SPA fallback.
+- [ ] Add CLI smoke tests for help output and required vault handling.
+- [ ] Add devctl plugin syntax/handshake smoke test.
+- [ ] Remove or gate analytics placeholders in `web/index.html` to eliminate Vite warnings.
+- [ ] Validate frontend, backend, single-binary build, and devctl after fixes.
+- [ ] Commit Phase 7 implementation and diary updates.
+
+## Follow-up Phase 8: Container and CI hardening
+
+- [ ] Verify `docker build -f backend/Dockerfile -t retro-obsidian-publish .`.
+- [ ] Verify container runtime with a mounted vault.
+- [ ] Decide CI shape for web check/build, Go tests, build-web fallback, and embedded Go build.
+- [ ] Add CI workflow if desired.
+- [ ] Decide whether generated embedded assets should remain ignored or be committed.
+
+## Follow-up Phase 9: Release polish
+
+- [ ] Add a `version` command.
+- [ ] Consider `--addr` in addition to `--port`.
+- [ ] Consider `--no-watch` for deployments that do not need fsnotify.
+- [ ] Consider a structured config dump command.
+- [ ] Add GoReleaser config for single-binary releases if this becomes a distributed CLI.
