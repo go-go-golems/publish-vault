@@ -45,16 +45,18 @@ type FileNode struct {
 
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
-	mu    sync.RWMutex
-	notes map[string]*Note // keyed by slug
-	root  string           // absolute path to vault directory
+	mu            sync.RWMutex
+	notes         map[string]*Note  // keyed by slug
+	wikiLinkIndex map[string]string // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
+	root          string            // absolute path to vault directory
 }
 
 // New creates a Vault and loads all notes from rootDir.
 func New(rootDir string) (*Vault, error) {
 	v := &Vault{
-		notes: make(map[string]*Note),
-		root:  rootDir,
+		notes:         make(map[string]*Note),
+		wikiLinkIndex: make(map[string]string),
+		root:          rootDir,
 	}
 	if err := v.LoadAll(); err != nil {
 		return nil, err
@@ -94,7 +96,9 @@ func (v *Vault) LoadAll() error {
 		return err
 	}
 
+	v.buildWikiLinkIndex()
 	v.buildBacklinks()
+	v.rebuildHTML()
 	return nil
 }
 
@@ -151,6 +155,71 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 	}, nil
 }
 
+// buildWikiLinkIndex creates a lookup from short slugified wiki targets to full
+// vault slugs. Obsidian wiki links like [[Tribal/foo]] reference notes by short
+// path, but the vault stores notes by their full relative path (e.g.,
+// Research/KB/Tribal/foo.md → slug "research/kb/tribal/foo").
+// The index maps every suffix of each note's path to the note's full slug,
+// so "tribal/foo" resolves to "research/kb/tribal/foo".
+func (v *Vault) buildWikiLinkIndex() {
+	v.wikiLinkIndex = make(map[string]string)
+	for _, note := range v.notes {
+		// Register the full slug
+		v.wikiLinkIndex[note.Slug] = note.Slug
+
+		// Register suffix-based short paths
+		// e.g., path "Research/KB/Tribal/App.md" → register:
+		//   "tribal/app", "kb/tribal/app"
+		parts := strings.Split(filepath.ToSlash(note.Path), "/")
+		filename := strings.TrimSuffix(parts[len(parts)-1], ".md")
+		suffixes := []string{parser.Slugify(filename)}
+
+		// Build progressive suffixes from the end of the path
+		for i := len(parts) - 2; i >= 0; i-- {
+			shortPath := strings.Join(parts[i:], "/")
+			shortPath = strings.TrimSuffix(shortPath, ".md")
+			suffixes = append(suffixes, parser.Slugify(shortPath))
+		}
+
+		for _, suffix := range suffixes {
+			if _, exists := v.wikiLinkIndex[suffix]; !exists {
+				v.wikiLinkIndex[suffix] = note.Slug
+			}
+		}
+
+		// Also register by title slug
+		titleSlug := parser.Slugify(note.Title)
+		if titleSlug != "" {
+			if _, exists := v.wikiLinkIndex[titleSlug]; !exists {
+				v.wikiLinkIndex[titleSlug] = note.Slug
+			}
+		}
+	}
+}
+
+// ResolveWikiLink maps a wiki link target (as written in the note) to the
+// actual vault slug. Returns ("", false) if no match is found.
+func (v *Vault) ResolveWikiLink(target string) (string, bool) {
+	slug := parser.Slugify(target)
+	if resolved, ok := v.wikiLinkIndex[slug]; ok {
+		return resolved, true
+	}
+	return "", false
+}
+
+// rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs.
+// This must be called after buildWikiLinkIndex so links point to actual notes.
+func (v *Vault) rebuildHTML() {
+	for _, note := range v.notes {
+		note.HTML = parser.ReplaceWikiLinksString(note.HTML, func(target string) string {
+			if resolved, ok := v.wikiLinkIndex[target]; ok {
+				return resolved
+			}
+			return target
+		})
+	}
+}
+
 // buildBacklinks populates the Backlinks field for every note.
 func (v *Vault) buildBacklinks() {
 	// Reset to an empty slice, not nil, so JSON clients always receive [] instead
@@ -160,18 +229,12 @@ func (v *Vault) buildBacklinks() {
 	}
 	for slug, note := range v.notes {
 		for _, wl := range note.WikiLinks {
-			target := wl.Target
-			// Try exact slug match, then title-based match
-			if _, ok := v.notes[target]; ok {
-				v.notes[target].Backlinks = appendUnique(v.notes[target].Backlinks, slug)
+			resolved, ok := v.ResolveWikiLink(wl.Target)
+			if !ok {
 				continue
 			}
-			// Try matching by title slug
-			for _, candidate := range v.notes {
-				if parser.Slugify(candidate.Title) == target || candidate.Slug == target {
-					candidate.Backlinks = appendUnique(candidate.Backlinks, slug)
-					break
-				}
+			if target, ok := v.notes[resolved]; ok {
+				target.Backlinks = appendUnique(target.Backlinks, slug)
 			}
 		}
 	}
@@ -190,7 +253,9 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	}
 	v.mu.Lock()
 	v.notes[note.Slug] = note
+	v.buildWikiLinkIndex()
 	v.buildBacklinks()
+	v.rebuildHTML()
 	v.mu.Unlock()
 	return note, nil
 }
@@ -202,6 +267,7 @@ func (v *Vault) RemoveNote(absPath string) string {
 	slug := pathToSlug(relPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
+	v.buildWikiLinkIndex()
 	v.buildBacklinks()
 	v.mu.Unlock()
 	return slug

@@ -168,6 +168,34 @@ func slugify(s string) string {
 	return strings.Trim(s, "-")
 }
 
+// ReplaceWikiLinksString resolves wiki-link targets in pre-rendered HTML.
+// The resolver function maps a short slugified target to the full vault slug.
+// It replaces data-target and href attributes in wiki-link anchors and embeds.
+var (
+	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
+	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"]+)"`)
+)
+
+func ReplaceWikiLinksString(html string, resolver func(string) string) string {
+	html = dataTargetRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := dataTargetRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		resolved := resolver(sub[1])
+		return `data-target="` + resolved + `"`
+	})
+	html = hrefNoteRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := hrefNoteRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		resolved := resolver(sub[1])
+		return `href="/note/` + resolved + `"`
+	})
+	return html
+}
+
 // extractTitle returns the title from frontmatter "title" key, or the first H1.
 func extractTitle(fm map[string]interface{}, src []byte) string {
 	if t, ok := fm["title"]; ok {

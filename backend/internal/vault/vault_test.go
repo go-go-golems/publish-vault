@@ -71,6 +71,61 @@ func TestFileTreeSortedFoldersFirstAlpha(t *testing.T) {
 	}
 }
 
+func TestWikiLinkResolution(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"Research/KB/Tribal/App-Auth.md":     "# App Auth\n\nContent here.",
+		"Research/KB/Fundamentals/Access.md": "# Access Control\n\nSee [[Tribal/App-Auth]] for details.",
+	}
+	for rel, content := range files {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	// Verify the short wiki link target resolves to the full slug
+	resolved, ok := v.ResolveWikiLink("Tribal/App-Auth")
+	if !ok {
+		t.Fatal("ResolveWikiLink should find Tribal/App-Auth")
+	}
+	if resolved != "research/kb/tribal/app-auth" {
+		t.Fatalf("expected resolved slug 'research/kb/tribal/app-auth', got '%s'", resolved)
+	}
+
+	// Verify backlinks are connected
+	authNote, ok := v.GetNote("research/kb/tribal/app-auth")
+	if !ok {
+		t.Fatal("app-auth note not found")
+	}
+	if len(authNote.Backlinks) == 0 {
+		t.Fatal("app-auth should have a backlink from Access")
+	}
+	if authNote.Backlinks[0] != "research/kb/fundamentals/access" {
+		t.Fatalf("backlink should be from access note, got '%s'", authNote.Backlinks[0])
+	}
+
+	// Verify the HTML has the resolved href
+	accessNote, ok := v.GetNote("research/kb/fundamentals/access")
+	if !ok {
+		t.Fatal("access note not found")
+	}
+	if !strings.Contains(accessNote.HTML, `href="/note/research/kb/tribal/app-auth"`) {
+		t.Fatalf("HTML should contain resolved href, got: %s", accessNote.HTML)
+	}
+	if !strings.Contains(accessNote.HTML, `data-target="research/kb/tribal/app-auth"`) {
+		t.Fatalf("HTML should contain resolved data-target, got: %s", accessNote.HTML)
+	}
+}
+
 func TestBacklinksMarshalAsEmptyArray(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "Index.md")
