@@ -170,10 +170,14 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 			Tags:  nonNilStrings(n.Tags),
 		})
 		for _, wl := range n.WikiLinks {
-			if slugSet[wl.Target] {
+			resolved, ok := h.vault.ResolveWikiLink(wl.Target)
+			if !ok {
+				continue
+			}
+			if slugSet[resolved] {
 				edges = append(edges, GraphEdge{
 					Source: n.Slug,
-					Target: wl.Target,
+					Target: resolved,
 				})
 			}
 		}
