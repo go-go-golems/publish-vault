@@ -12,18 +12,44 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: .devctl.yaml
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
     - Path: README.md
-      Note: Inspected during the chronological assessment and recorded in the diary
+      Note: |-
+        Inspected during the chronological assessment and recorded in the diary
+        Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/cmd/retro-obsidian-publish/commands/build/web.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/cmd/retro-obsidian-publish/commands/root.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/cmd/retro-obsidian-publish/commands/serve/serve.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/cmd/retro-obsidian-publish/main.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
     - Path: backend/cmd/server/main.go
       Note: Inspected during the chronological assessment and recorded in the diary
     - Path: backend/internal/api/api.go
+    - Path: backend/internal/server/server.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
     - Path: backend/internal/vault/vault.go
+    - Path: backend/internal/web/embed.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/internal/web/embed_none.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: backend/internal/web/static.go
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
     - Path: client/src/store/vaultApi.ts
       Note: Inspected during the chronological assessment and recorded in the diary
     - Path: package.json
       Note: Inspected during the chronological assessment and recorded in the diary
+    - Path: plugins/retro-obsidian-publish.py
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
     - Path: vite.config.ts
       Note: Inspected during the chronological assessment and recorded in the diary
+    - Path: web/package.json
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
+    - Path: web/vite.config.ts
+      Note: Implemented or updated during the single-binary Glazed/devctl migration
 ExternalSources:
     - devctl help user-guide
     - devctl help scripting-guide
@@ -33,6 +59,19 @@ LastUpdated: 2026-05-13T13:45:00-04:00
 WhatFor: Use this to understand what was inspected, which commands were run, and what remains to implement.
 WhenToUse: When continuing the setup implementation or reviewing the design-doc evidence trail.
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -331,4 +370,235 @@ Primary document path:
 
 ```text
 ttmp/2026/05/13/RETRO-SETUP-001--retro-obsidian-publish-initial-assessment-and-setup-plan/design-doc/01-initial-assessment-and-setup-implementation-guide.md
+```
+
+## Step 4: Implemented the web move, single binary, Glazed CLI, Dagger build verb, and devctl setup
+
+I implemented the setup migration requested after the initial assessment. The application now has a `web/` frontend package, a single Go CLI binary under `backend/cmd/retro-obsidian-publish`, a directory-per-verb command layout, embedded web asset support, a `build web` verb backed by Dagger with local fallback, and devctl orchestration.
+
+The implementation was committed as `df40b4e50cea4f9835acda82962943846ffc0b3d` with message `Migrate to single binary Glazed app`. The earlier ticket-planning docs were committed separately as `8c31bef1e70edafc84f7dc839c293aa6c953476c`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "make it a single go binary, one file per verb, directory structure follows verb structure. 
+
+Add tasks and phases to the ticket, then work on all phases. Commit at appropriate intervals, keep a detailed diary as you go"
+
+**Assistant interpretation:** Update the ticket tasks, then implement every planned phase: move frontend into `web/`, refactor backend to a single embedded Go binary, use Glazed commands with one file per verb and verb-mirroring directories, add Dagger build support, add devctl, validate, document, and commit.
+
+**Inferred user intent:** The user wants the planning ticket converted into an executed migration with reviewable commits and a continuation-friendly implementation diary.
+
+**Commit (code):** `df40b4e50cea4f9835acda82962943846ffc0b3d` — `Migrate to single binary Glazed app`
+
+### What I did
+
+- Updated `tasks.md` with explicit phases and checkboxes.
+- Committed ticket setup docs first:
+  - `git commit -m "Document setup migration plan"`
+  - Commit: `8c31bef1e70edafc84f7dc839c293aa6c953476c`
+- Moved frontend package/tooling into `web/`:
+  - `client/src` -> `web/src`
+  - `client/public` -> `web/public`
+  - root `package.json`, `pnpm-lock.yaml`, `vite.config.ts`, `tsconfig*.json`, `.storybook`, `components.json`, and `patches` -> `web/`
+- Updated frontend config:
+  - `web/vite.config.ts` now uses `web/` as root and `web/dist` as output.
+  - `web/tsconfig.json`, `web/components.json`, and Storybook paths now point at `web/src`.
+  - `web/package.json` build now runs only `vite build`; the old Express static wrapper path was removed.
+- Added single-binary Go runtime:
+  - `backend/internal/server/server.go`
+  - `backend/internal/web/embed.go`
+  - `backend/internal/web/embed_none.go`
+  - `backend/internal/web/static.go`
+  - `backend/internal/web/generate.go`
+- Added Glazed/Cobra command tree:
+  - `backend/cmd/retro-obsidian-publish/main.go`
+  - `backend/cmd/retro-obsidian-publish/commands/root.go`
+  - `backend/cmd/retro-obsidian-publish/commands/serve/serve.go`
+  - `backend/cmd/retro-obsidian-publish/commands/build/root.go`
+  - `backend/cmd/retro-obsidian-publish/commands/build/web.go`
+- Removed the old standard-library flag entrypoint:
+  - `backend/cmd/server/main.go`
+- Added Dagger-backed build verb in the same binary:
+  - `retro-obsidian-publish build web`
+  - local fallback via `BUILD_WEB_LOCAL=1` or `--local`
+- Added devctl support:
+  - `.devctl.yaml`
+  - `plugins/retro-obsidian-publish.py`
+- Updated Docker/Compose for the single app container and removed stale frontend-only deployment files:
+  - removed `Dockerfile.frontend`
+  - removed `nginx.conf`
+  - removed `server/index.ts`
+- Updated `README.md` for the new layout and workflow.
+- Amended the implementation commit to remove an accidentally staged Python `__pycache__` file.
+
+### Why
+
+- A single Go binary simplifies deployment and removes the separate Express/nginx static wrapper from the primary path.
+- Glazed provides schema-backed flags, sections, help, logging, and command introspection.
+- The verb-mirroring directory structure keeps command ownership clear: `serve` lives under `commands/serve`, while `build web` lives under `commands/build/web.go`.
+- Moving the frontend package to `web/` isolates pnpm, Vite, TypeScript, Storybook, patches, and source files from repository root.
+- devctl turns local startup into a repeatable plan/up/status/logs/down workflow.
+
+### What worked
+
+- Frontend validation passed:
+
+```bash
+pnpm --dir web check
+pnpm --dir web build
+```
+
+- Backend validation passed:
+
+```bash
+cd backend
+go test ./...
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+```
+
+- Glazed command help worked:
+
+```bash
+cd backend
+go run ./cmd/retro-obsidian-publish help
+go run ./cmd/retro-obsidian-publish serve --help
+go run ./cmd/retro-obsidian-publish build web --help
+```
+
+- Local build-web fallback worked:
+
+```bash
+cd backend
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+```
+
+- Embedded single-binary smoke test worked on port `23457`:
+
+```bash
+cd backend
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+./bin/retro-obsidian-publish serve --vault ./vault-example --port 23457
+curl -fsS http://127.0.0.1:23457/api/notes
+curl -fsS http://127.0.0.1:23457/
+```
+
+The smoke test produced:
+
+```text
+1866 /tmp/retro-api.json
+367481 /tmp/retro-root.html
+```
+
+- devctl validation worked:
+
+```bash
+devctl plugins list
+devctl plan
+devctl up --force
+devctl status --tail-lines 5
+curl -fsS http://127.0.0.1:8080/api/notes
+curl -fsS http://127.0.0.1:3000
+devctl down
+```
+
+### What didn't work
+
+- The first `devctl plugins list` failed because `plugins/retro-obsidian-publish.py` had a mismatched closing brace/parenthesis in the `handle_launch` response. Exact error:
+
+```text
+SyntaxError: closing parenthesis '}' does not match opening parenthesis '(' on line 79
+```
+
+I fixed the response construction and verified with:
+
+```bash
+python3 -m py_compile plugins/retro-obsidian-publish.py
+```
+
+- The Dagger path attempted to start the Dagger engine but failed to pull `registry.dagger.io/engine:v0.20.8` due a Docker/registry timeout:
+
+```text
+Error response from daemon: Get "https://registry.dagger.io/v2/": net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+```
+
+The command then correctly fell back to local pnpm and completed the web build.
+
+- Some ports used during manual smoke tests were already occupied. `18080` and `19080` were not usable, so I used `23456`/`23457` for single-binary smoke tests.
+
+- Vite still warns about missing analytics placeholder environment variables in `web/index.html`:
+
+```text
+(!) %VITE_ANALYTICS_ENDPOINT% is not defined in env variables found in /index.html.
+(!) %VITE_ANALYTICS_WEBSITE_ID% is not defined in env variables found in /index.html.
+```
+
+The build still succeeds, but this should be cleaned up later.
+
+### What I learned
+
+- The root `.gitignore` pattern `build/` also caused the command directory `backend/cmd/retro-obsidian-publish/commands/build/` to appear ignored, so I added explicit unignore rules for that source directory.
+- `go:embed` requires a package-local path, so the web build output is copied into `backend/internal/web/embed/public` instead of embedding `../../web/dist` directly.
+- The devctl plugin should run the backend with `--serve-web=false` in development because Vite serves the frontend on port `3000`.
+
+### What was tricky to build
+
+The main tricky part was reconciling three requirements that interact with each other: a single embedded Go binary, a separate `web/` package for development, and a Dagger/local build verb inside the same CLI binary. The stable solution is to treat `web/dist` as an intermediate artifact and copy it into `backend/internal/web/embed/public` only when preparing an embedded binary.
+
+Another subtle issue was Git hygiene: running `python3 -m py_compile` created `plugins/__pycache__`, which was accidentally included in the first implementation commit. I removed it and amended the commit before continuing.
+
+### What warrants a second pair of eyes
+
+- Review `backend/internal/web/static.go` for SPA fallback behavior and API-prefix exclusion.
+- Review `backend/cmd/retro-obsidian-publish/commands/build/web.go` for Dagger fallback semantics and whether Dagger failures should always fall back or only fall back for engine unavailability.
+- Review `backend/Dockerfile`; it was updated for a root build context and single embedded binary, but I did not run a full Docker image build.
+- Review `plugins/retro-obsidian-publish.py` for devctl protocol strictness and service definitions.
+
+### What should be done in the future
+
+- Fix watcher/search-index consistency.
+- Add tests for static SPA fallback and API route priority.
+- Clean up analytics placeholders in `web/index.html`.
+- Decide whether to add a CI workflow that runs `BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local` and then `go build -tags embed`.
+
+### Code review instructions
+
+- Start with command structure:
+  - `backend/cmd/retro-obsidian-publish/commands/root.go`
+  - `backend/cmd/retro-obsidian-publish/commands/serve/serve.go`
+  - `backend/cmd/retro-obsidian-publish/commands/build/web.go`
+- Then review single-binary serving:
+  - `backend/internal/server/server.go`
+  - `backend/internal/web/static.go`
+  - `backend/internal/web/embed.go`
+  - `backend/internal/web/embed_none.go`
+- Then review frontend move config:
+  - `web/vite.config.ts`
+  - `web/tsconfig.json`
+  - `web/package.json`
+- Then review devctl:
+  - `.devctl.yaml`
+  - `plugins/retro-obsidian-publish.py`
+- Validate with:
+
+```bash
+pnpm --dir web check
+pnpm --dir web build
+cd backend
+go test ./...
+BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+cd ..
+devctl plugins list
+devctl plan
+devctl up --force
+devctl status --tail-lines 5
+devctl down
+```
+
+### Technical details
+
+Implementation commit:
+
+```text
+df40b4e50cea4f9835acda82962943846ffc0b3d Migrate to single binary Glazed app
 ```

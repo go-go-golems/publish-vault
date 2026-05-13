@@ -12,14 +12,26 @@ DocType: design-doc
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: .devctl.yaml
+      Note: Implementation now realizes the setup design
     - Path: Dockerfile.frontend
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: Makefile
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: README.md
-      Note: Evidence and migration target referenced by the initial setup implementation guide
+      Note: |-
+        Evidence and migration target referenced by the initial setup implementation guide
+        Implementation now realizes the setup design
     - Path: backend/Dockerfile
       Note: Evidence and migration target referenced by the initial setup implementation guide
+    - Path: backend/cmd/retro-obsidian-publish/commands/build/web.go
+      Note: Implementation now realizes the setup design
+    - Path: backend/cmd/retro-obsidian-publish/commands/root.go
+      Note: Implementation now realizes the setup design
+    - Path: backend/cmd/retro-obsidian-publish/commands/serve/serve.go
+      Note: Implementation now realizes the setup design
+    - Path: backend/cmd/retro-obsidian-publish/main.go
+      Note: Implementation now realizes the setup design
     - Path: backend/cmd/server/main.go
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: backend/internal/api/api.go
@@ -28,10 +40,18 @@ RelatedFiles:
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: backend/internal/search/search.go
       Note: Evidence and migration target referenced by the initial setup implementation guide
+    - Path: backend/internal/server/server.go
+      Note: Implementation now realizes the setup design
     - Path: backend/internal/vault/vault.go
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: backend/internal/watcher/watcher.go
       Note: Evidence and migration target referenced by the initial setup implementation guide
+    - Path: backend/internal/web/embed.go
+      Note: Implementation now realizes the setup design
+    - Path: backend/internal/web/embed_none.go
+      Note: Implementation now realizes the setup design
+    - Path: backend/internal/web/static.go
+      Note: Implementation now realizes the setup design
     - Path: client/src/App.tsx
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: client/src/main.tsx
@@ -42,8 +62,14 @@ RelatedFiles:
       Note: Evidence and migration target referenced by the initial setup implementation guide
     - Path: package.json
       Note: Evidence and migration target referenced by the initial setup implementation guide
+    - Path: plugins/retro-obsidian-publish.py
+      Note: Implementation now realizes the setup design
     - Path: vite.config.ts
       Note: Evidence and migration target referenced by the initial setup implementation guide
+    - Path: web/package.json
+      Note: Implementation now realizes the setup design
+    - Path: web/vite.config.ts
+      Note: Implementation now realizes the setup design
 ExternalSources:
     - devctl help user-guide
     - devctl help scripting-guide
@@ -53,6 +79,19 @@ LastUpdated: 2026-05-13T13:45:00-04:00
 WhatFor: Use this to onboard an intern and guide the first implementation pass for repository setup and toolchain migration.
 WhenToUse: Before changing CLI wiring, moving frontend files, replacing Docker-only builds, or adding devctl support.
 ---
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

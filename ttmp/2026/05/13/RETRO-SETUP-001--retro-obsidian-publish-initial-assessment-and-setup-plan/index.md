@@ -13,13 +13,19 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: README.md
-      Note: Current project architecture and setup documentation referenced by the ticket.
-    - Path: backend/cmd/server/main.go
-      Note: Current backend CLI entrypoint to migrate to Glazed.
-    - Path: package.json
-      Note: Current root pnpm package file to move under web/.
-    - Path: vite.config.ts
-      Note: Current Vite configuration to migrate under web/.
+      Note: Updated project architecture and setup documentation referenced by the ticket.
+    - Path: backend/cmd/retro-obsidian-publish/main.go
+      Note: Current single-binary Glazed CLI entrypoint.
+    - Path: backend/cmd/retro-obsidian-publish/commands/serve/serve.go
+      Note: Glazed serve verb replacing the old flag-based backend command.
+    - Path: backend/cmd/retro-obsidian-publish/commands/build/web.go
+      Note: Dagger-backed build web verb for embedded single-binary assets.
+    - Path: web/package.json
+      Note: Current pnpm package file after the web/ migration.
+    - Path: web/vite.config.ts
+      Note: Current Vite configuration after the web/ migration.
+    - Path: plugins/retro-obsidian-publish.py
+      Note: devctl plugin for local orchestration.
 ExternalSources:
     - devctl help user-guide
     - devctl help scripting-guide
