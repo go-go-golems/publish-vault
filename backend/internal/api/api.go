@@ -174,7 +174,7 @@ func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				continue
 			}
-			if slugSet[resolved] {
+			if slugSet[resolved] && resolved != n.Slug {
 				edges = append(edges, GraphEdge{
 					Source: n.Slug,
 					Target: resolved,
