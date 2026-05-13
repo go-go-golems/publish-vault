@@ -15,6 +15,16 @@ topics:
       description: devctl local development orchestration and plugin setup
     - slug: pnpm
       description: pnpm package manager workflows and lockfile management
+    - slug: mermaid
+      description: Mermaid diagram rendering
+    - slug: sidebar
+      description: Sidebar UI component
+    - slug: storybook
+      description: Storybook component stories
+    - slug: syntax-highlighting
+      description: Code syntax highlighting
+    - slug: ui
+      description: User interface
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes

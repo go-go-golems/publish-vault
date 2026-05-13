@@ -1,9 +1,27 @@
 ---
-title: Investigation Diary
-ticket: RETRO-UI-002
-doc_type: reference
-status: active
+Title: ""
+Ticket: ""
+Status: ""
+Topics: []
+DocType: ""
+Intent: ""
+Owners: []
+RelatedFiles:
+    - Path: backend/internal/search/search.go
+      Note: Fuzzy MatchQuery and prefix queries (Step 4)
+    - Path: web/src/components/organisms/NoteRenderer/NoteRenderer.tsx
+      Note: Embeds
+    - Path: web/src/index.css
+      Note: Copy button
+ExternalSources: []
+Summary: ""
+LastUpdated: 0001-01-01T00:00:00Z
+WhatFor: ""
+WhenToUse: ""
 ---
+
+
+
 
 # Diary
 
@@ -352,4 +370,327 @@ Review:
 Validate:
 ```bash
 curl -fsS http://127.0.0.1:8080/api/notes/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service | grep callout
+```
+
+## Step 4: Fuzzy search and right-panel resizable — improve search and layout UX
+
+Search returned zero results for partial words like "merm". The right panel was fixed-width and couldn't be resized. Graph edges used raw wiki-link targets instead of resolved slugs, producing 0 edges instead of ~900.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Fix search to handle partial words, make the right panel resizable, and fix the graph edge resolution bug.
+
+**Inferred user intent:** Make search actually useful for partial matches; make the layout more flexible; fix the graph which was empty.
+
+**Commit (code):** 72ed05b — Improve search: fuzzy matching for partial words, prefix for short queries
+**Commit (code):** 581caf8 — Make right panel resizable with drag handle
+**Commit (code):** d0908ec — Fix graph edges: resolve wiki links to vault slugs
+
+### What I did
+
+**Fuzzy search:**
+- Changed `search.go` to use `MatchQuery` with `SetFuzziness(1)` for words > 3 characters.
+- Short words (≤3 chars) use prefix queries for exact start matching.
+- Searching "merm" now returns 30 results instead of 0.
+
+**Right panel resizable:**
+- Wrapped the right `<aside>` in `NotePage.tsx` with `ResizablePanelGroup` / `ResizablePanel` / `ResizableHandle`.
+- Default 25%, min 12%, max 40%.
+- Added retro-styled resize handle.
+
+**Graph edge fix:**
+- `getGraph` in `api.go` was comparing raw `wl.Target` (e.g., `Tribal/App-Auth`) against slug set — never matching.
+- Changed to use `vault.ResolveWikiLink()` to resolve targets before checking slug membership.
+- Edge count went from 0 → 906.
+
+### Why
+Search was nearly unusable for partial matches. The graph was completely empty. The right panel was too inflexible.
+
+### What worked
+- Bleve's `MatchQuery` with `SetFuzziness(1)` handles partial words well without needing ngram tokenizers.
+- The `ResolveWikiLink()` function already existed for backlinks — reusing it for graph edges was straightforward.
+
+### What didn't work
+N/A
+
+### What I learned
+- Bleve `MatchQuery` with fuzziness is a good middle ground between exact and ngram search.
+- The graph edge resolution bug was a classic "use raw value vs. resolved value" mistake.
+
+### What was tricky to build
+- The fuzzy vs. prefix query boundary: very short words with fuzziness produce too many false positives, so ≤3 char words use prefix queries.
+
+### What warrants a second pair of eyes
+- The graph edge resolution — verify that `ResolveWikiLink` doesn't produce false positives for ambiguous targets.
+
+### What should be done in the future
+- Consider ngram tokenizer for true substring matching if fuzzy proves insufficient.
+- Filter self-referencing graph edges (a note linking to itself creates a loop).
+
+### Code review instructions
+
+Review:
+- `backend/internal/search/search.go` — fuzzy + prefix query logic
+- `backend/internal/api/api.go` — graph edge resolution using `ResolveWikiLink`
+- `web/src/components/pages/NotePage/NotePage.tsx` — ResizablePanelGroup for right panel
+- `web/src/index.css` — `.retro-resize-handle` styles
+
+Validate:
+```bash
+curl -fsS 'http://127.0.0.1:8080/api/search?q=merm' | jq '.results | length'
+curl -fsS 'http://127.0.0.1:8080/api/graph' | jq '.edges | length'
+```
+
+## Step 5: Resolve wiki-link display text to note titles
+
+Wiki links in the rendered HTML showed slugified targets like `Tribal/application-native-authorization` as display text instead of the actual note title `Application-Native Authorization — How We Do It`. The `data-raw` attribute was added to anchors in the parser, but the display text replacement wasn't wired in.
+
+### Prompt Context
+
+**User prompt (verbatim):** "work on tasks 1-6 (renumbered 2.1-2.6), add them to the ticket, work them one by one, commit at intervals, and keep a diary."
+
+**Assistant interpretation:** Task 2.1: Fix wiki-link display text to show resolved note titles.
+
+**Inferred user intent:** Make wiki links show human-readable titles instead of slugified paths.
+
+**Commit (code):** dc68621 — Resolve wiki-link display text to note titles
+
+### What I did
+
+- Added `data-raw` attribute to wiki-link anchors in `parser.go` — stores the original raw target (e.g., `Fundamentals/access-control-models`).
+- Added `dataRawRe` regex to match `data-raw="..."` attributes.
+- Added `ReplaceWikiLinkDisplay()` function that takes a title-resolver callback and replaces the anchor text between `>` and `</a>` with the resolved note title.
+- Updated `rebuildHTML()` in `vault.go` to call `ReplaceWikiLinkDisplay` after `ReplaceWikiLinksString`.
+- Added `TestWikiLinkDataRaw` and `TestWikiLinkDataRawRealFormat` to `parser_test.go`.
+
+### Why
+The `data-raw` attribute carries the original wiki-link target through the HTML transformation pipeline. The `ReplaceWikiLinksString` step resolves `data-target` and `href` to full slugs, while `ReplaceWikiLinkDisplay` resolves display text to note titles. Without `data-raw`, the display text replacement had no way to know which note to look up.
+
+### What worked
+- Adding `data-raw` to the parser output was simple and non-breaking.
+- `ReplaceWikiLinkDisplay` uses the already-resolved `data-target` slug to look up titles via `v.notes[slug].Title`.
+- Verified: `Fundamentals/access-control-models` → display text `Access Control Models: Authentication, Authorization, and Delegation`.
+
+### What didn't work
+**Critical debugging mystery**: After adding `data-raw` to the parser (confirmed by unit test), the API-served HTML contained 0 `data-raw` attributes. The mystery turned out to be a stale server binary — the previous server process was still running on port 8080, and the kill+restart didn't fully take effect due to a port conflict (`bind: address already in use`). After killing the stale process and restarting, `data-raw` appeared correctly (1298 occurrences before and after replacement).
+
+### What I learned
+- Always verify the server is actually running the new binary by checking PID and log output.
+- The `ReplaceWikiLinksString` regex preserves `data-raw` because it only targets `data-target` and `href="/note/..."` attributes.
+
+### What was tricky to build
+- The stale-server debugging mystery took significant time. The parser was correct, the regex was correct, but the served HTML came from an old binary. The lesson: after rebuilding, always confirm the old process is dead (`lsof -ti:8080`) and the new one started.
+
+### What warrants a second pair of eyes
+- The `ReplaceWikiLinkDisplay` regex — it matches `data-raw="..."` then captures text between `>` and `</a>`. If an anchor has nested HTML (e.g., `<code>` inside), the regex may break.
+
+### What should be done in the future
+- Consider HTML-aware (DOM-based) display text replacement instead of regex for robustness.
+- Add test coverage for `ReplaceWikiLinkDisplay`.
+
+### Code review instructions
+
+Review:
+- `backend/internal/parser/parser.go` — `data-raw` attribute, `dataRawRe`, `ReplaceWikiLinkDisplay`
+- `backend/internal/parser/parser_test.go` — `TestWikiLinkDataRaw`, `TestWikiLinkDataRawRealFormat`
+- `backend/internal/vault/vault.go` — `rebuildHTML()` calling `ReplaceWikiLinkDisplay`
+
+Validate:
+```bash
+curl -fsS http://127.0.0.1:8080/api/notes/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service | python3 -c 'import json,re,sys; d=json.load(sys.stdin); [print(m.group(1)[:50], "→", m.group(2)[:50]) for m in re.finditer(r"data-raw=\"([^\"]*)\"[^>]*>([^<]*)", d["html"])]'
+```
+
+## Step 6: Filter self-referencing graph edges and add copy-code button
+
+Notes that link to themselves were creating circular graph edges. Code blocks had no way to copy their content.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 5)
+
+**Assistant interpretation:** Task 2.2: Filter self-edges in graph. Task 2.3: Add copy-code button.
+
+**Inferred user intent:** Clean up the graph visualization and add a common code-reading convenience.
+
+**Commit (code):** 36258ba — Filter self-referencing graph edges
+**Commit (code):** 1040c14 — Add click-to-copy button on code blocks
+
+### What I did
+
+**Self-edge filter:**
+- Added `&& resolved != n.Slug` condition to the graph edge builder in `api.go`.
+- Self-referencing edges (a note linking to itself) are now excluded.
+
+**Copy-code button:**
+- Added a post-highlight useEffect in `NoteRenderer.tsx` that injects a `⎘` button into each `<pre>` block.
+- On click, copies `code.textContent` to clipboard and briefly shows `✓`.
+- Button is hidden by default (`opacity: 0`) and appears on hover.
+- Added `.copy-code-btn` CSS in `index.css` with retro styling (ink background, paper text).
+
+### Why
+Self-edges create noise in the graph. Copy-code is a standard feature in documentation sites.
+
+### What worked
+- The one-line `&& resolved != n.Slug` fix was trivial.
+- The DOM-injection approach for copy buttons works well alongside hljs highlighting.
+
+### What didn't work
+N/A
+
+### What I learned
+- The copy button needs `position: relative` on the `<pre>` parent for absolute positioning to work.
+
+### What was tricky to build
+N/A — straightforward implementation.
+
+### What warrants a second pair of eyes
+- The copy button's clipboard API call (`navigator.clipboard.writeText`) — may fail in non-HTTPS contexts. Should add a fallback.
+
+### What should be done in the future
+- Add clipboard API fallback for HTTP contexts (e.g., `document.execCommand('copy')`).
+- Consider selective highlight.js language imports to reduce bundle size.
+
+### Code review instructions
+
+Review:
+- `backend/internal/api/api.go` — self-edge filter (`resolved != n.Slug`)
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` — copy button injection
+- `web/src/index.css` — `.copy-code-btn` styles
+
+Validate:
+```bash
+curl -fsS http://127.0.0.1:8080/api/graph | python3 -c 'import json,sys; g=json.load(sys.stdin); self_edges=[e for e in g["edges"] if e["source"]==e["target"]; print(f"Self-edges: {len(self_edges)}")'
+```
+
+## Step 7: Render ![[embeds]] with inline note content and add collapsible callouts
+
+`![[Note]]` embeds were rendering as empty `<div class="wiki-embed">` placeholders. Callouts with `[!type]-` syntax (Obsidian's default-collapsed) were not collapsible.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 5)
+
+**Assistant interpretation:** Task 2.4: Render embeds inline. Task 2.5: Add collapsible callout support.
+
+**Inferred user intent:** Make embeds show actual content and make callouts match Obsidian's collapsible behavior.
+
+**Commit (code):** 9477854 — Render ![[embeds]] with inline note content
+**Commit (code):** 945b53d — Add collapsible callouts [!type]- default closed with toggle
+
+### What I did
+
+**Embed rendering:**
+- Added a `useEffect` in `NoteRenderer.tsx` that finds `.wiki-embed` divs, fetches the embedded note's HTML via `/api/notes/{target}`, and injects it as a child `<div class="wiki-embed-content">`.
+- Failed fetches show `⚠ Embed not found: {target}`.
+- Added `.wiki-embed-content` and `.wiki-embed-broken` CSS.
+
+**Collapsible callouts:**
+- Updated `calloutRe` regex in `parser.go` to capture the `+`/`-` fold character after `[!type]`: `\[!(\w+)\]([+-])?`.
+- `[!type]-` renders as `<div class="callout callout-type callout-collapsible">` with the body `display:none`.
+- `[!type]+` and `[!type]` render as normal (open) callouts.
+- Added `callout-toggle` span (▼) in the title for collapsible callouts.
+- Added click handler in `NoteRenderer.tsx` that toggles `display:none` on the `.callout-body` and swaps ▼/▶.
+- Added `.callout-collapsible`, `.callout-toggle` CSS with hover effects.
+- Added `TestCollapsibleCallout` and `TestOpenCallout` to `parser_test.go`.
+
+### Why
+Embeds are a core Obsidian feature. Collapsible callouts are used in the `go-go-parc` vault for summary blocks that should be hidden by default.
+
+### What worked
+- The client-side fetch approach for embeds is simple and doesn't require backend changes.
+- The `]` in the regex was the key insight — `[!warning]-` means the `]` closes the type, then `-` is the fold char.
+
+### What didn't work
+**Regex failure #1**: Initial regex `\[!(\w+)([+-])?` didn't account for the `]` between the type and fold char. The `\w+` matched `warning`, then `([+-])?` tried to match `]` which isn't `+` or `-`, so the fold char was always empty. The test output showed `]- Collapsed Warning` leaking into the title. Fix: added explicit `\]` before the fold group: `\[!(\w+)\]([+-])?`.
+
+**Regex failure #2**: The Go raw string literal had `\]` which Go interprets as literal `\]`. But the actual issue was simpler — the first attempt forgot to match the closing `]` bracket, so the fold character was never captured.
+
+### What I learned
+- The `]` in `[!type]-` is the Markdown link reference closing bracket, not part of the callout type. The regex must match `\]` explicitly between the type and fold char.
+- Client-side embed fetching is elegant but creates N+1 API calls for notes with many embeds.
+
+### What was tricky to build
+- The regex evolution: `\[!(\w+)\]([+-])?([\s\S]*?)` — the `]` placement was the critical fix. Without it, the fold char was always empty and `- Collapsed Warning` leaked into the content.
+
+### What warrants a second pair of eyes
+- Embed fetching — if an embedded note itself contains embeds, this creates recursive API calls. Should add a depth limit.
+- The collapsible callout click handler is in the `handleClick` callback — verify it doesn't interfere with wiki-link clicks.
+
+### What should be done in the future
+- Add embed depth limit (max 2 levels of nesting).
+- Add embed loading indicator (spinner or placeholder text).
+- Consider server-side embed resolution for better performance.
+
+### Code review instructions
+
+Review:
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` — embed useEffect, collapsible callout toggle in handleClick
+- `backend/internal/parser/parser.go` — updated `calloutRe` regex, collapsible callout rendering
+- `backend/internal/parser/parser_test.go` — `TestCollapsibleCallout`, `TestOpenCallout`
+- `web/src/index.css` — `.wiki-embed-content`, `.callout-collapsible`, `.callout-toggle` styles
+
+Validate:
+```bash
+cd backend && go test ./internal/parser/ -run TestCollapsibleCallout -v
+curl -fsS http://127.0.0.1:8080/api/notes/research/playbooks/sync-vault-projects-to-parc | grep wiki-embed
+```
+
+## Step 8: Add heading permalink anchors and hash-scroll navigation
+
+Goldmark generates `id` attributes on headings, but there were no permalink links and no scroll-to-heading behavior for hash fragments.
+
+### Prompt Context
+
+**User prompt (verbatim):** "keep a diary (read the skill if necessary)" and "commit at appropriate intervals"
+
+**Assistant interpretation:** Task 2.6 (final task): Add heading permalinks. Also update the diary with all recent progress.
+
+**Inferred user intent:** Complete all six tasks, keep documentation current, commit properly.
+
+**Commit (code):** bd03a56 — Add heading permalink anchors and hash-scroll navigation
+
+### What I did
+
+- Added a `useEffect` in `NoteRenderer.tsx` that finds all `<h1>`–`<h6>` elements with `id` attributes and injects an `<a class="heading-anchor" href="#id">#</a>` as the last child.
+- The `#` link is hidden by default (`opacity: 0`) and appears on heading hover.
+- Clicking the permalink sets `window.location.hash` and scrolls smoothly to the heading.
+- Added a separate `useEffect` that handles hash-scroll on note load — if `window.location.hash` is set, waits 200ms for content to render, then scrolls to the target heading.
+- Added `.heading-anchor` CSS with retro styling.
+
+### Why
+Heading permalinks are essential for sharing specific sections. Hash-scroll is needed because the SPA renders content dynamically after navigation — the browser's native scroll-to-hash doesn't work with `dangerouslySetInnerHTML`.
+
+### What worked
+- `CSS.escape(hash)` properly escapes heading IDs that contain special characters.
+- The 200ms delay gives mermaid and hljs effects time to run before scrolling.
+
+### What didn't work
+N/A
+
+### What I learned
+- React's `dangerouslySetInnerHTML` doesn't trigger the browser's native scroll-to-hash because the content isn't in the DOM at navigation time. A programmatic scroll is needed.
+- `CSS.escape()` is essential for heading IDs with dots, colons, or other CSS-significant characters.
+
+### What was tricky to build
+- The scroll timing: mermaid rendering is async and can change the document height. The 200ms delay is a heuristic — for very large mermaid diagrams, the scroll target may shift. Consider using a `MutationObserver` or `ResizeObserver` instead.
+
+### What warrants a second pair of eyes
+- The scroll delay heuristic (200ms) — may be insufficient for slow mermaid renders or very long notes.
+
+### What should be done in the future
+- Replace the 200ms scroll delay with a `MutationObserver` that waits for mermaid SVGs to be inserted.
+- Add scroll-margin-top to headings so the fixed header doesn't obscure the target.
+
+### Code review instructions
+
+Review:
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` — heading permalink injection and hash-scroll effects
+- `web/src/index.css` — `.heading-anchor` styles
+
+Validate:
+```bash
+# Check that headings have IDs
+curl -fsS http://127.0.0.1:8080/api/notes/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service | python3 -c 'import re,sys; html=sys.stdin.read(); ids=re.findall(r"<h[1-6] id=\"([^\"]*)\"", html); print(f"Heading IDs: {len(ids)}"); [print(f"  {i}") for i in ids[:5]]'
 ```
