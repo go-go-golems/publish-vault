@@ -25,3 +25,11 @@ Implemented web/ migration, single embedded Go binary, Glazed command tree, Dagg
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/web/static.go — SPA handler for embedded web assets
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/plugins/retro-obsidian-publish.py — devctl plugin
 
+
+## 2026-05-13
+
+Uploaded final implementation-complete ticket bundle to reMarkable.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/13/RETRO-SETUP-001--retro-obsidian-publish-initial-assessment-and-setup-plan/tasks.md — Marked final upload complete

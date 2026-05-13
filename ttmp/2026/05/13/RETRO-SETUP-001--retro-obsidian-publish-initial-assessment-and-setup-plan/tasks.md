@@ -67,7 +67,7 @@
 - [x] Resolve Go version mismatch by updating the backend Dockerfile to Go 1.25.
 - [x] Run final validation suite.
 - [x] Update diary, changelog, and docmgr doctor.
-- [ ] Upload final docs to reMarkable if requested.
+- [x] Upload final docs to reMarkable.
 - [x] Commit final docs/cleanup.
 
 ## Follow-up correctness tasks
