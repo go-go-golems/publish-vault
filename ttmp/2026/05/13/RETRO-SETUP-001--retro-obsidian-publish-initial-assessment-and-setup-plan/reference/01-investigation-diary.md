@@ -777,3 +777,130 @@ Phase 7 commits:
 37c29a7013883645884916200e5ebf9388758295 Add follow-up hardening tasks
 8f865db702d01ad1e14e63800dbe085550bb1fdc Harden watcher search sync and tests
 ```
+
+## Step 6: Completed Phase 8 container and CI hardening
+
+I completed the container and CI hardening phase. The Docker image now builds and runs successfully with a mounted vault, the build context is pruned with `.dockerignore`, and a GitHub Actions workflow captures the chosen CI shape for web checks, backend tests, plugin smoke testing, embedded binary builds, and Docker image builds.
+
+The implementation was committed as `cf6c8a483e468bccaaef6c6bff45c0e3c9fcd012` with message `Add CI and harden Docker build`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "do it"
+
+**Assistant interpretation:** Continue with the next tracked phase, Phase 8: Docker verification, CI workflow, and generated asset policy.
+
+**Inferred user intent:** The user wants the remaining hardening work executed rather than only described.
+
+**Commit (code):** `cf6c8a483e468bccaaef6c6bff45c0e3c9fcd012` — `Add CI and harden Docker build`
+
+### What I did
+
+- Ran Docker build verification:
+  - `docker build -f backend/Dockerfile -t retro-obsidian-publish .`
+- Added `.dockerignore` so Docker build context excludes:
+  - `.git`
+  - `.devctl`
+  - `ttmp`
+  - `web/node_modules`
+  - `web/dist`
+  - `backend/bin`
+  - generated embedded public assets
+- Fixed the backend Docker build for Glazed/go-sqlite3:
+  - added `build-base` to the Go builder image;
+  - built the binary with `CGO_ENABLED=1`.
+- Verified container runtime with mounted vault:
+  - `docker run -d --name retro-obsidian-publish-smoke -p 18088:8080 -v "$PWD/backend/vault-example:/vault:ro" -e VAULT_DIR=/vault retro-obsidian-publish`
+  - `curl -fsS http://127.0.0.1:18088/api/notes`
+  - `curl -fsS http://127.0.0.1:18088/`
+- Added `.github/workflows/ci.yml` with this CI shape:
+  - checkout;
+  - setup Go `1.25.x`;
+  - setup Node `22` with pnpm cache;
+  - `pnpm --dir web install --frozen-lockfile`;
+  - `pnpm --dir web check`;
+  - `pnpm --dir web build`;
+  - `python3 -m unittest plugins/test_retro_plugin.py`;
+  - `cd backend && go test ./...`;
+  - `BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local`;
+  - `go build -tags embed`;
+  - `docker build -f backend/Dockerfile -t retro-obsidian-publish .`.
+- Documented generated asset policy in `README.md`: generated web assets remain ignored and are rebuilt by `build web`.
+- Marked Phase 8 tasks complete in `tasks.md`.
+
+### Why
+
+The Docker runtime initially failed because the binary was compiled with CGO disabled in Alpine, while Glazed's help system depends on go-sqlite3. Building with CGO enabled in a builder image that has `build-base` fixes the runtime failure.
+
+The `.dockerignore` file matters because the first Docker build sent a very large context that included local generated/dependency directories. Excluding those directories makes Docker builds faster and safer.
+
+### What worked
+
+The corrected Docker build completed successfully. The mounted-vault container smoke test succeeded:
+
+```text
+1866 /tmp/retro-docker-api.json
+367351 /tmp/retro-docker-root.html
+369217 total
+2026/05/13 20:35:39 Loading vault from /vault
+2026/05/13 20:35:39 Loaded 5 notes
+2026/05/13 20:35:39 Server listening on http://localhost:8080
+```
+
+### What didn't work
+
+The first Docker runtime attempt failed immediately with:
+
+```text
+{"level":"fatal","error":"failed to create tables: failed to inspect sections table: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub","time":"2026-05-13T20:32:52Z","message":"Failed to create in-memory store"}
+```
+
+I fixed it by installing `build-base` in the Go builder stage and using `CGO_ENABLED=1 go build` for the embedded binary.
+
+### What I learned
+
+- Glazed's help initialization can require go-sqlite3 at startup, so static/CGO-disabled container builds are not valid for this binary as currently wired.
+- Docker context size was large without `.dockerignore`; generated web assets and dependencies should not be sent to Docker.
+- Generated embedded assets should remain ignored. The source of truth is `web/`, and `retro-obsidian-publish build web` stages assets for embedding.
+
+### What was tricky to build
+
+The Docker image built successfully before the runtime failure, so the issue was not obvious from `docker build`. The failure only appeared when starting the container. Keeping a mounted-vault runtime smoke test in the checklist is important because it catches CGO/runtime-linking problems that build-only CI can miss.
+
+### What warrants a second pair of eyes
+
+- Review `.github/workflows/ci.yml` once it runs on GitHub, especially whether `actions/setup-go` accepts `1.25.x` in the hosted runner image at that time.
+- Review whether Docker CI should run the container smoke test too, or only build the image. The current workflow builds the image but does not run it.
+
+### What should be done in the future
+
+- Add a container smoke step to CI if GitHub-hosted Docker port publishing is acceptable for the repo.
+- Continue Phase 9 release polish if the project will be distributed as a CLI.
+
+### Code review instructions
+
+Review these files:
+
+- `.dockerignore`
+- `.github/workflows/ci.yml`
+- `backend/Dockerfile`
+- `README.md`
+- `ttmp/2026/05/13/RETRO-SETUP-001--retro-obsidian-publish-initial-assessment-and-setup-plan/tasks.md`
+
+Validation commands already run locally:
+
+```bash
+docker build -f backend/Dockerfile -t retro-obsidian-publish .
+docker run -d --name retro-obsidian-publish-smoke -p 18088:8080 -v "$PWD/backend/vault-example:/vault:ro" -e VAULT_DIR=/vault retro-obsidian-publish
+curl -fsS http://127.0.0.1:18088/api/notes
+curl -fsS http://127.0.0.1:18088/
+docker rm -f retro-obsidian-publish-smoke
+```
+
+### Technical details
+
+Phase 8 commit:
+
+```text
+cf6c8a483e468bccaaef6c6bff45c0e3c9fcd012 Add CI and harden Docker build
+```

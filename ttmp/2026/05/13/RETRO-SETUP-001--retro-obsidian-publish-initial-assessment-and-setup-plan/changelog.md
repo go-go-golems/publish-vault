@@ -44,3 +44,14 @@ Completed Phase 7 items 1-4: reviewed migration, fixed watcher/search sync, adde
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/web/static_test.go — SPA fallback and API exclusion tests
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/index.html — Removed analytics placeholders causing Vite warnings
 
+
+## 2026-05-13
+
+Completed Phase 8: verified Docker build/runtime, fixed CGO-enabled container build, added .dockerignore, documented generated asset policy, and added CI workflow (commit cf6c8a4).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.dockerignore — Docker context pruning and generated asset policy
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/ci.yml — CI workflow for web/backend/plugin/embed/docker validation
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/Dockerfile — CGO-enabled single-binary Docker build
+
