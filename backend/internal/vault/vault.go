@@ -4,6 +4,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -262,7 +263,26 @@ func (v *Vault) FileTree() *FileNode {
 		}
 	}
 
+	sortTree(root)
+
 	return root
+}
+
+// sortTree recursively sorts tree nodes: folders first, then alphabetically.
+func sortTree(node *FileNode) {
+	if node == nil {
+		return
+	}
+	sort.SliceStable(node.Children, func(i, j int) bool {
+		a, b := node.Children[i], node.Children[j]
+		if a.IsFolder != b.IsFolder {
+			return a.IsFolder
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
+	for _, child := range node.Children {
+		sortTree(child)
+	}
 }
 
 // Root returns the vault root directory.
