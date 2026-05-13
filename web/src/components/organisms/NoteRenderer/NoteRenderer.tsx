@@ -161,7 +161,36 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     });
   }, [resolvedHtml]);
 
-  // Build breadcrumb from path
+  // Embed rendering — resolve ![[Note]] placeholders with inline note content
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const embeds = el.querySelectorAll<HTMLElement>(".wiki-embed");
+    embeds.forEach((embed) => {
+      const target = embed.getAttribute("data-target") ?? "";
+      if (!target) return;
+      // Don't re-render already-populated embeds
+      if (embed.dataset.resolved) return;
+      embed.dataset.resolved = "true";
+
+      fetch(`/api/notes/${encodeURIComponent(target)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.html) {
+            const container = document.createElement("div");
+            container.className = "wiki-embed-content retro-inset my-2";
+            container.innerHTML = data.html;
+            embed.appendChild(container);
+          }
+        })
+        .catch(() => {
+          // Show broken link indicator
+          embed.textContent = `⚠ Embed not found: ${target}`;
+          embed.className = "wiki-embed wiki-embed-broken";
+        });
+    });
+  }, [resolvedHtml]);
   const breadcrumbs = useMemo(() => {
     const parts = note.path.replace(/\.md$/, "").split("/");
     return parts.map((p, i) => ({

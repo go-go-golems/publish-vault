@@ -518,6 +518,19 @@
     opacity: 1;
   }
 
+  /* ── Wiki embeds ── */
+  .wiki-embed-content {
+    border: 1px solid var(--color-ink);
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .wiki-embed-broken {
+    color: var(--color-destructive-accent);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px 8px;
+  }
+
   /* ── Callouts (admonitions) ── */
   .callout {
     border: 1px solid var(--color-ink);
