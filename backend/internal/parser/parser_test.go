@@ -1,6 +1,9 @@
 package parser
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseFrontmatterWikiLinksAndEmbeds(t *testing.T) {
 	src := []byte(`---
@@ -64,4 +67,42 @@ func TestSlugifyPreservesSlashPaths(t *testing.T) {
 	if got, want := Slugify("Folder/My Note!"), "folder/my-note"; got != want {
 		t.Fatalf("Slugify() = %q, want %q", got, want)
 	}
+}
+
+func TestCalloutRendering(t *testing.T) {
+	src := []byte(`# Test
+
+> [!summary]\n> This is a summary callout.\n> With multiple lines.
+`)
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !contains(parsed.HTML, `class="callout callout-summary"`) {
+		t.Fatalf("HTML should contain callout-summary div, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `callout-title`) {
+		t.Fatalf("HTML should contain callout-title, got: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, `<blockquote`) {
+		t.Fatalf("HTML should not contain raw blockquote, got: %s", parsed.HTML)
+	}
+}
+
+func TestCalloutWithTitle(t *testing.T) {
+	src := []byte("# Test\n\n> [!warning] Custom Warning Title\n> Body text here.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !contains(parsed.HTML, `callout-warning`) {
+		t.Fatalf("HTML should contain callout-warning, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, "Custom Warning Title") {
+		t.Fatalf("HTML should contain custom title, got: %s", parsed.HTML)
+	}
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

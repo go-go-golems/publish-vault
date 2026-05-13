@@ -73,6 +73,9 @@ func Parse(src []byte) (*ParsedNote, error) {
 	frontmatter := meta.Get(ctx)
 	htmlOut := buf.String()
 
+	// --- Render callouts (admonitions) ---
+	htmlOut = renderCallouts(htmlOut)
+
 	// --- Extract title ---
 	title := extractTitle(frontmatter, src)
 
@@ -197,6 +200,113 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 }
 
 // extractTitle returns the title from frontmatter "title" key, or the first H1.
+// renderCallouts transforms Obsidian-style callout blockquotes into styled divs.
+// Goldmark renders `> [!type] Title` as `<blockquote><p>[!type] Title<br/>...</p></blockquote>`.
+// This function detects that pattern and replaces it with a styled callout div.
+var calloutRe = regexp.MustCompile(`<blockquote>\s*<p>\[!(\w+)\]([\s\S]*?)</blockquote>`)
+
+func renderCallouts(html string) string {
+	return calloutRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := calloutRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		calloutType := strings.ToLower(sub[1])
+		// Extract content: everything between [!type] and </blockquote>
+		// The content may contain multiple <p> tags
+		content := sub[2]
+		// Remove trailing </p> if present (goldmark wraps in <p> for single-paragraph)
+		content = strings.TrimSuffix(content, "</p>")
+		content = strings.TrimSuffix(content, "</p>\n")
+		content = strings.TrimSpace(content)
+
+		// Split content into optional title and body
+		// The title is text before the first <br />, the body is after
+		var title, body string
+		if idx := strings.Index(content, "<br />"); idx >= 0 {
+			title = strings.TrimSpace(content[:idx])
+			body = strings.TrimSpace(content[idx+6:])
+		} else if idx := strings.Index(content, "<br/>"); idx >= 0 {
+			title = strings.TrimSpace(content[:idx])
+			body = strings.TrimSpace(content[idx+5:])
+		} else {
+			body = strings.TrimSpace(content)
+		}
+
+		// Map callout types to icons/labels
+		label := strings.Title(calloutType)
+		switch calloutType {
+		case "summary":
+			label = "Summary"
+		case "note":
+			label = "Note"
+		case "tip":
+			label = "Tip"
+		case "warning":
+			label = "Warning"
+		case "important":
+			label = "Important"
+		case "caution":
+			label = "Caution"
+		case "info":
+			label = "Info"
+		case "question":
+			label = "Question"
+		case "quote":
+			label = "Quote"
+		case "example":
+			label = "Example"
+		case "abstract":
+			label = "Abstract"
+		}
+
+		var b strings.Builder
+		b.WriteString(`<div class="callout callout-` + calloutType + `">`)
+		b.WriteString(`<div class="callout-title">`)
+		b.WriteString(`<span class="callout-icon">` + calloutIcon(calloutType) + `</span> `)
+		if title != "" {
+			b.WriteString(title)
+		} else {
+			b.WriteString(label)
+		}
+		b.WriteString(`</div>`)
+		if body != "" {
+			b.WriteString(`<div class="callout-body">`)
+			b.WriteString(body)
+			b.WriteString(`</div>`)
+		}
+		b.WriteString(`</div>`)
+		return b.String()
+	})
+}
+
+func calloutIcon(typ string) string {
+	switch typ {
+	case "summary", "abstract":
+		return "≡"
+	case "note":
+		return "✎"
+	case "tip":
+		return "💡"
+	case "warning":
+		return "⚠"
+	case "important":
+		return "❗"
+	case "caution":
+		return "🔥"
+	case "info":
+		return "ℹ"
+	case "question":
+		return "❓"
+	case "quote":
+		return "❝"
+	case "example":
+		return "📋"
+	default:
+		return "■"
+	}
+}
+
 func extractTitle(fm map[string]interface{}, src []byte) string {
 	if t, ok := fm["title"]; ok {
 		if ts, ok := t.(string); ok && ts != "" {

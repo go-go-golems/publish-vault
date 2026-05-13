@@ -497,6 +497,45 @@
     border: 1px solid var(--color-ink);
   }
 
+  /* ── Callouts (admonitions) ── */
+  .callout {
+    border: 1px solid var(--color-ink);
+    margin: 0.8em 0;
+    background: var(--color-panel);
+  }
+  .callout-title {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 8px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .callout-icon {
+    font-style: normal;
+    font-size: 12px;
+  }
+  .callout-body {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .callout-body p { margin: 0.4em 0; }
+  .callout-summary { border-color: #005500; }
+  .callout-summary .callout-title { background: #005500; }
+  .callout-warning { border-color: #cc7700; }
+  .callout-warning .callout-title { background: #cc7700; }
+  .callout-important { border-color: #cc0000; }
+  .callout-important .callout-title { background: #cc0000; }
+  .callout-tip { border-color: #0055cc; }
+  .callout-tip .callout-title { background: #0055cc; }
+  .callout-note { border-color: var(--color-ink); }
+  .callout-info { border-color: #555; }
+  .callout-info .callout-title { background: #555; }
+
   /* ── Highlight.js retro overrides ── */
   .hljs { background: var(--color-ink) !important; color: var(--color-paper) !important; }
   .hljs-keyword, .hljs-selector-tag { color: #aaddff; font-weight: bold; }

@@ -106,7 +106,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
           allSlugs={allSlugs}
           onNavigate={handleNavigate}
           onTagClick={handleTagClick}
-          className="max-w-3xl"
+          className="max-w-4xl"
         />
       </ScrollArea>
 

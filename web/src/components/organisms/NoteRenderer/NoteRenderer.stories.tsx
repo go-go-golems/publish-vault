@@ -152,3 +152,33 @@ export const WithMermaidAndCode: Story = {
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };
+
+export const WithCallouts: Story = {
+  args: {
+    note: {
+      ...baseNote,
+      title: "Note with Callouts",
+      html: `
+    <p>This note demonstrates Obsidian-style callout admonitions.</p>
+    <div class="callout callout-summary">
+      <div class="callout-title"><span class="callout-icon">≡</span> Summary</div>
+      <div class="callout-body"><p>A multi-tenant Go service that hosts many isolated Goja sites. Humans sign up and manage sites through an admin console.</p></div>
+    </div>
+    <div class="callout callout-warning">
+      <div class="callout-title"><span class="callout-icon">⚠</span> Warning</div>
+      <div class="callout-body"><p>This feature is experimental and may change in future versions.</p></div>
+    </div>
+    <div class="callout callout-tip">
+      <div class="callout-title"><span class="callout-icon">💡</span> Tip</div>
+      <div class="callout-body"><p>Use <code>goja-host deploy</code> to deploy a site from the CLI.</p></div>
+    </div>
+    <div class="callout callout-note">
+      <div class="callout-title"><span class="callout-icon">✎</span> Architecture Note</div>
+      <div class="callout-body"><p>The Go binary uses goldmark for Markdown parsing and go-sqlite3 for full-text search.</p></div>
+    </div>
+  `,
+    },
+    allSlugs: ["callouts-note"],
+    onNavigate: (slug) => console.log("navigate:", slug),
+  },
+};
