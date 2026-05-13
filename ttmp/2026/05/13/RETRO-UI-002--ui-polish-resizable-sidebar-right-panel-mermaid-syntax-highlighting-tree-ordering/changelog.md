@@ -35,3 +35,13 @@ Fixed wiki-link resolution: short Obsidian paths now resolve to full vault slugs
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/parser/parser.go — ReplaceWikiLinksString
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — buildWikiLinkIndex
 
+
+## 2026-05-13
+
+Render callout admonitions and widen article to max-w-4xl
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/parser/parser.go — renderCallouts()
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/index.css — .callout styles
+

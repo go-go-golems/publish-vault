@@ -284,3 +284,72 @@ Validate:
 ```bash
 curl -fsS http://127.0.0.1:8080/api/notes/research/kb/tribal/application-native-authorization | jq .backlinks
 ```
+
+## Step 3: Render callout admonitions and widen article
+
+The `> [!summary]` callout in the Goja Sites proposal was rendering as a plain blockquote with raw `[!summary]` text. Also, the article width was narrower than Obsidian Publish (768px vs 800px).
+
+### Prompt Context
+
+**User prompt (verbatim):** "I aso think the width of the article could be a bit wider: https://publish.obsidian.md/manuel/Projects/2026/05/04/ARTICLE+-+Obsidian+to+reMarkable+Sync+-+Native+Delta+Upload+and+Vault+Report+Pipeline (compare to this) ,not much though. also render admonitions like !summary on http://127.0.0.1:8080/note/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service"
+
+**Assistant interpretation:** Widen article slightly and render Obsidian-style callout admonitions.
+
+**Inferred user intent:** Match Obsidian Publish's readability width and make callouts look like proper styled boxes.
+
+**Commit (code):** 22dab5f — Render callout admonitions and widen article to max-w-4xl
+
+### What I did
+
+- Checked Obsidian Publish's actual content width: `max-width: 800px` on `.markdown-preview-sizer`.
+- Widened article from `max-w-3xl` (768px) to `max-w-4xl` (896px) — a bit wider than Obsidian Publish, which fits the retro design's denser layout.
+- Added `renderCallouts()` to `parser.go` — detects `<blockquote><p>[!type]` patterns and transforms them into styled `<div class="callout callout-type">` blocks.
+- Added `calloutIcon()` helper — maps callout types to Unicode icons (≡ for summary, ⚠ for warning, 💡 for tip, etc.).
+- Added retro callout CSS — each callout type has a colored titlebar (green for summary, orange for warning, red for important, blue for tip).
+- Added `TestCalloutRendering` and `TestCalloutWithTitle` to `parser_test.go`.
+- Added `WithCallouts` story to `NoteRenderer.stories.tsx`.
+
+### Why
+
+Obsidian callouts (`> [!type]`) are a core authoring feature. Without rendering them, important summary/warning/note boxes appear as plain blockquotes with raw `[!type]` markers.
+
+### What worked
+
+The regex approach `\[!(\w+)\]` catches all standard callout types. The retro-themed callout boxes with colored titlebars match the overall design language.
+
+### What didn't work
+
+Go's `regexp` package doesn't support `(?!...)` lookahead, so the initial regex failed at compile time. Rewrote using `[\s\S]*?` lazy match with `</blockquote>` as the closing boundary.
+
+### What I learned
+
+Obsidian Publish uses `max-width: 800px`. Our `max-w-4xl` (896px) is slightly wider, which works well for the retro monospace-heavy content.
+
+### What was tricky to build
+
+The regex for multi-paragraph blockquotes — goldmark wraps single-paragraph blockquotes in one `<p>` tag, but multi-paragraph ones use multiple `<p>` tags. The regex `[\s\S]*?</blockquote>` handles both cases.
+
+### What warrants a second pair of eyes
+
+- Nested blockquotes inside callouts — the current regex may not handle them correctly.
+- Callout collapsibility — Obsidian supports `> [!type]+` and `> [!type]-` for default-open/closed. Not yet implemented.
+
+### What should be done in the future
+
+- Add collapsible callout support (`[!type]+` default open, `[!type]-` default closed).
+- Handle nested blockquotes inside callouts.
+- Add more callout type colors if needed.
+
+### Code review instructions
+
+Review:
+- `backend/internal/parser/parser.go` — `renderCallouts()`, `calloutIcon()`
+- `backend/internal/parser/parser_test.go` — callout tests
+- `web/src/index.css` — `.callout` styles
+- `web/src/components/pages/NotePage/NotePage.tsx` — `max-w-4xl`
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.stories.tsx` — `WithCallouts` story
+
+Validate:
+```bash
+curl -fsS http://127.0.0.1:8080/api/notes/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service | grep callout
+```
