@@ -206,6 +206,44 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         });
     });
   }, [resolvedHtml]);
+
+  // Heading permalinks — inject # link after each heading
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const headings = el.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6");
+    headings.forEach((heading) => {
+      if (heading.querySelector(".heading-anchor")) return;
+      const id = heading.id;
+      if (!id) return;
+      const anchor = document.createElement("a");
+      anchor.className = "heading-anchor";
+      anchor.href = `#${id}`;
+      anchor.title = "Link to this section";
+      anchor.textContent = "#";
+      anchor.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.location.hash = id;
+        heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      heading.appendChild(anchor);
+    });
+  }, [resolvedHtml]);
+
+  // Scroll to heading on hash navigation
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash || !contentRef.current) return;
+    // Small delay to let content render
+    const timer = setTimeout(() => {
+      const target = contentRef.current?.querySelector(`#${CSS.escape(hash)}`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [note.slug, resolvedHtml]);
   const breadcrumbs = useMemo(() => {
     const parts = note.path.replace(/\.md$/, "").split("/");
     return parts.map((p, i) => ({

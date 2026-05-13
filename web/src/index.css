@@ -531,6 +531,32 @@
     padding: 4px 8px;
   }
 
+  /* ── Heading permalinks ── */
+  .note-prose h1, .note-prose h2, .note-prose h3,
+  .note-prose h4, .note-prose h5, .note-prose h6 {
+    position: relative;
+  }
+  .heading-anchor {
+    position: absolute;
+    right: 0;
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--color-ink);
+    opacity: 0;
+    text-decoration: none;
+    transition: opacity 0.15s;
+    padding-left: 4px;
+  }
+  .note-prose h1:hover .heading-anchor,
+  .note-prose h2:hover .heading-anchor,
+  .note-prose h3:hover .heading-anchor,
+  .note-prose h4:hover .heading-anchor,
+  .note-prose h5:hover .heading-anchor,
+  .note-prose h6:hover .heading-anchor,
+  .heading-anchor:focus {
+    opacity: 0.6;
+  }
+
   /* ── Callouts (admonitions) ── */
   .callout {
     border: 1px solid var(--color-ink);
