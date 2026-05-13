@@ -15,7 +15,7 @@ import (
 type Note struct {
 	Slug        string                 `json:"slug"`
 	Title       string                 `json:"title"`
-	Path        string                 `json:"path"`        // relative path inside vault
+	Path        string                 `json:"path"` // relative path inside vault
 	Frontmatter map[string]interface{} `json:"frontmatter"`
 	Tags        []string               `json:"tags"`
 	Excerpt     string                 `json:"excerpt"`
@@ -166,31 +166,34 @@ func (v *Vault) buildBacklinks() {
 	}
 }
 
-// ReloadNote re-parses a single file and updates the vault index.
-func (v *Vault) ReloadNote(absPath string) error {
+// ReloadNote re-parses a single file, updates the vault index, and returns the
+// updated note so callers can refresh secondary indexes.
+func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	note, err := v.loadNote(absPath, info)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	v.mu.Lock()
 	v.notes[note.Slug] = note
 	v.buildBacklinks()
 	v.mu.Unlock()
-	return nil
+	return note, nil
 }
 
-// RemoveNote removes a note from the vault index.
-func (v *Vault) RemoveNote(absPath string) {
+// RemoveNote removes a note from the vault index and returns the removed slug so
+// callers can refresh secondary indexes.
+func (v *Vault) RemoveNote(absPath string) string {
 	relPath, _ := filepath.Rel(v.root, absPath)
 	slug := pathToSlug(relPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
 	v.buildBacklinks()
 	v.mu.Unlock()
+	return slug
 }
 
 // GetNote returns a note by slug.

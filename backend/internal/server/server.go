@@ -57,7 +57,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("failed to build search index: %w", err)
 	}
 
-	fw, err := watcher.New(v)
+	fw, err := watcher.New(v, watcher.WithSearchIndex(si))
 	if err != nil {
 		log.Printf("warning: could not start file watcher: %v", err)
 	} else {

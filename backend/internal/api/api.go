@@ -1,12 +1,13 @@
 // Package api provides the HTTP REST API for the Obsidian vault.
 //
 // Endpoints:
-//   GET /api/notes          — list all notes (slug, title, tags, excerpt, modTime)
-//   GET /api/notes/{slug}   — full note (html, frontmatter, wikiLinks, backlinks)
-//   GET /api/tree           — hierarchical file tree
-//   GET /api/search?q=...   — full-text search
-//   GET /api/tags           — all tags with counts
-//   GET /api/graph          — graph data (nodes + edges) for the link graph
+//
+//	GET /api/notes          — list all notes (slug, title, tags, excerpt, modTime)
+//	GET /api/notes/{slug}   — full note (html, frontmatter, wikiLinks, backlinks)
+//	GET /api/tree           — hierarchical file tree
+//	GET /api/search?q=...   — full-text search
+//	GET /api/tags           — all tags with counts
+//	GET /api/graph          — graph data (nodes + edges) for the link graph
 package api
 
 import (
@@ -134,8 +135,8 @@ func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
 
 // GraphNode represents a note node in the link graph.
 type GraphNode struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID    string   `json:"id"`
+	Title string   `json:"title"`
 	Tags  []string `json:"tags"`
 }
 

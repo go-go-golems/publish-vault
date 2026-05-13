@@ -16,11 +16,15 @@ type SPAOptions struct {
 // NewSPAHandler returns an http.Handler that serves static web assets and falls
 // back to index.html for client-side routes.
 func NewSPAHandler(opts *SPAOptions) http.Handler {
+	return newSPAHandler(PublicFS, opts)
+}
+
+func newSPAHandler(fsys fs.FS, opts *SPAOptions) http.Handler {
 	apiPrefix := "/api"
 	if opts != nil && opts.APIPrefix != "" {
 		apiPrefix = opts.APIPrefix
 	}
-	files := http.FileServer(http.FS(PublicFS))
+	files := http.FileServer(http.FS(fsys))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, apiPrefix) {
@@ -30,21 +34,21 @@ func NewSPAHandler(opts *SPAOptions) http.Handler {
 
 		cleanPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if cleanPath == "." || cleanPath == "" {
-			serveIndex(w, r)
+			serveIndex(fsys, w)
 			return
 		}
 
-		if fileExists(cleanPath) {
+		if fileExists(fsys, cleanPath) {
 			files.ServeHTTP(w, r)
 			return
 		}
 
-		serveIndex(w, r)
+		serveIndex(fsys, w)
 	})
 }
 
-func serveIndex(w http.ResponseWriter, r *http.Request) {
-	data, err := fs.ReadFile(PublicFS, "index.html")
+func serveIndex(fsys fs.FS, w http.ResponseWriter) {
+	data, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		http.Error(w, "web bundle not found; run `retro-obsidian-publish build web` first", http.StatusNotFound)
 		return
@@ -53,7 +57,7 @@ func serveIndex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-func fileExists(name string) bool {
-	info, err := fs.Stat(PublicFS, name)
+func fileExists(fsys fs.FS, name string) bool {
+	info, err := fs.Stat(fsys, name)
 	return err == nil && !info.IsDir()
 }

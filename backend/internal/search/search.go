@@ -3,6 +3,7 @@ package search
 
 import (
 	"os"
+	"sync"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
@@ -13,15 +14,16 @@ import (
 
 // SearchResult represents a single search hit.
 type SearchResult struct {
-	Slug    string  `json:"slug"`
-	Title   string  `json:"title"`
-	Excerpt string  `json:"excerpt"`
+	Slug    string   `json:"slug"`
+	Title   string   `json:"title"`
+	Excerpt string   `json:"excerpt"`
 	Tags    []string `json:"tags"`
-	Score   float64 `json:"score"`
+	Score   float64  `json:"score"`
 }
 
 // Index wraps a bleve index for vault notes.
 type Index struct {
+	mu  sync.Mutex
 	idx bleve.Index
 }
 
@@ -74,6 +76,9 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 
 // Index adds or updates a note in the search index.
 func (si *Index) Index(note *vault.Note) error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
 	// Flatten tags to space-separated string for indexing
 	tags := ""
 	for i, t := range note.Tags {
@@ -93,11 +98,16 @@ func (si *Index) Index(note *vault.Note) error {
 
 // Delete removes a note from the search index.
 func (si *Index) Delete(slug string) error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
 	return si.idx.Delete(slug)
 }
 
 // Search performs a full-text query and returns ranked results.
 func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
 	if limit <= 0 {
 		limit = 20
 	}
