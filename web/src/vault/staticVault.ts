@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────
  * Imports all demo Markdown files via Vite's ?raw loader, parses
  * frontmatter (js-yaml), renders HTML (marked), extracts wiki-links,
- * builds the backlink graph, file tree, and search index — all in-browser.
+ * builds backlinks, file tree, and search index — all in-browser.
  *
  * This module is the "static backend" used when VITE_API_URL is not set.
  */
@@ -14,7 +14,6 @@ import type {
   Note,
   NoteListItem,
   FileNode,
-  GraphData,
   SearchResult,
   TagCount,
 } from "../types";
@@ -186,7 +185,6 @@ function buildVault(): {
   notes: Map<string, Note>;
   list: NoteListItem[];
   tree: FileNode;
-  graph: GraphData;
   tagCounts: TagCount[];
 } {
   // ── Parse all files ──────────────────────────────────────────
@@ -356,28 +354,6 @@ function buildVault(): {
   }
   sortTree(root);
 
-  // ── Build graph ──────────────────────────────────────────────
-  const graphNodes = rawNotes.map((rn) => ({
-    id: rn.slug,
-    title: rn.title,
-    tags: rn.tags,
-  }));
-
-  const edgeSet = new Set<string>();
-  const graphEdges: { source: string; target: string }[] = [];
-  for (const [source, targets] of Array.from(wikiLinkMap.entries())) {
-    for (const target of targets) {
-      if (!allSlugs.has(target)) continue;
-      const key = [source, target].sort().join("||");
-      if (!edgeSet.has(key)) {
-        edgeSet.add(key);
-        graphEdges.push({ source, target });
-      }
-    }
-  }
-
-  const graph: GraphData = { nodes: graphNodes, edges: graphEdges };
-
   // ── Build tag counts ─────────────────────────────────────────
   const tagMap = new Map<string, number>();
   for (const rn of rawNotes) {
@@ -389,7 +365,7 @@ function buildVault(): {
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count);
 
-  return { notes, list, tree: root, graph, tagCounts };
+  return { notes, list, tree: root, tagCounts };
 }
 
 // ── Singleton vault instance ──────────────────────────────────────
@@ -415,10 +391,6 @@ export function staticGetNote(slug: string): Note | null {
 
 export function staticGetTree(): FileNode {
   return getVault().tree;
-}
-
-export function staticGetGraph(): GraphData {
-  return getVault().graph;
 }
 
 export function staticListTags(): TagCount[] {

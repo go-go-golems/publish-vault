@@ -491,7 +491,6 @@
     text-transform: uppercase;
   }
 
-  /* ── Graph canvas ── */
   /* ── Copy code button ── */
   .note-prose pre { position: relative; }
   .copy-code-btn {

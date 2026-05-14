@@ -7,7 +7,6 @@
 //	GET /api/tree           — hierarchical file tree
 //	GET /api/search?q=...   — full-text search
 //	GET /api/tags           — all tags with counts
-//	GET /api/graph          — graph data (nodes + edges) for the link graph
 package api
 
 import (
@@ -40,7 +39,6 @@ func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/api/tree", h.getTree).Methods("GET")
 	r.HandleFunc("/api/search", h.searchNotes).Methods("GET")
 	r.HandleFunc("/api/tags", h.listTags).Methods("GET")
-	r.HandleFunc("/api/graph", h.getGraph).Methods("GET")
 }
 
 // NoteListItem is the lightweight note representation for listing.
@@ -131,59 +129,6 @@ func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
 		return tags[i].Count > tags[j].Count
 	})
 	jsonResponse(w, tags)
-}
-
-// GraphNode represents a note node in the link graph.
-type GraphNode struct {
-	ID    string   `json:"id"`
-	Title string   `json:"title"`
-	Tags  []string `json:"tags"`
-}
-
-// GraphEdge represents a directed link between notes.
-type GraphEdge struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-}
-
-// GraphData is the full graph payload.
-type GraphData struct {
-	Nodes []GraphNode `json:"nodes"`
-	Edges []GraphEdge `json:"edges"`
-}
-
-// getGraph returns nodes and edges for the link graph.
-func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
-	notes := h.vault.AllNotes()
-	slugSet := map[string]bool{}
-	for _, n := range notes {
-		slugSet[n.Slug] = true
-	}
-
-	nodes := make([]GraphNode, 0, len(notes))
-	edges := []GraphEdge{}
-
-	for _, n := range notes {
-		nodes = append(nodes, GraphNode{
-			ID:    n.Slug,
-			Title: n.Title,
-			Tags:  nonNilStrings(n.Tags),
-		})
-		for _, wl := range n.WikiLinks {
-			resolved, ok := h.vault.ResolveWikiLink(wl.Target)
-			if !ok {
-				continue
-			}
-			if slugSet[resolved] && resolved != n.Slug {
-				edges = append(edges, GraphEdge{
-					Source: n.Slug,
-					Target: resolved,
-				})
-			}
-		}
-	}
-
-	jsonResponse(w, GraphData{Nodes: nodes, Edges: edges})
 }
 
 // jsonResponse writes v as JSON with proper content-type.

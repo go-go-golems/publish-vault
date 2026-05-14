@@ -51,18 +51,3 @@ export interface TagCount {
   count: number;
 }
 
-export interface GraphNode {
-  id: string;
-  title: string;
-  tags: string[];
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}

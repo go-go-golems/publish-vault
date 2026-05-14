@@ -17,7 +17,6 @@ function mockStore(overrides: Record<string, unknown> = {}) {
         rightPanelOpen: true,
         searchQuery: "",
         activeNoteSlug: null,
-        graphVisible: false,
         ...overrides,
       },
       [vaultApi.reducerPath]: {},
