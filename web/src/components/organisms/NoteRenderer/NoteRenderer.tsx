@@ -68,7 +68,10 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       if (wikiTarget && anchor.classList.contains("wiki-link")) {
         e.preventDefault();
         if (!anchor.classList.contains("broken")) {
-          onNavigate(wikiTarget);
+          const href = anchor.getAttribute("href") ?? "";
+          const hashIndex = href.indexOf("#");
+          const hash = hashIndex >= 0 ? href.slice(hashIndex) : "";
+          onNavigate(`${wikiTarget}${hash}`);
         }
         return;
       }

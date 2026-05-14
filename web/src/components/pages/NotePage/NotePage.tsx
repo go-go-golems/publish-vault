@@ -32,7 +32,8 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
 
   const handleNavigate = useCallback(
     (targetSlug: string) => {
-      dispatch(setActiveNote(targetSlug));
+      const [noteSlug] = targetSlug.split("#", 1);
+      dispatch(setActiveNote(noteSlug));
       navigate(`/note/${targetSlug}`);
     },
     [dispatch, navigate]

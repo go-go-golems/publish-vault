@@ -159,7 +159,7 @@ func replaceWikiLinks(src []byte) []byte {
 		if heading != "" {
 			href += "#" + slugify(heading)
 		}
-		return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + display + `">` + display + `</a>`)
+		return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-alias="` + alias + `">` + display + `</a>`)
 	})
 }
 
@@ -176,7 +176,7 @@ func slugify(s string) string {
 // It replaces data-target and href attributes in wiki-link anchors and embeds.
 var (
 	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
-	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"]+)"`)
+	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"#]+)(#[^"]*)?"`)
 	dataRawRe    = regexp.MustCompile(`data-raw="([^"]*)"`)
 )
 
@@ -195,7 +195,11 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 			return match
 		}
 		resolved := resolver(sub[1])
-		return `href="/note/` + resolved + `"`
+		fragment := ""
+		if len(sub) >= 3 {
+			fragment = sub[2]
+		}
+		return `href="/note/` + resolved + fragment + `"`
 	})
 	return html
 }
@@ -213,6 +217,12 @@ func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) stri
 			return match
 		}
 		rawDisplay := sub[5]
+		if strings.Contains(match, `data-alias="`) {
+			aliasSub := regexp.MustCompile(`data-alias="([^"]*)"`).FindStringSubmatch(match)
+			if len(aliasSub) >= 2 && aliasSub[1] != "" {
+				return match
+			}
+		}
 		// Extract data-target to get the resolved slug
 		targetSub := dataTargetRe.FindStringSubmatch(match)
 		if len(targetSub) < 2 {

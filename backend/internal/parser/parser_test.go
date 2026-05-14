@@ -111,14 +111,41 @@ func TestWikiLinkDataRaw(t *testing.T) {
 	if !contains(parsed.HTML, `data-raw="Tribal/App-Auth"`) {
 		t.Fatalf("HTML should contain data-raw for first link, got: %s", parsed.HTML)
 	}
-	if !contains(parsed.HTML, `data-raw="Custom Alias"`) {
-		t.Fatalf("HTML should contain data-raw for aliased link, got: %s", parsed.HTML)
+	if !contains(parsed.HTML, `data-raw="Fundamentals/Access"`) {
+		t.Fatalf("HTML should contain raw target for aliased link, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `data-alias="Custom Alias"`) {
+		t.Fatalf("HTML should contain data-alias for aliased link, got: %s", parsed.HTML)
 	}
 	if !contains(parsed.HTML, ">Tribal/App-Auth</a>") {
 		t.Fatalf("HTML should display raw target for first link, got: %s", parsed.HTML)
 	}
 	if !contains(parsed.HTML, ">Custom Alias</a>") {
 		t.Fatalf("HTML should display alias for second link, got: %s", parsed.HTML)
+	}
+}
+
+func TestReplaceWikiLinksStringPreservesHeadingFragment(t *testing.T) {
+	html := `<p><a href="/note/tribal/app-auth#authorization-flow" class="wiki-link" data-target="tribal/app-auth" data-raw="Tribal/App Auth" data-alias="">Tribal/App Auth</a></p>`
+	got := ReplaceWikiLinksString(html, func(target string) string {
+		if target == "tribal/app-auth" {
+			return "research/kb/tribal/app-auth"
+		}
+		return target
+	})
+	if !contains(got, `href="/note/research/kb/tribal/app-auth#authorization-flow"`) {
+		t.Fatalf("heading fragment should be preserved, got: %s", got)
+	}
+	if !contains(got, `data-target="research/kb/tribal/app-auth"`) {
+		t.Fatalf("data-target should resolve without fragment, got: %s", got)
+	}
+}
+
+func TestReplaceWikiLinkDisplayPreservesAlias(t *testing.T) {
+	html := `<p><a href="/note/research/kb/target" class="wiki-link" data-target="research/kb/target" data-raw="Target" data-alias="Custom Alias">Custom Alias</a></p>`
+	got := ReplaceWikiLinkDisplay(html, func(_ string) string { return "Resolved Title" })
+	if !contains(got, `>Custom Alias</a>`) {
+		t.Fatalf("explicit alias should be preserved, got: %s", got)
 	}
 }
 
