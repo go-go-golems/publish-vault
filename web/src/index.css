@@ -407,7 +407,7 @@
   /* ── Note content prose ── */
   .note-column-width {
     width: 100%;
-    max-width: 44rem;
+    max-width: 50rem;
   }
   .note-prose {
     font-size: 14px;
