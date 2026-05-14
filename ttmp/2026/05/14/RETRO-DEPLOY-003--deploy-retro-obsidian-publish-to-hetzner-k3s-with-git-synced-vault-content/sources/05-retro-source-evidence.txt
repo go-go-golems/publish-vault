@@ -1,0 +1,318 @@
+## retro repo key files
+     1	FROM node:22-alpine AS web-builder
+     2	WORKDIR /src/web
+     3	RUN corepack enable
+     4	COPY web/package.json web/pnpm-lock.yaml ./
+     5	COPY web/patches ./patches
+     6	RUN pnpm install --frozen-lockfile
+     7	COPY web ./
+     8	ARG VITE_API_URL=
+     9	ARG VITE_VAULT_NAME=My Vault
+    10	ENV VITE_API_URL=$VITE_API_URL
+    11	ENV VITE_VAULT_NAME=$VITE_VAULT_NAME
+    12	RUN pnpm build
+    13	
+    14	FROM golang:1.25-alpine AS go-builder
+    15	RUN apk add --no-cache build-base
+    16	WORKDIR /src/backend
+    17	COPY backend/go.mod backend/go.sum ./
+    18	RUN go mod download
+    19	COPY backend ./
+    20	COPY --from=web-builder /src/web/dist ./internal/web/embed/public
+    21	RUN CGO_ENABLED=1 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+    22	
+    23	FROM alpine:3.20
+    24	RUN apk add --no-cache ca-certificates
+    25	WORKDIR /app
+    26	COPY --from=go-builder /src/backend/bin/retro-obsidian-publish ./retro-obsidian-publish
+    27	EXPOSE 8080
+    28	ENTRYPOINT ["./retro-obsidian-publish"]
+    29	CMD ["serve", "--port", "8080", "--serve-web"]
+--- server.go
+    20		web "retro-obsidian-publish/backend/internal/web"
+    21	)
+    22	
+    23	// Config holds the runtime settings for the Retro Obsidian Publish server.
+    24	type Config struct {
+    25		VaultDir string
+    26		Port     string
+    27		ServeWeb bool
+    28	}
+    29	
+    30	// Run starts the API server and, when enabled, serves the bundled web SPA from
+    31	// the same process.
+    32	func Run(ctx context.Context, cfg Config) error {
+    33		if cfg.VaultDir == "" {
+    34			return fmt.Errorf("vault dir is required")
+    35		}
+    36		if cfg.Port == "" {
+    37			cfg.Port = "8080"
+    38		}
+    39		if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
+    40			return fmt.Errorf("invalid port %q: %w", cfg.Port, err)
+    41		}
+    42	
+    43		absVault, err := filepath.Abs(cfg.VaultDir)
+    44		if err != nil {
+    45			return fmt.Errorf("invalid vault path: %w", err)
+    46		}
+    47	
+    48		log.Printf("Loading vault from %s", absVault)
+    49		v, err := vault.New(absVault)
+    50		if err != nil {
+    51			return fmt.Errorf("failed to load vault: %w", err)
+    52		}
+    53		log.Printf("Loaded %d notes", len(v.AllNotes()))
+    54	
+    55		si, err := search.New(v)
+    56		if err != nil {
+    57			return fmt.Errorf("failed to build search index: %w", err)
+    58		}
+    59	
+    60		fw, err := watcher.New(v, watcher.WithSearchIndex(si))
+    61		if err != nil {
+    62			log.Printf("warning: could not start file watcher: %v", err)
+    63		} else {
+    64			defer fw.Close()
+    65		}
+    66	
+    67		r := mux.NewRouter()
+    68		h := api.New(v, si)
+    69		h.Register(r)
+    70		if cfg.ServeWeb {
+    71			r.PathPrefix("/").Handler(web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"}))
+    72		}
+    73	
+    74		c := cors.New(cors.Options{
+    75			AllowedOrigins: []string{"*"},
+    76			AllowedMethods: []string{"GET", "OPTIONS"},
+    77			AllowedHeaders: []string{"Content-Type"},
+    78		})
+    79	
+    80		srv := &http.Server{
+    81			Addr:              ":" + cfg.Port,
+    82			Handler:           c.Handler(r),
+    83			ReadHeaderTimeout: 5 * time.Second,
+    84		}
+    85	
+    86		errCh := make(chan error, 1)
+    87		go func() {
+    88			log.Printf("Server listening on http://localhost:%s", cfg.Port)
+    89			errCh <- srv.ListenAndServe()
+    90		}()
+    91	
+    92		select {
+    93		case <-ctx.Done():
+    94			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    95			defer cancel()
+--- watcher.go
+     1	// Package watcher monitors the vault directory for file changes and triggers re-indexing.
+     2	package watcher
+     3	
+     4	import (
+     5		"log"
+     6		"os"
+     7		"path/filepath"
+     8		"strings"
+     9		"time"
+    10	
+    11		"github.com/fsnotify/fsnotify"
+    12	
+    13		"retro-obsidian-publish/backend/internal/search"
+    14		"retro-obsidian-publish/backend/internal/vault"
+    15	)
+    16	
+    17	// VaultWatcher wraps fsnotify and debounces rapid file events.
+    18	type VaultWatcher struct {
+    19		vault   *vault.Vault
+    20		search  *search.Index
+    21		watcher *fsnotify.Watcher
+    22		done    chan struct{}
+    23	}
+    24	
+    25	// Option configures a VaultWatcher.
+    26	type Option func(*VaultWatcher)
+    27	
+    28	// WithSearchIndex keeps the search index in sync with file watcher reload and
+    29	// remove events.
+    30	func WithSearchIndex(si *search.Index) Option {
+    31		return func(vw *VaultWatcher) {
+    32			vw.search = si
+    33		}
+    34	}
+    35	
+    36	// New creates and starts a VaultWatcher for the given vault.
+    37	func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
+    38		fw, err := fsnotify.NewWatcher()
+    39		if err != nil {
+    40			return nil, err
+    41		}
+    42	
+    43		vw := &VaultWatcher{
+    44			vault:   v,
+    45			watcher: fw,
+    46			done:    make(chan struct{}),
+    47		}
+    48		for _, opt := range opts {
+    49			opt(vw)
+    50		}
+    51	
+    52		// Watch the vault root and all subdirectories
+    53		if err := filepath.Walk(v.Root(), func(path string, info os.FileInfo, err error) error {
+    54			if err != nil {
+    55				return nil
+    56			}
+    57			if info.IsDir() {
+    58				return fw.Add(path)
+    59			}
+    60			return nil
+    61		}); err != nil {
+    62			fw.Close()
+    63			return nil, err
+    64		}
+    65	
+    66		go vw.loop()
+    67		return vw, nil
+    68	}
+    69	
+    70	// Close stops the watcher.
+    71	func (vw *VaultWatcher) Close() {
+    72		close(vw.done)
+    73		vw.watcher.Close()
+    74	}
+    75	
+    76	// loop processes fsnotify events with debouncing.
+    77	func (vw *VaultWatcher) loop() {
+    78		pending := map[string]fsnotify.Op{}
+    79		ticker := time.NewTicker(500 * time.Millisecond)
+    80		defer ticker.Stop()
+    81	
+    82		for {
+    83			select {
+    84			case <-vw.done:
+    85				return
+    86	
+    87			case event, ok := <-vw.watcher.Events:
+    88				if !ok {
+    89					return
+    90				}
+    91				if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
+    92					continue
+    93				}
+    94				pending[event.Name] = event.Op
+    95	
+    96			case err, ok := <-vw.watcher.Errors:
+    97				if !ok {
+    98					return
+    99				}
+   100				log.Printf("watcher error: %v", err)
+   101	
+   102			case <-ticker.C:
+   103				if len(pending) == 0 {
+   104					continue
+   105				}
+   106				for path, op := range pending {
+   107					vw.apply(path, op)
+   108				}
+   109				pending = map[string]fsnotify.Op{}
+   110			}
+   111		}
+   112	}
+   113	
+   114	func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
+   115		if op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+   116			log.Printf("vault: removing %s", path)
+   117			slug := vw.vault.RemoveNote(path)
+   118			if vw.search != nil {
+   119				if err := vw.search.Delete(slug); err != nil {
+   120					log.Printf("search: delete error for %s: %v", slug, err)
+   121				}
+   122			}
+   123			return
+   124		}
+   125	
+   126		log.Printf("vault: reloading %s", path)
+   127		note, err := vw.vault.ReloadNote(path)
+   128		if err != nil {
+   129			log.Printf("vault: reload error: %v", err)
+   130			return
+   131		}
+   132		if vw.search != nil {
+   133			if err := vw.search.Index(note); err != nil {
+   134				log.Printf("search: index error for %s: %v", note.Slug, err)
+   135			}
+   136		}
+   137	}
+--- vault reload
+68:func (v *Vault) LoadAll() error {
+213:func (v *Vault) rebuildHTML() {
+231:func (v *Vault) buildBacklinks() {
+252:func (v *Vault) ReloadNote(absPath string) (*Note, error) {
+272:func (v *Vault) RemoveNote(absPath string) string {
+362:func (v *Vault) Root() string {
+--- README
+    36	│       ├── store/vaultApi.ts                  # RTK Query API/static mode slice
+    37	│       ├── lib/wikiLinks.ts
+    38	│       └── index.css                          # Retro macOS design tokens
+    39	│
+    40	├── plugins/retro-obsidian-publish.py          # devctl plugin
+    41	├── .devctl.yaml                               # devctl wiring
+    42	├── Makefile                                   # convenience wrappers
+    43	└── ideas.md                                   # design philosophy
+    44	```
+    45	
+    46	The production target is a **single Go binary**. The `retro-obsidian-publish build web` verb builds `web/` and copies `web/dist` into `backend/internal/web/embed/public`; `go build -tags embed` then embeds those assets into the binary.
+    47	
+    48	---
+    49	
+    50	## Stack
+    51	
+    52	| Layer | Technology |
+    53	|-------|------------|
+    54	| Backend language | Go |
+    55	| CLI framework | Glazed + Cobra |
+    56	| Markdown parsing | goldmark + goldmark-meta |
+    57	| Full-text search | Bleve v2 |
+    58	| File watching | fsnotify |
+    59	| HTTP router | gorilla/mux |
+    60	| Frontend framework | React 19 + Vite 7 |
+    61	| State management | Redux Toolkit + RTK Query |
+    62	| Styling | Tailwind CSS 4 |
+    63	| Package manager | pnpm |
+    64	| Build bundling | Dagger with local pnpm fallback |
+    65	| Local orchestration | devctl |
+    66	
+    67	---
+    68	
+    69	## Getting started
+    70	
+    71	### 1. Install web dependencies
+    72	
+    73	```bash
+    74	pnpm --dir web install --frozen-lockfile
+    75	```
+    76	
+    77	### 2. Build the web bundle for embedding
+    78	
+    79	Dagger-first, with automatic local fallback if the Dagger engine is unavailable:
+    80	
+    81	```bash
+    82	cd backend
+    83	go run ./cmd/retro-obsidian-publish build web
+    84	```
+    85	
+    86	Force local pnpm mode:
+    87	
+    88	```bash
+    89	cd backend
+    90	BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local
+    91	```
+    92	
+    93	### 3. Build the single binary
+    94	
+    95	```bash
+    96	cd backend
+    97	go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
+    98	```
+    99	
+   100	### 4. Run the app

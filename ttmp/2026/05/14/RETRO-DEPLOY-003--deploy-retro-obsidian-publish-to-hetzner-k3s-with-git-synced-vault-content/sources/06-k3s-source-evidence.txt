@@ -1,0 +1,352 @@
+## k3s repo key files
+--- apps
+argocd-public.yaml
+artifacts.yaml
+bot-signup.yaml
+codebase-browser.yaml
+coinvault.yaml
+discord-ui-showcase.yaml
+docs-yolo.yaml
+draft-review.yaml
+glaze-docs.yaml
+go-go-host.yaml
+go-go-os-examples.yaml
+goja-essay.yaml
+goja-kanban.yaml
+hair-booking.yaml
+keycloak.yaml
+loki.yaml
+mirotalk-sfu.yaml
+monitoring-extras.yaml
+monitoring.yaml
+mysql.yaml
+platform-cert-issuer.yaml
+postgres.yaml
+pretext-trace.yaml
+pretext.yaml
+pyxis.yaml
+redis.yaml
+sanitize.yaml
+smailnail.yaml
+static-sites-host.yaml
+traefik-observability.yaml
+vault-backup.yaml
+vault-kubernetes-auth.yaml
+vault-secrets-operator-smoke.yaml
+vault-secrets-operator.yaml
+vault.yaml
+wesen-os.yaml
+xmpp.yaml
+--- goja-essay app
+     1	apiVersion: argoproj.io/v1alpha1
+     2	kind: Application
+     3	metadata:
+     4	  name: goja-essay
+     5	  namespace: argocd
+     6	  finalizers:
+     7	    - resources-finalizer.argocd.argoproj.io
+     8	spec:
+     9	  project: default
+    10	  destination:
+    11	    server: https://kubernetes.default.svc
+    12	    namespace: goja-essay
+    13	  source:
+    14	    repoURL: https://github.com/wesen/2026-03-27--hetzner-k3s.git
+    15	    targetRevision: main
+    16	    path: gitops/kustomize/goja-essay
+    17	  syncPolicy:
+    18	    automated:
+    19	      prune: true
+    20	      selfHeal: true
+    21	    syncOptions:
+    22	      - CreateNamespace=true
+    23	      - ServerSideApply=true
+--- goja-essay kustomize
+--- gitops/kustomize/goja-essay/deployment.yaml
+     1	apiVersion: apps/v1
+     2	kind: Deployment
+     3	metadata:
+     4	  name: goja-essay
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "1"
+     7	  labels:
+     8	    app.kubernetes.io/name: goja-essay
+     9	    app.kubernetes.io/component: web
+    10	spec:
+    11	  replicas: 1
+    12	  selector:
+    13	    matchLabels:
+    14	      app.kubernetes.io/name: goja-essay
+    15	      app.kubernetes.io/component: web
+    16	  template:
+    17	    metadata:
+    18	      labels:
+    19	        app.kubernetes.io/name: goja-essay
+    20	        app.kubernetes.io/component: web
+    21	    spec:
+    22	      enableServiceLinks: false
+    23	      containers:
+    24	        - name: goja-essay
+    25	          image: ghcr.io/go-go-golems/go-go-goja:sha-4398f5a
+    26	          imagePullPolicy: IfNotPresent
+    27	          ports:
+    28	            - containerPort: 8080
+    29	              name: http
+    30	          readinessProbe:
+    31	            httpGet:
+    32	              path: /api/essay/sections/meet-a-session
+    33	              port: http
+    34	            initialDelaySeconds: 3
+    35	            periodSeconds: 10
+    36	          livenessProbe:
+    37	            httpGet:
+    38	              path: /api/essay/sections/meet-a-session
+    39	              port: http
+    40	            initialDelaySeconds: 10
+    41	            periodSeconds: 20
+    42	          resources:
+    43	            requests:
+    44	              cpu: 25m
+    45	              memory: 64Mi
+    46	            limits:
+    47	              memory: 256Mi
+    48	          volumeMounts:
+    49	            - name: data
+    50	              mountPath: /data
+    51	      volumes:
+    52	        - name: data
+    53	          persistentVolumeClaim:
+    54	            claimName: goja-essay-data
+--- gitops/kustomize/goja-essay/ingress.yaml
+     1	apiVersion: networking.k8s.io/v1
+     2	kind: Ingress
+     3	metadata:
+     4	  name: goja-essay
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "2"
+     7	    cert-manager.io/cluster-issuer: letsencrypt-prod
+     8	  labels:
+     9	    app.kubernetes.io/name: goja-essay
+    10	    app.kubernetes.io/component: web
+    11	spec:
+    12	  ingressClassName: traefik
+    13	  tls:
+    14	    - hosts:
+    15	        - goja.yolo.scapegoat.dev
+    16	      secretName: goja-essay-tls
+    17	  rules:
+    18	    - host: goja.yolo.scapegoat.dev
+    19	      http:
+    20	        paths:
+    21	          - path: /
+    22	            pathType: Prefix
+    23	            backend:
+    24	              service:
+    25	                name: goja-essay
+    26	                port:
+    27	                  number: 80
+--- gitops/kustomize/goja-essay/kustomization.yaml
+     1	apiVersion: kustomize.config.k8s.io/v1beta1
+     2	kind: Kustomization
+     3	
+     4	namespace: goja-essay
+     5	
+     6	resources:
+     7	  - namespace.yaml
+     8	  - pvc.yaml
+     9	  - deployment.yaml
+    10	  - service.yaml
+    11	  - ingress.yaml
+--- gitops/kustomize/goja-essay/namespace.yaml
+     1	apiVersion: v1
+     2	kind: Namespace
+     3	metadata:
+     4	  name: goja-essay
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "-1"
+--- gitops/kustomize/goja-essay/pvc.yaml
+     1	apiVersion: v1
+     2	kind: PersistentVolumeClaim
+     3	metadata:
+     4	  name: goja-essay-data
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "1"
+     7	spec:
+     8	  accessModes:
+     9	    - ReadWriteOnce
+    10	  resources:
+    11	    requests:
+    12	      storage: 1Gi
+--- gitops/kustomize/goja-essay/service.yaml
+     1	apiVersion: v1
+     2	kind: Service
+     3	metadata:
+     4	  name: goja-essay
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "1"
+     7	  labels:
+     8	    app.kubernetes.io/name: goja-essay
+     9	    app.kubernetes.io/component: web
+    10	spec:
+    11	  selector:
+    12	    app.kubernetes.io/name: goja-essay
+    13	    app.kubernetes.io/component: web
+    14	  ports:
+    15	    - port: 80
+    16	      targetPort: http
+    17	      protocol: TCP
+    18	      name: http
+--- static-sites-host
+--- gitops/kustomize/static-sites-host/caddy-config.yaml
+     1	apiVersion: v1
+     2	kind: ConfigMap
+     3	metadata:
+     4	  name: static-sites-caddy-config
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "0"
+     7	  labels:
+     8	    app.kubernetes.io/name: static-sites-host
+     9	    app.kubernetes.io/component: config
+    10	data:
+    11	  Caddyfile: |
+    12	    :8080 {
+    13	      @health path /healthz
+    14	      respond @health "ok" 200
+    15	
+    16	      root * /srv/sites/{host}/current
+    17	
+    18	      @immutable path *.js *.css *.wasm *.svg *.ico *.png *.jpg *.jpeg *.gif *.webp
+    19	      header @immutable Cache-Control "public, max-age=31536000, immutable"
+    20	      header Cache-Control "no-cache"
+    21	
+    22	      try_files {path} {path}/ /index.html
+    23	      file_server
+    24	    }
+--- gitops/kustomize/static-sites-host/deployment.yaml
+     1	apiVersion: apps/v1
+     2	kind: Deployment
+     3	metadata:
+     4	  name: static-sites-host
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "1"
+     7	  labels:
+     8	    app.kubernetes.io/name: static-sites-host
+     9	    app.kubernetes.io/component: web
+    10	spec:
+    11	  replicas: 1
+    12	  revisionHistoryLimit: 5
+    13	  selector:
+    14	    matchLabels:
+    15	      app.kubernetes.io/name: static-sites-host
+    16	      app.kubernetes.io/component: web
+    17	  template:
+    18	    metadata:
+    19	      labels:
+    20	        app.kubernetes.io/name: static-sites-host
+    21	        app.kubernetes.io/component: web
+    22	    spec:
+    23	      enableServiceLinks: false
+    24	      containers:
+    25	        - name: caddy
+    26	          image: caddy:2.8-alpine
+    27	          imagePullPolicy: IfNotPresent
+    28	          args:
+    29	            - caddy
+    30	            - run
+    31	            - --config
+    32	            - /etc/caddy/Caddyfile
+    33	            - --adapter
+    34	            - caddyfile
+    35	          ports:
+    36	            - containerPort: 8080
+    37	              name: http
+    38	          readinessProbe:
+    39	            httpGet:
+    40	              path: /healthz
+    41	              port: http
+    42	            initialDelaySeconds: 3
+    43	            periodSeconds: 10
+    44	          livenessProbe:
+    45	            httpGet:
+    46	              path: /healthz
+    47	              port: http
+    48	            initialDelaySeconds: 15
+    49	            periodSeconds: 20
+    50	          resources:
+    51	            requests:
+    52	              cpu: 25m
+    53	              memory: 64Mi
+    54	            limits:
+    55	              memory: 256Mi
+    56	          volumeMounts:
+    57	            - name: caddy-config
+    58	              mountPath: /etc/caddy/Caddyfile
+    59	              subPath: Caddyfile
+    60	              readOnly: true
+    61	            - name: static-sites-content
+    62	              mountPath: /srv/sites
+    63	      volumes:
+    64	        - name: caddy-config
+    65	          configMap:
+    66	            name: static-sites-caddy-config
+    67	        - name: static-sites-content
+    68	          persistentVolumeClaim:
+    69	            claimName: static-sites-content
+--- gitops/kustomize/static-sites-host/kustomization.yaml
+     1	apiVersion: kustomize.config.k8s.io/v1beta1
+     2	kind: Kustomization
+     3	namespace: static-sites
+     4	resources:
+     5	  - namespace.yaml
+     6	  - pvc.yaml
+     7	  - caddy-config.yaml
+     8	  - deployment.yaml
+     9	  - service.yaml
+    10	labels:
+    11	  - pairs:
+    12	      app.kubernetes.io/part-of: static-sites
+--- gitops/kustomize/static-sites-host/namespace.yaml
+     1	apiVersion: v1
+     2	kind: Namespace
+     3	metadata:
+     4	  name: static-sites
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "0"
+     7	  labels:
+     8	    app.kubernetes.io/name: static-sites
+     9	    app.kubernetes.io/part-of: static-sites
+--- gitops/kustomize/static-sites-host/pvc.yaml
+     1	apiVersion: v1
+     2	kind: PersistentVolumeClaim
+     3	metadata:
+     4	  name: static-sites-content
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "0"
+     7	  labels:
+     8	    app.kubernetes.io/name: static-sites-host
+     9	    app.kubernetes.io/component: content
+    10	spec:
+    11	  accessModes:
+    12	    - ReadWriteOnce
+    13	  resources:
+    14	    requests:
+    15	      storage: 5Gi
+--- gitops/kustomize/static-sites-host/service.yaml
+     1	apiVersion: v1
+     2	kind: Service
+     3	metadata:
+     4	  name: static-sites-host
+     5	  annotations:
+     6	    argocd.argoproj.io/sync-wave: "1"
+     7	  labels:
+     8	    app.kubernetes.io/name: static-sites-host
+     9	    app.kubernetes.io/component: web
+    10	spec:
+    11	  type: ClusterIP
+    12	  selector:
+    13	    app.kubernetes.io/name: static-sites-host
+    14	    app.kubernetes.io/component: web
+    15	  ports:
+    16	    - name: http
+    17	      port: 80
+    18	      targetPort: http

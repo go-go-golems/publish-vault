@@ -25,6 +25,18 @@ topics:
       description: Code syntax highlighting
     - slug: ui
       description: User interface
+    - slug: argocd
+      description: Argo CD declarative GitOps continuous delivery for Kubernetes
+    - slug: git-sync
+      description: Kubernetes git-sync sidecar for synchronizing Git repository content into Pods
+    - slug: gitops
+      description: Git as source of truth for deployment and operational configuration
+    - slug: k3s
+      description: Lightweight Kubernetes distribution used for the Hetzner cluster
+    - slug: obsidian-vault
+      description: Obsidian Markdown vault content and metadata
+    - slug: retro-obsidian-publish
+      description: Retro Obsidian Publish application for serving vault content
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
