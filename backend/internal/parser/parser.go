@@ -4,6 +4,7 @@ package parser
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -70,7 +71,7 @@ func Parse(src []byte) (*ParsedNote, error) {
 		return nil, err
 	}
 
-	frontmatter := meta.Get(ctx)
+	frontmatter := normalizeFrontmatter(meta.Get(ctx))
 	htmlOut := buf.String()
 
 	// --- Render callouts (admonitions) ---
@@ -388,6 +389,42 @@ func calloutIcon(typ string) string {
 		return "📋"
 	default:
 		return "■"
+	}
+}
+
+func normalizeFrontmatter(fm map[string]interface{}) map[string]interface{} {
+	if fm == nil {
+		return map[string]interface{}{}
+	}
+	normalized, ok := normalizeYAMLValue(fm).(map[string]interface{})
+	if !ok {
+		return map[string]interface{}{}
+	}
+	return normalized
+}
+
+func normalizeYAMLValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(v))
+		for key, child := range v {
+			out[key] = normalizeYAMLValue(child)
+		}
+		return out
+	case map[interface{}]interface{}:
+		out := make(map[string]interface{}, len(v))
+		for key, child := range v {
+			out[fmt.Sprint(key)] = normalizeYAMLValue(child)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		for i, child := range v {
+			out[i] = normalizeYAMLValue(child)
+		}
+		return out
+	default:
+		return value
 	}
 }
 

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -126,6 +127,35 @@ See [[PROJECT REPORT - Keycloak OS1 Login Theme - A Technical Deep Dive]].
 	}
 	if !contains(parsed.HTML, `class="wiki-link"`) {
 		t.Fatalf("body wiki link should still render, got: %s", parsed.HTML)
+	}
+}
+
+func TestNestedFrontmatterIsJSONEncodable(t *testing.T) {
+	parsed, err := Parse([]byte(`---
+title: Nested Metadata
+RelatedFiles:
+  - Path: pkg/media/gst/recording.go
+    Note: Direct recording builder with x264enc
+ExternalSources:
+  - URL: https://example.com
+    Meta:
+      Kind: reference
+---
+
+# Body
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if _, err := json.Marshal(parsed.Frontmatter); err != nil {
+		t.Fatalf("frontmatter should be JSON encodable: %v (%#v)", err, parsed.Frontmatter)
+	}
+	related, ok := parsed.Frontmatter["RelatedFiles"].([]interface{})
+	if !ok || len(related) != 1 {
+		t.Fatalf("RelatedFiles = %#v, want one item slice", parsed.Frontmatter["RelatedFiles"])
+	}
+	if _, ok := related[0].(map[string]interface{}); !ok {
+		t.Fatalf("RelatedFiles[0] = %T, want map[string]interface{}", related[0])
 	}
 }
 

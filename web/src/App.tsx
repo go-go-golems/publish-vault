@@ -56,14 +56,33 @@ function chooseHomeSlug(notes: NoteListItem[]): string | undefined {
     path: note.path.toLowerCase(),
   }));
 
+  const preferredHomeSlugs = [
+    "index",
+    "home",
+    "readme",
+    "projects/00-project-index-repos-and-concepts",
+    "research/institute/guidelines/guidelines-index",
+  ];
+
+  const eligibleIndexes = normalized
+    .filter(({ slug, path }) => (slug === "index" || slug.endsWith("/index")) && !slug.includes("/sources/") && !path.includes("/sources/"))
+    .sort((a, b) => indexScore(a) - indexScore(b));
+
   return (
-    normalized.find(({ slug }) => slug === "index")?.note.slug ??
-    normalized.find(({ slug }) => slug.endsWith("/index"))?.note.slug ??
-    normalized.find(({ title }) => title === "index")?.note.slug ??
-    normalized.find(({ path }) => path.endsWith("/index.md") || path === "index.md")?.note.slug ??
-    normalized.find(({ slug, title, path }) => slug.includes("index") || title.includes("index") || path.includes("index"))?.note.slug ??
+    preferredHomeSlugs.map((candidate) => normalized.find(({ slug }) => slug === candidate)?.note.slug).find(Boolean) ??
+    normalized.find(({ title }) => ["index", "home", "readme"].includes(title))?.note.slug ??
+    normalized.find(({ path }) => path === "index.md" || path === "home.md" || path === "readme.md")?.note.slug ??
+    eligibleIndexes[0]?.note.slug ??
+    normalized.find(({ slug }) => slug.includes("project-index"))?.note.slug ??
     notes[0].slug
   );
+}
+
+function indexScore(item: { slug: string; title: string; path: string }) {
+  const depth = item.slug.split("/").length;
+  const sourcePenalty = item.slug.includes("/sources/") || item.path.includes("/sources/") ? 1000 : 0;
+  const titlePenalty = item.title === "index" ? 0 : 10;
+  return sourcePenalty + depth + titlePenalty;
 }
 
 function NoteRoute(props: { params?: Record<string, string | undefined> }) {
