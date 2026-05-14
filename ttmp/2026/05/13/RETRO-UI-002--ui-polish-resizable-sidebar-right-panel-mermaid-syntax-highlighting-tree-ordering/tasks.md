@@ -17,3 +17,9 @@
 - [x] 2.4: Embed rendering — render ![[Note]] inline content (9477854)
 - [x] 2.5: Collapsible callouts — parse [!type]+ and [!type]- (945b53d)
 - [x] 2.6: Hash heading links — scroll to heading on [[Note#Heading]] (bd03a56)
+
+## Round 3
+
+- [ ] 3.1: Remove node graph from the UI for now — remove graph toggle, panel, and frontend graph fetching
+- [ ] 3.2: Preserve wiki-link heading fragments when resolving slugs and navigating `[[Note#Heading]]`
+- [ ] 3.3: Respect explicit wiki-link aliases — keep `[[Target|Alias]]` display text while using note titles only for unaliased links
