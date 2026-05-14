@@ -284,8 +284,8 @@ They should not share one credential because their scopes and lifetimes differ.
 
 ### What warrants a second pair of eyes
 
-- Confirm the exact vault repo URL and whether a deploy key or fine-grained PAT is preferred.
-- Confirm whether git-sync should use SSH (`ssh`, `known_hosts`) or HTTPS (`username`, `password`) in this cluster.
+- Confirm the production branch for `git@github.com:go-go-golems/go-go-parc.git` (assumed: `main`).
+- Confirm whether git-sync should use SSH (`ssh`, `known_hosts`) or HTTPS (`username`, `password`) in this cluster; SSH deploy key is now provisioned in Vault.
 
 ### What should be done in the future
 
@@ -301,6 +301,12 @@ Review:
 - Existing VSO examples under `/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/discord-ui-showcase/`.
 
 ### Technical details
+
+Confirmed vault repository:
+
+```text
+git@github.com:go-go-golems/go-go-parc.git
+```
 
 Recommended Vault path:
 

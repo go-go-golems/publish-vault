@@ -68,7 +68,7 @@ This document is a design and implementation guide. It does not yet implement th
 
 - **Application GitOps repo**: `~/code/wesen/2026-03-27--hetzner-k3s`, the repository Argo CD watches for Kubernetes manifests.
 - **Application code repo**: `~/code/wesen/2026-05-13--retro-obsidian-publish`, the repository containing the Go server and React frontend.
-- **Vault repo**: the Git-backed Obsidian content repository to publish. In local testing this has been `/home/manuel/code/wesen/go-go-golems/go-go-parc`.
+- **Vault repo**: the Git-backed Obsidian content repository to publish: `git@github.com:go-go-golems/go-go-parc.git` (local checkout: `/home/manuel/code/wesen/go-go-golems/go-go-parc`).
 - **Content sync**: pulling updated Markdown files into a running Pod.
 - **Index reload**: parsing Markdown, rebuilding wiki-link resolution/backlinks, and rebuilding the Bleve search index.
 - **GitOps reconciliation**: Argo CD applying Kubernetes manifests from Git.
@@ -387,7 +387,7 @@ spec:
         - name: git-sync
           image: registry.k8s.io/git-sync/git-sync:v4.4.0
           args:
-            - --repo=git@github.com:wesen/go-go-parc.git
+            - --repo=git@github.com:go-go-golems/go-go-parc.git
             - --ref=main
             - --root=/git/root
             - --link=current
@@ -779,7 +779,7 @@ volumeMounts:
 Configure git-sync:
 
 ```text
---repo=git@github.com:wesen/<vault-repo>.git
+--repo=git@github.com:go-go-golems/go-go-parc.git
 --ssh-key-file=/etc/git-secret/ssh
 --ssh-known-hosts=true
 --ssh-known-hosts-file=/etc/git-secret/known_hosts
@@ -1045,7 +1045,7 @@ reload: active revision abc123
 
 ## Open questions
 
-1. What is the exact vault repository URL and branch?
+1. Confirm the production branch for `git@github.com:go-go-golems/go-go-parc.git` (assumed: `main`).
 2. Which domain should the public site use?
 3. Should the published site require basic auth initially?
 4. What exact Vault KV path should store the vault repo deploy key? Proposed: `kv/apps/retro-obsidian-publish/prod/vault-git`.
