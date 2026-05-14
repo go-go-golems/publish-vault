@@ -24,9 +24,11 @@ type Command struct {
 
 // Settings are decoded from the Glazed default command section.
 type Settings struct {
-	Vault    string `glazed:"vault"`
-	Port     string `glazed:"port"`
-	ServeWeb bool   `glazed:"serve-web"`
+	Vault          string `glazed:"vault"`
+	Port           string `glazed:"port"`
+	ServeWeb       bool   `glazed:"serve-web"`
+	Watch          bool   `glazed:"watch"`
+	ReloadTokenEnv string `glazed:"reload-token-env"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -49,6 +51,7 @@ Examples:
   retro-obsidian-publish serve --vault ./vault-example --port 8080
   retro-obsidian-publish serve --vault ./vault-example --port 8080 --serve-web
   VAULT_DIR=/path/to/vault retro-obsidian-publish serve --serve-web
+  RETRO_RELOAD_TOKEN=secret retro-obsidian-publish serve --vault /git/root/current --watch=false
 `),
 		cmds.WithFlags(
 			fields.New("vault", fields.TypeString,
@@ -61,6 +64,14 @@ Examples:
 			fields.New("serve-web", fields.TypeBool,
 				fields.WithDefault(true),
 				fields.WithHelp("Serve the bundled web SPA from the same Go process."),
+			),
+			fields.New("watch", fields.TypeBool,
+				fields.WithDefault(true),
+				fields.WithHelp("Watch Markdown files with fsnotify. Disable in git-sync deployments and use the reload endpoint instead."),
+			),
+			fields.New("reload-token-env", fields.TypeString,
+				fields.WithDefault("RETRO_RELOAD_TOKEN"),
+				fields.WithHelp("Environment variable containing the bearer token for POST /api/admin/reload. Empty value disables reload endpoint."),
 			),
 		),
 		cmds.WithSections(glazedSection, commandSettingsSection),
@@ -88,5 +99,9 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.Vault == "" {
 		return fmt.Errorf("--vault or VAULT_DIR is required")
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, ServeWeb: settings.ServeWeb})
+	reloadToken := ""
+	if settings.ReloadTokenEnv != "" {
+		reloadToken = os.Getenv(settings.ReloadTokenEnv)
+	}
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken})
 }

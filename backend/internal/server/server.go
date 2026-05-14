@@ -7,24 +7,25 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"path/filepath"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 
 	"retro-obsidian-publish/backend/internal/api"
-	"retro-obsidian-publish/backend/internal/search"
-	"retro-obsidian-publish/backend/internal/vault"
 	"retro-obsidian-publish/backend/internal/watcher"
 	web "retro-obsidian-publish/backend/internal/web"
 )
 
 // Config holds the runtime settings for the Retro Obsidian Publish server.
 type Config struct {
-	VaultDir string
-	Port     string
-	ServeWeb bool
+	VaultDir    string
+	Port        string
+	ServeWeb    bool
+	Watch       bool
+	ReloadToken string
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -36,45 +37,49 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.Port == "" {
 		cfg.Port = "8080"
 	}
+	if cfg.ReloadToken == "" {
+		cfg.ReloadToken = os.Getenv("RETRO_RELOAD_TOKEN")
+	}
 	if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
 		return fmt.Errorf("invalid port %q: %w", cfg.Port, err)
 	}
 
-	absVault, err := filepath.Abs(cfg.VaultDir)
+	log.Printf("Loading vault from %s", cfg.VaultDir)
+	state, err := NewRuntimeState(cfg.VaultDir)
 	if err != nil {
-		return fmt.Errorf("invalid vault path: %w", err)
+		return err
 	}
+	v, si := state.Snapshot()
+	log.Printf("Loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
 
-	log.Printf("Loading vault from %s", absVault)
-	v, err := vault.New(absVault)
-	if err != nil {
-		return fmt.Errorf("failed to load vault: %w", err)
-	}
-	log.Printf("Loaded %d notes", len(v.AllNotes()))
-
-	si, err := search.New(v)
-	if err != nil {
-		return fmt.Errorf("failed to build search index: %w", err)
-	}
-
-	fw, err := watcher.New(v, watcher.WithSearchIndex(si))
-	if err != nil {
-		log.Printf("warning: could not start file watcher: %v", err)
+	if cfg.Watch {
+		fw, err := watcher.New(v, watcher.WithSearchIndex(si))
+		if err != nil {
+			log.Printf("warning: could not start file watcher: %v", err)
+		} else {
+			defer fw.Close()
+		}
 	} else {
-		defer fw.Close()
+		log.Printf("File watcher disabled; expecting explicit reloads")
 	}
 
 	r := mux.NewRouter()
-	h := api.New(v, si)
+	h := api.NewWithProvider(state)
 	h.Register(r)
+	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
+	if cfg.ReloadToken != "" {
+		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken)).Methods("POST")
+	} else {
+		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env")
+	}
 	if cfg.ServeWeb {
 		r.PathPrefix("/").Handler(web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"}))
 	}
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	})
 
 	srv := &http.Server{
@@ -103,4 +108,48 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 		return err
 	}
+}
+
+type healthResponse struct {
+	OK             bool   `json:"ok"`
+	Notes          int    `json:"notes"`
+	VaultRoot      string `json:"vaultRoot"`
+	ConfiguredRoot string `json:"configuredRoot"`
+}
+
+func healthHandler(state *RuntimeState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		v, _ := state.Snapshot()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"ok":true,"notes":%d,"vaultRoot":%q,"configuredRoot":%q}`,
+			len(v.AllNotes()), state.ResolvedRoot(), state.ConfiguredRoot())
+	}
+}
+
+func reloadHandler(state *RuntimeState, token string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !validBearerToken(r.Header.Get("Authorization"), token) {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		if err := state.Reload(); err != nil {
+			log.Printf("reload failed: %v", err)
+			http.Error(w, `{"error":"reload failed"}`, http.StatusInternalServerError)
+			return
+		}
+		v, _ := state.Snapshot()
+		log.Printf("reload: loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func validBearerToken(header, token string) bool {
+	if token == "" {
+		return false
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	return strings.TrimPrefix(header, prefix) == token
 }

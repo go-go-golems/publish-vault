@@ -119,7 +119,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
             allSlugs={allSlugs}
             onNavigate={handleNavigate}
             onTagClick={handleTagClick}
-            className="max-w-4xl"
+            className="max-w-5xl"
           />
         </ScrollArea>
       </ResizablePanel>
@@ -141,7 +141,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
           allSlugs={allSlugs}
           onNavigate={handleNavigate}
           onTagClick={handleTagClick}
-          className="max-w-4xl"
+          className="max-w-5xl"
         />
       </ScrollArea>
     </div>

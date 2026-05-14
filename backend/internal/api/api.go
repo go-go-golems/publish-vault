@@ -21,15 +21,34 @@ import (
 	"retro-obsidian-publish/backend/internal/vault"
 )
 
-// Handler holds dependencies for the API.
-type Handler struct {
+// SnapshotProvider returns the currently active vault and search index.
+// Implementations may swap both values atomically during a reload.
+type SnapshotProvider interface {
+	Snapshot() (*vault.Vault, *search.Index)
+}
+
+type staticProvider struct {
 	vault  *vault.Vault
 	search *search.Index
 }
 
-// New creates a new API Handler.
+func (p staticProvider) Snapshot() (*vault.Vault, *search.Index) {
+	return p.vault, p.search
+}
+
+// Handler holds dependencies for the API.
+type Handler struct {
+	provider SnapshotProvider
+}
+
+// New creates a new API Handler backed by fixed vault/search pointers.
 func New(v *vault.Vault, si *search.Index) *Handler {
-	return &Handler{vault: v, search: si}
+	return NewWithProvider(staticProvider{vault: v, search: si})
+}
+
+// NewWithProvider creates a new API Handler backed by a dynamic provider.
+func NewWithProvider(provider SnapshotProvider) *Handler {
+	return &Handler{provider: provider}
 }
 
 // Register mounts all routes on the given router.
@@ -53,7 +72,8 @@ type NoteListItem struct {
 
 // listNotes returns all notes as a list.
 func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
-	notes := h.vault.AllNotes()
+	v, _ := h.provider.Snapshot()
+	notes := v.AllNotes()
 	items := make([]NoteListItem, 0, len(notes))
 	for _, n := range notes {
 		items = append(items, NoteListItem{
@@ -76,7 +96,8 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
-	note, ok := h.vault.GetNote(slug)
+	v, _ := h.provider.Snapshot()
+	note, ok := v.GetNote(slug)
 	if !ok {
 		http.Error(w, `{"error":"note not found"}`, http.StatusNotFound)
 		return
@@ -86,7 +107,8 @@ func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 
 // getTree returns the vault file tree.
 func (h *Handler) getTree(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, h.vault.FileTree())
+	v, _ := h.provider.Snapshot()
+	jsonResponse(w, v.FileTree())
 }
 
 // searchNotes performs full-text search.
@@ -96,7 +118,8 @@ func (h *Handler) searchNotes(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, []search.SearchResult{})
 		return
 	}
-	results, err := h.search.Search(q, 30)
+	_, si := h.provider.Snapshot()
+	results, err := si.Search(q, 30)
 	if err != nil {
 		http.Error(w, `{"error":"search failed"}`, http.StatusInternalServerError)
 		return
@@ -116,7 +139,8 @@ type TagCount struct {
 // listTags returns all tags with their note counts.
 func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
 	counts := map[string]int{}
-	for _, n := range h.vault.AllNotes() {
+	v, _ := h.provider.Snapshot()
+	for _, n := range v.AllNotes() {
 		for _, t := range n.Tags {
 			counts[t]++
 		}

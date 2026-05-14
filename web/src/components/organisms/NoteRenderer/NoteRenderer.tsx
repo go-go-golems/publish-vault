@@ -261,7 +261,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       <BreadcrumbBar segments={breadcrumbs} onNavigate={onNavigate} />
 
       {/* Title */}
-      <h1 className="text-2xl font-bold text-[var(--color-ink)] leading-tight border-b border-[var(--color-ink)] pb-2">
+      <h1 className="note-column-width text-2xl font-bold text-[var(--color-ink)] leading-tight border-b border-[var(--color-ink)] pb-2">
         {note.title}
       </h1>
 
@@ -271,6 +271,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         tags={note.tags}
         modTime={note.modTime}
         onTagClick={onTagClick}
+        className="note-column-width"
       />
 
       {/* Content */}
