@@ -3,7 +3,7 @@
  * Design: Retro System 1 — note content + resizable right panel with backlinks.
  * Fetches note by slug via RTK Query.
  */
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { NoteRenderer } from "../../organisms/NoteRenderer/NoteRenderer";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
@@ -29,6 +29,13 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const dispatch = useAppDispatch();
   const [, navigate] = useLocation();
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
+
+  useEffect(() => {
+    const [noteSlug] = slug.split("#", 1);
+    if (noteSlug) {
+      dispatch(setActiveNote(noteSlug));
+    }
+  }, [dispatch, slug]);
 
   const handleNavigate = useCallback(
     (targetSlug: string) => {

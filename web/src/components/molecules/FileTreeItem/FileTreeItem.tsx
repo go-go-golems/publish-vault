@@ -2,7 +2,7 @@
  * MOLECULE: FileTreeItem
  * Design: Retro System 1 — compact tree node with folder/file icon, indent, expand toggle.
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { Icon } from "../../atoms/Icon/Icon";
 import type { FileNode } from "../../../types";
@@ -20,7 +20,15 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   activeSlug,
   onSelect,
 }) => {
-  const [expanded, setExpanded] = useState(depth < 2);
+  const activeDescendant = activeSlug ? nodeContainsSlug(node, activeSlug) : false;
+  const [expanded, setExpanded] = useState(depth < 2 || activeDescendant);
+  const itemRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (activeDescendant) {
+      setExpanded(true);
+    }
+  }, [activeDescendant]);
 
   if (node.isFolder) {
     return (
@@ -60,8 +68,16 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   }
 
   const isActive = node.slug === activeSlug;
+
+  useEffect(() => {
+    if (isActive) {
+      itemRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [isActive]);
+
   return (
     <button
+      ref={itemRef}
       type="button"
       className={clsx("retro-tree-item w-full text-left", isActive && "active")}
       style={{ paddingLeft: `${8 + depth * 14 + 14}px` }}
@@ -72,3 +88,8 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     </button>
   );
 };
+
+function nodeContainsSlug(node: FileNode, slug: string): boolean {
+  if (node.slug === slug) return true;
+  return node.children?.some((child) => nodeContainsSlug(child, slug)) ?? false;
+}
