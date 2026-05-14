@@ -329,3 +329,130 @@ if err != nil {
 }
 v, err := vault.New(resolvedRoot)
 ```
+
+
+## Step 4: Implement, deploy, and stabilize k3s runtime
+
+Implemented the production runtime support in `retro-obsidian-publish`, built and pushed GHCR images, then deployed the app into the Hetzner k3s cluster through Argo CD. The live URL is now `https://parc.yolo.scapegoat.dev`, and `/api/healthz` reports the git-sync worktree currently being served.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue, crashloop backoff and such"
+
+**Assistant interpretation:** Continue the deployment until the crashloop is resolved or a real blocker is reached.
+
+**Inferred user intent:** Do not stop at manifests; debug the real cluster rollout until the site is actually healthy.
+
+**Commit (retro app):** `385b4db Add health and reload endpoints for git-sync deployment` and `b3f93bb Allow loopback reloads for git-sync sidecar`.
+
+**Commit (k3s GitOps):** `5a4e7d6 Deploy retro obsidian publish with git-sync vault`, `8f833dc Fix git-sync secret permissions`, `4466f48 Add image pull secret for retro obsidian publish`, and `46f48d8 Stabilize retro obsidian publish startup`.
+
+### What I did
+
+- Added swappable runtime state in the app so the API reads the current vault/search snapshot.
+- Added symlink-aware vault loading with `filepath.EvalSymlinks`, so `/git/root/current` follows git-sync's atomic symlink.
+- Added `GET /api/healthz` and `POST /api/admin/reload`.
+- Added loopback-only reload support for the git-sync sidecar webhook.
+- Added `--watch=false` for production deployments.
+- Built and pushed `ghcr.io/go-go-golems/retro-obsidian-publish:sha-b3f93bb`.
+- Added k3s manifests under `/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish`.
+- Added the Argo CD Application at `gitops/applications/retro-obsidian-publish.yaml`.
+- Added Vault policy/role files and used Vault Secrets Operator to materialize:
+  - `retro-obsidian-publish-vault-git` for git-sync SSH credentials.
+  - `retro-obsidian-publish-ghcr-pull` for GHCR image pulls.
+- Seeded `kv/apps/retro-obsidian-publish/prod/image-pull` from the workstation GitHub deploy token without printing secret values.
+- Re-ran `./scripts/bootstrap-vault-kubernetes-auth.sh` so the updated policy path became active.
+- Verified Argo CD reports the app `Synced` and `Healthy`.
+- Verified the public endpoint:
+  - `https://parc.yolo.scapegoat.dev/` returns `HTTP/2 200`.
+  - `https://parc.yolo.scapegoat.dev/api/healthz` returns `{"ok":true,"notes":513,...}`.
+
+### Why
+
+The app needs to distinguish manifest deployment from vault content refresh. Argo CD rolls out the app and sidecars, while git-sync keeps the Markdown vault checkout current inside the Pod. The app reload endpoint turns git-sync's symlink update into an in-process vault/search rebuild without needing to restart the Pod.
+
+### What worked
+
+- git-sync successfully cloned `git@github.com:go-go-golems/go-go-parc.git` after the secret permissions were fixed.
+- Vault Secrets Operator successfully synced both the vault SSH secret and the GHCR image pull secret.
+- cert-manager issued `retro-obsidian-publish-tls`; the ingress is live on `parc.yolo.scapegoat.dev`.
+- The final rollout stabilized with one Pod, two containers ready, zero restarts.
+
+### What didn't work
+
+1. The first git-sync initContainer crashlooped with:
+
+```text
+No ED25519 host key is known for github.com and you have requested strict checking.
+Host key verification failed.
+```
+
+The `known_hosts` value existed in the Secret, but the secret volume mode was `0400` and the git-sync container runs as uid/gid `65533`. Fix: add pod `fsGroup: 65533` and set the secret volume `defaultMode: 0440`.
+
+2. After git-sync succeeded, the app image failed to pull from GHCR anonymously:
+
+```text
+failed to authorize: failed to fetch anonymous token ... 401 Unauthorized
+```
+
+Fix: add a Vault-backed `kubernetes.io/dockerconfigjson` image pull secret and reference it with `imagePullSecrets`.
+
+3. The first app rollout then restarted with exit code `137`. The sidecar webhook retried every 3 seconds with a 1-second timeout while the app was still loading and while reloads were expensive, and the probes were too aggressive for initial vault load/reload timing. Fix: increase the app memory limit to `1536Mi`, add `--webhook-timeout=30s`, and relax startup probes (`readiness` initial delay 20s, `liveness` initial delay 90s, 5s timeouts).
+
+### What I learned
+
+- git-sync's SSH secret files must be readable by the non-root git-sync user; secret contents being correct is not enough.
+- Private GHCR packages need an image pull secret even when the image was pushed successfully from the workstation.
+- On this vault size, initial load plus a full reload is not instantaneous. Probes and webhook timeouts need to reflect the actual indexing cost.
+
+### What was tricky to build
+
+The main rollout problem was a chain of independent runtime issues: git SSH host verification, private image auth, then probe/webhook timing. Each had to be fixed in the GitOps repo, pushed, and reconciled by Argo CD before the next issue appeared.
+
+### What warrants a second pair of eyes
+
+- Whether the app should expose an explicit startup probe separate from readiness/liveness.
+- Whether reloads should be serialized/debounced in app code to avoid overlapping expensive reload attempts.
+- Whether the GHCR image should be made public or kept private with the current image pull secret.
+
+### What should be done in the future
+
+- Test a real vault content commit and confirm git-sync pulls the new commit and the reload webhook updates the API/search results.
+- Consider adding application metrics for reload duration, note count, and last successful reload time.
+- Consider reducing the Docker image and memory footprint after deployment behavior is stable.
+
+### Code review instructions
+
+Review the app runtime changes in the retro repository and the k3s manifests in:
+
+```bash
+/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish
+/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/applications/retro-obsidian-publish.yaml
+/home/manuel/code/wesen/2026-03-27--hetzner-k3s/vault/policies/kubernetes/retro-obsidian-publish.hcl
+/home/manuel/code/wesen/2026-03-27--hetzner-k3s/vault/roles/kubernetes/retro-obsidian-publish.json
+```
+
+Validate live state:
+
+```bash
+cd /home/manuel/code/wesen/2026-03-27--hetzner-k3s
+export KUBECONFIG="$PWD/.cache/kubeconfig-tailnet.yaml"
+kubectl -n argocd get app retro-obsidian-publish
+kubectl -n retro-obsidian-publish get pods
+curl -fsS https://parc.yolo.scapegoat.dev/api/healthz
+```
+
+### Technical details
+
+Final observed live health response:
+
+```json
+{"ok":true,"notes":513,"vaultRoot":"/git/root/.worktrees/5d5d5bd578633314f97fc17f6f29016056f8efdd","configuredRoot":"/git/root/current"}
+```
+
+Final observed Argo CD/Pod state:
+
+```text
+Synced Healthy Succeeded 46f48d82f45a7adba4389aee3e12b306be988a3d
+retro-obsidian-publish-f644bd75-s627q   2/2   Running   0
+```

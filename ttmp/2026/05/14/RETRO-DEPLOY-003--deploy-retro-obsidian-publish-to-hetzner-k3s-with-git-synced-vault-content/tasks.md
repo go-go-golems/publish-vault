@@ -13,9 +13,10 @@
 
 ## Future implementation phases proposed by the design
 
-- [ ] Add production reload API and health endpoints to `retro-obsidian-publish`.
-- [ ] Add Docker image publication workflow or document manual GHCR publishing.
-- [ ] Add kustomize deployment under `~/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish`.
-- [ ] Add Argo CD Application under `gitops/applications/retro-obsidian-publish.yaml`.
-- [ ] Add git-sync sidecar, SSH/HTTPS credentials, shared `emptyDir`, service, ingress, and probes.
+- [x] Add production reload API and health endpoints to `retro-obsidian-publish`.
+- [x] Add Docker image publication workflow or document manual GHCR publishing.
+- [x] Add kustomize deployment under `~/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish`.
+- [x] Add Argo CD Application under `gitops/applications/retro-obsidian-publish.yaml`.
+- [x] Add git-sync sidecar, SSH credentials from Vault, shared `emptyDir`, service, ingress, and probes.
 - [ ] Test end-to-end vault update: commit vault change → git-sync pulls → reload webhook → server updates API/search/backlinks.
+- [x] Deploy and verify baseline production health at `https://parc.yolo.scapegoat.dev`.
