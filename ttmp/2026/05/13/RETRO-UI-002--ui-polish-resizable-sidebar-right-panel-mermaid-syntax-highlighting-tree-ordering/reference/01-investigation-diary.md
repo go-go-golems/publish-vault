@@ -7,6 +7,8 @@ DocType: ""
 Intent: ""
 Owners: []
 RelatedFiles:
+    - Path: backend/internal/api/api.go
+      Note: Graph endpoint deleted in Step 11
     - Path: backend/internal/parser/parser.go
       Note: Wiki-link alias and heading-fragment handling
     - Path: backend/internal/search/search.go
@@ -19,12 +21,17 @@ RelatedFiles:
       Note: Graph toggle removed in Round 3
     - Path: web/src/index.css
       Note: Copy button
+    - Path: web/src/types/index.ts
+      Note: Graph types deleted in Step 11
+    - Path: web/src/vault/staticVault.ts
+      Note: Static graph builder deleted in Step 11
 ExternalSources: []
 Summary: ""
 LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -846,4 +853,77 @@ Validate:
 ```bash
 cd backend && go test ./internal/parser -count=1
 pnpm --dir web check
+```
+
+## Step 11: Fully delete the graph feature code
+
+After the graph was removed from the visible UI, the follow-up request clarified that the graph should be deleted rather than merely hidden. I treated this as Round 3 task 3.4 and removed the remaining backend, static-vault, type, icon, component, and story code.
+
+### Prompt Context
+
+**User prompt (verbatim):** "delete it. then continue if you have anything left"
+
+**Assistant interpretation:** Delete all remaining graph feature code, then check for leftover work.
+
+**Inferred user intent:** Avoid dormant dead code and ensure the graph feature is truly gone.
+
+**Commit (tasks):** 528587b — Tasks: add graph code deletion
+**Commit (code):** 12c47d6 — Delete graph feature code
+
+### What I did
+
+- Added task 3.4 to `tasks.md`.
+- Removed `/api/graph` registration from `backend/internal/api/api.go`.
+- Deleted backend `GraphNode`, `GraphEdge`, `GraphData`, and `getGraph()`.
+- Removed graph route smoke-test coverage and the old graph empty-array test from `api_test.go`.
+- Deleted `web/src/components/organisms/GraphView/GraphView.tsx` and `GraphView.stories.tsx`.
+- Removed graph types from `web/src/types/index.ts`.
+- Removed static-vault graph construction and `staticGetGraph()`.
+- Removed the `graph` icon from `Icon.tsx` and the unused CSS graph comment from `index.css`.
+- Removed stale `graphVisible` story state from `VaultLayout.stories.tsx`.
+- Verified there are no source references to `GraphView`, `GraphData`, `getGraph`, `/api/graph`, `graphVisible`, `toggleGraph`, or `retro-graph`.
+
+### Why
+
+Keeping dormant graph code after removing the UI would create maintenance burden and confusion. Deleting it makes the product scope explicit: backlinks remain, the node graph is gone.
+
+### What worked
+
+- The graph deletion was cleanly isolated; TypeScript and Go tests passed after removal.
+- `rg` confirmed no graph references remain in source files outside ignored generated assets.
+
+### What didn't work
+
+N/A
+
+### What I learned
+
+The graph feature touched both runtime paths: backend API and static demo vault. A complete deletion has to include the static-vault graph builder, not just the visible React component.
+
+### What was tricky to build
+
+The repository contains generated embedded assets under `backend/internal/web/embed/public` and build output under `web/dist` that still mention Mermaid graph diagrams. Those are generated/ignored artifacts, not source graph-feature code. I excluded them from the graph-source reference check.
+
+### What warrants a second pair of eyes
+
+- Whether any external client depended on `/api/graph`. Removing the endpoint is a breaking API change, but it matches the explicit request to delete the graph.
+
+### What should be done in the future
+
+N/A unless the graph feature is reintroduced as a dedicated page.
+
+### Code review instructions
+
+Review:
+- `backend/internal/api/api.go` — route and graph handler deleted.
+- `backend/internal/api/api_test.go` — graph tests removed.
+- `web/src/vault/staticVault.ts` — static graph builder removed.
+- `web/src/types/index.ts` — graph types removed.
+- Deleted `web/src/components/organisms/GraphView/*`.
+
+Validate:
+```bash
+rg -n "GraphView|GraphData|GraphNode|GraphEdge|getGraph|staticGetGraph|/api/graph|graphVisible|toggleGraph|retro-graph" web/src backend/internal --glob '!backend/internal/web/embed/public/**' --glob '!web/dist/**'
+pnpm --dir web check
+cd backend && go test ./...
 ```

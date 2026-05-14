@@ -117,3 +117,14 @@ Step 10: Preserve wiki-link heading fragments and explicit aliases (4554af0)
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/parser/parser.go — Fragment-preserving href resolution and data-alias support
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Preserve hash when navigating wiki links
 
+
+## 2026-05-14
+
+Step 11: Fully delete graph feature code (528587b, 12c47d6)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/api/api.go — Removed /api/graph handler and graph payload types
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/organisms/GraphView/GraphView.tsx — Deleted graph component
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/vault/staticVault.ts — Removed static graph builder and staticGetGraph
+
