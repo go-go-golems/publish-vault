@@ -45,8 +45,9 @@ The recommended production shape is:
 4. Run the app container and a `kubernetes/git-sync` sidecar in the same Pod.
 5. Mount a shared `emptyDir` volume at `/git`.
 6. Configure `git-sync` to clone the vault repo and publish the current revision through its atomic symlink contract.
-7. Configure the app to read the vault from a path below the symlink, for example `/git/root/current/vault` if the repo contains a `vault/` subdirectory.
-8. Add a small authenticated admin reload endpoint to the app and configure `git-sync` `--webhook-url` to call it after every successful sync.
+7. Configure the app to read the vault from the `git-sync` published checkout. The vault Git repository root is the vault, so the configured path should be `/git/root/current`; the application must resolve that symlink at startup/reload before walking it.
+8. Materialize git credentials from the cluster's Vault installation with Vault Secrets Operator, using a dedicated read-only vault-repo credential rather than reusing the Argo CD GitOps repository credential.
+9. Add a small authenticated admin reload endpoint to the app and configure `git-sync` `--webhook-url` to call it after every successful sync.
 9. On reload, the app should fully reload the vault and rebuild the in-memory search index.
 
 This design avoids baking private vault content into the application image, avoids representing many Markdown files as ConfigMaps, and keeps the deployed service aligned with Git as the source of truth.
@@ -309,8 +310,11 @@ Create a kustomize directory:
 ├── deployment.yaml
 ├── service.yaml
 ├── ingress.yaml
-├── vault-git-secret.yaml          # or VaultStaticSecret if using Vault Secrets Operator
-├── reload-secret.yaml             # or VaultStaticSecret for reload token
+├── serviceaccount.yaml
+├── vault-connection.yaml
+├── vault-auth.yaml
+├── vault-static-secret-vault-git.yaml
+├── vault-static-secret-reload.yaml
 └── kustomization.yaml
 ```
 
@@ -347,7 +351,7 @@ spec:
           emptyDir: {}
         - name: git-ssh
           secret:
-            secretName: retro-obsidian-vault-git-ssh
+            secretName: retro-obsidian-publish-vault-git
             defaultMode: 0400
       containers:
         - name: app
@@ -358,7 +362,7 @@ spec:
             - "8080"
             - --serve-web
             - --vault
-            - /git/root/current/vault
+            - /git/root/current
           env:
             - name: RETRO_RELOAD_TOKEN
               valueFrom:
@@ -419,29 +423,36 @@ Important caveat: `git-sync`'s webhook configuration may need a way to send an a
 
 `git-sync` publishes updates by changing a symlink. This is good because consumers never see a half-updated checkout. It is also subtle for Go's `filepath.Walk` and fsnotify.
 
-Recommended vault repo layout:
+Resolved vault repo layout decision:
 
 ```text
 vault-repo/
-└── vault/
-    ├── Index.md
-    ├── Research/
-    └── Projects/
+├── Index.md
+├── Research/
+├── Projects/
+└── ...
 ```
 
-Recommended app vault path:
+The Git repository root is the vault. Therefore the intended configured app vault path is:
 
 ```text
-/git/root/current/vault
+/git/root/current
 ```
 
-Why not `/git/root/current`?
+However, `/git/root/current` is a `git-sync` symlink. Go's `filepath.Walk` does not reliably traverse a symlink root the same way it traverses a real directory. The production-safe approach is to keep the configured path as the stable symlink path but make the application resolve it before every full load/reload:
 
-- `current` is the git-sync symlink.
-- If the application treats the symlink itself as the vault root, some filesystem walking/watching code can see the symlink rather than the directory.
-- Using `/git/root/current/vault` makes the final path component a real directory inside the symlinked worktree.
+```go
+configuredRoot := "/git/root/current"
+resolvedRoot, err := filepath.EvalSymlinks(configuredRoot)
+if err != nil {
+    return fmt.Errorf("vault checkout is not ready: %w", err)
+}
+v, err := vault.New(resolvedRoot)
+```
 
-If the vault repo root must be the vault itself, add an app-side symlink normalization/reload strategy before production rollout.
+This is especially important for webhook-driven reloads. When `git-sync` publishes a new revision, it flips `current` to a new worktree. A reload must call `EvalSymlinks` again, not reuse the previously resolved worktree path.
+
+A pragmatic startup workaround is to pass `/git/root/current/.` as the vault path, because a trailing slash/dot often forces symlink resolution at the filesystem layer. Do not rely on that as the long-term contract; implement explicit symlink resolution in the app.
 
 ## Required application changes before production
 
@@ -679,7 +690,7 @@ Suggested CLI flags:
 
 ```text
 serve
-  --vault /git/root/current/vault
+  --vault /git/root/current
   --port 8080
   --serve-web
   --reload-token-env RETRO_RELOAD_TOKEN
@@ -706,30 +717,114 @@ Example image tag:
 ghcr.io/wesen/retro-obsidian-publish:sha-<gitsha>
 ```
 
-### Phase 3: Add Git credentials
+### Phase 3: Add Git credentials from Vault
 
-Files in k3s repo:
+The cluster already uses HashiCorp Vault plus Vault Secrets Operator (VSO) for application runtime secrets and image-pull secrets. Use that same pattern for the vault Git credential.
 
-- `gitops/kustomize/retro-obsidian-publish/vault-git-secret.yaml`
-- or Vault Secrets Operator resources if this cluster prefers Vault-backed secrets.
+Do **not** reuse the Argo CD repository credential for the vault sync:
 
-Recommended secret keys for SSH:
+- The documented Argo CD credential is an `argocd` namespace repository Secret used by Argo CD to read `wesen/2026-03-27--hetzner-k3s`.
+- That token is scoped to the GitOps repo and, per `docs/argocd-private-gitops-repo-secret.md`, currently comes from the operator workstation `.envrc` variable `ARGOCD_TOKEN`, not from a VSO-managed workload secret.
+- The vault content repo is a separate trust boundary. Use a dedicated read-only deploy key or fine-grained token that can read only the vault repo.
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: retro-obsidian-vault-git-ssh
-type: Opaque
-stringData:
-  ssh: |
-    -----BEGIN OPENSSH PRIVATE KEY-----
-    ...
-  known_hosts: |
-    github.com ssh-ed25519 ...
+Recommended Vault KV path:
+
+```text
+kv/apps/retro-obsidian-publish/prod/vault-git
 ```
 
-Use a read-only deploy key limited to the vault repo.
+Recommended VSO-generated Kubernetes Secret:
+
+```yaml
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: retro-obsidian-publish-vault-git
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  vaultAuthRef: retro-obsidian-publish
+  mount: kv
+  type: kv-v2
+  path: apps/retro-obsidian-publish/prod/vault-git
+  refreshAfter: 30s
+  destination:
+    name: retro-obsidian-publish-vault-git
+    create: true
+    overwrite: true
+```
+
+For SSH-based git-sync, seed Vault with keys such as:
+
+```text
+ssh: <private deploy key>
+known_hosts: <github.com known_hosts line>
+```
+
+Then mount the generated Kubernetes Secret into the `git-sync` container:
+
+```yaml
+volumes:
+  - name: git-ssh
+    secret:
+      secretName: retro-obsidian-publish-vault-git
+      defaultMode: 0400
+
+volumeMounts:
+  - name: git-ssh
+    mountPath: /etc/git-secret
+    readOnly: true
+```
+
+Configure git-sync:
+
+```text
+--repo=git@github.com:wesen/<vault-repo>.git
+--ssh-key-file=/etc/git-secret/ssh
+--ssh-known-hosts=true
+--ssh-known-hosts-file=/etc/git-secret/known_hosts
+```
+
+Required Vault platform files in the k3s repo:
+
+```text
+vault/policies/kubernetes/retro-obsidian-publish.hcl
+vault/roles/kubernetes/retro-obsidian-publish.json
+gitops/kustomize/retro-obsidian-publish/serviceaccount.yaml
+gitops/kustomize/retro-obsidian-publish/vault-connection.yaml
+gitops/kustomize/retro-obsidian-publish/vault-auth.yaml
+gitops/kustomize/retro-obsidian-publish/vault-static-secret-vault-git.yaml
+```
+
+Policy sketch:
+
+```hcl
+path "kv/data/apps/retro-obsidian-publish/prod/vault-git" {
+  capabilities = ["read"]
+}
+
+path "kv/metadata/apps/retro-obsidian-publish/prod/vault-git" {
+  capabilities = ["read"]
+}
+```
+
+Role sketch:
+
+```json
+{
+  "bound_service_account_names": ["retro-obsidian-publish"],
+  "bound_service_account_namespaces": ["retro-obsidian-publish"],
+  "policies": ["retro-obsidian-publish"],
+  "token_ttl": "1h"
+}
+```
+
+After adding those files, run the existing k3s helper:
+
+```bash
+cd /home/manuel/code/wesen/2026-03-27--hetzner-k3s
+./scripts/bootstrap-vault-kubernetes-auth.sh
+```
 
 ### Phase 4: Add kustomize app
 
@@ -879,7 +974,7 @@ main containers:
   - git-sync continuous sidecar
 ```
 
-This avoids app startup failing because `/git/root/current/vault` does not exist yet.
+This avoids app startup failing because `/git/root/current` does not exist yet.
 
 ## Intern implementation checklist
 
@@ -919,7 +1014,7 @@ Content-Type: application/json
 {
   "ok": true,
   "notes": 514,
-  "vaultRoot": "/git/root/current/vault",
+  "vaultRoot": "/git/root/current",
   "revision": "optional-git-sha"
 }
 ```
@@ -943,7 +1038,7 @@ Logging:
 
 ```text
 reload: requested by git-sync
-reload: loaded 514 notes from /git/root/current/vault
+reload: loaded 514 notes from /git/root/current
 reload: rebuilt search index in 1.2s
 reload: active revision abc123
 ```
@@ -951,12 +1046,11 @@ reload: active revision abc123
 ## Open questions
 
 1. What is the exact vault repository URL and branch?
-2. Is the vault repository root the vault, or does it contain a subdirectory?
-3. Which domain should the public site use?
-4. Should the published site require basic auth initially?
-5. Is the cluster already using Vault Secrets Operator for app secrets, or should the first implementation use plain Kubernetes Secrets?
-6. Should production disable fsnotify watcher and rely only on git-sync webhook reload?
-7. Should image publication live in this repo's GitHub Actions or be done manually at first?
+2. Which domain should the public site use?
+3. Should the published site require basic auth initially?
+4. What exact Vault KV path should store the vault repo deploy key? Proposed: `kv/apps/retro-obsidian-publish/prod/vault-git`.
+5. Should production disable fsnotify watcher and rely only on git-sync webhook reload?
+6. Should image publication live in this repo's GitHub Actions or be done manually at first?
 
 ## References
 

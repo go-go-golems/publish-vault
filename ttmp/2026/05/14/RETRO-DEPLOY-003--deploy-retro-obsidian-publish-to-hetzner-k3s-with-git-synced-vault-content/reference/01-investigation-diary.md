@@ -181,7 +181,7 @@ The `docmgr doctor` validation scans downloaded Markdown sources too. Because De
 ### What warrants a second pair of eyes
 
 - The design recommends a reload endpoint and token authentication, but the exact git-sync hook mechanism should be verified against the chosen git-sync image version before implementation.
-- The document recommends `/git/root/current/vault`; verify the real vault repo layout before manifests are written.
+- The vault repo root is now confirmed to be the vault. The app must resolve `/git/root/current` as a symlink before walking it.
 
 ### What should be done in the future
 
@@ -223,4 +223,103 @@ Successful upload output:
 
 ```text
 OK: uploaded RETRO_DEPLOY_003_K3s_Git_Sync_Design.pdf -> /ai/2026/05/14/RETRO-DEPLOY-003
+```
+
+## Step 3: Resolve vault repo layout and Vault-backed Git credential plan
+
+The vault repository root is confirmed to be the vault itself. That changes the git-sync mount path from the earlier conservative `/git/root/current/vault` recommendation to `/git/root/current`, and it makes explicit symlink resolution in the app mandatory before production.
+
+I also checked the k3s repo's Vault patterns. Existing applications use Vault Secrets Operator (`VaultConnection`, `VaultAuth`, `VaultStaticSecret`) for runtime secrets and image-pull secrets. Argo CD's own GitOps repository credential is documented separately as an `argocd` namespace repository Secret currently sourced from `.envrc` (`ARGOCD_TOKEN`), so the vault content sync should use a new dedicated Vault-backed Git credential rather than borrowing Argo CD's credential.
+
+### Prompt Context
+
+**User prompt (verbatim):** "the git repo root is the vault. Also, can we get the github credentials from the 'vault' (as in, the vault installation we run to manage our credentials?) . I think that's where argocd gets its github credentials from?"
+
+**Assistant interpretation:** Update the deployment design with the confirmed vault repository layout and clarify whether Git credentials for git-sync should be sourced from HashiCorp Vault.
+
+**Inferred user intent:** Avoid hardcoding GitHub credentials in manifests and align the vault sync deployment with the cluster's existing secret-management model.
+
+**Commit (code):** N/A — design update.
+
+### What I did
+
+- Inspected k3s VSO patterns in existing apps such as `discord-ui-showcase` and `go-go-host`.
+- Read `docs/argocd-private-gitops-repo-secret.md` to verify how Argo CD's private GitOps repo credential is currently documented.
+- Updated the design guide:
+  - vault root path is now `/git/root/current`.
+  - app must call `filepath.EvalSymlinks` before startup/reload walks.
+  - git-sync credentials should be materialized from Vault via VSO.
+  - do not reuse the Argo CD GitOps repo credential.
+  - proposed Vault path: `kv/apps/retro-obsidian-publish/prod/vault-git`.
+  - added policy/role/VaultStaticSecret sketches.
+
+### Why
+
+The repo-root-is-vault detail affects correctness: `git-sync` publishes `current` as a symlink, and Go's `filepath.Walk` does not safely traverse a symlink root. The server must resolve the symlink on every full reload so it follows the newest worktree after git-sync flips the symlink.
+
+Credential separation also matters. Argo CD's credential reads the GitOps repo; the runtime sidecar needs a credential for the vault repo. Those should be separate least-privilege credentials.
+
+### What worked
+
+- The k3s repo has a clear VSO convention: service account + `VaultConnection` + `VaultAuth` + `VaultStaticSecret`.
+- Existing policies/roles under `vault/policies/kubernetes` and `vault/roles/kubernetes` provide direct templates for the new app.
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+Argo CD's current repository credential is not represented as a VSO-managed manifest in this repo. The docs say it is a Kubernetes Secret in `argocd`, created from an operator workstation token (`ARGOCD_TOKEN`). Separately, CI GitOps PR tokens can be Vault-backed through GitHub Actions OIDC. For runtime git-sync, the clean pattern is VSO in the app namespace.
+
+### What was tricky to build
+
+The tricky distinction is that there are three GitHub credential use cases:
+
+1. Argo CD reads the GitOps repo.
+2. CI opens PRs to the GitOps repo.
+3. git-sync reads the vault repo at runtime.
+
+They should not share one credential because their scopes and lifetimes differ.
+
+### What warrants a second pair of eyes
+
+- Confirm the exact vault repo URL and whether a deploy key or fine-grained PAT is preferred.
+- Confirm whether git-sync should use SSH (`ssh`, `known_hosts`) or HTTPS (`username`, `password`) in this cluster.
+
+### What should be done in the future
+
+- Add app-side symlink resolution and reload endpoint before writing the final Deployment.
+- Seed the Vault path and add the VSO manifests in the k3s repo.
+
+### Code review instructions
+
+Review:
+
+- `design-doc/01-k3s-deployment-and-git-synced-vault-design-guide.md`, sections "Vault repo layout and symlink details" and "Phase 3: Add Git credentials from Vault".
+- `/home/manuel/code/wesen/2026-03-27--hetzner-k3s/docs/argocd-private-gitops-repo-secret.md` for Argo CD credential distinction.
+- Existing VSO examples under `/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/discord-ui-showcase/`.
+
+### Technical details
+
+Recommended Vault path:
+
+```text
+kv/apps/retro-obsidian-publish/prod/vault-git
+```
+
+Recommended app vault path:
+
+```text
+/git/root/current
+```
+
+Required app behavior:
+
+```go
+resolvedRoot, err := filepath.EvalSymlinks(configuredRoot)
+if err != nil {
+    return fmt.Errorf("vault checkout is not ready: %w", err)
+}
+v, err := vault.New(resolvedRoot)
 ```
