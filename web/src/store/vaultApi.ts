@@ -15,14 +15,11 @@ import type {
   FileNode,
   SearchResult,
   TagCount,
-  GraphData,
   WikiLinkRef,
-  GraphNode,
-  GraphEdge,
 } from "../types";
 
 // Re-export types so consumers can import from one place
-export type { Note, NoteListItem, FileNode, SearchResult, TagCount, GraphData, WikiLinkRef, GraphNode, GraphEdge };
+export type { Note, NoteListItem, FileNode, SearchResult, TagCount, WikiLinkRef };
 
 // ── Mode detection ────────────────────────────────────────────────
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || "";
@@ -52,7 +49,7 @@ export const vaultApi = createApi({
   reducerPath: "vaultApi",
   // baseQuery is used only in backend mode; static mode uses queryFn
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE }),
-  tagTypes: ["Note", "Notes", "Tree", "Tags", "Graph"],
+  tagTypes: ["Note", "Notes", "Tree", "Tags"],
   endpoints: (builder) => ({
 
     // ── List all notes ──────────────────────────────────────────
@@ -132,22 +129,6 @@ export const vaultApi = createApi({
             providesTags: ["Tags"] as const,
           }
     ),
-
-    // ── Graph ───────────────────────────────────────────────────
-    getGraph: builder.query<GraphData, void>(
-      IS_STATIC
-        ? {
-            queryFn: async (): Promise<{ data: GraphData }> => {
-              const s = await getStatic();
-              return ok(s.staticGetGraph());
-            },
-            providesTags: ["Graph"] as const,
-          }
-        : {
-            query: () => "/api/graph",
-            providesTags: ["Graph"] as const,
-          }
-    ),
   }),
 });
 
@@ -157,5 +138,4 @@ export const {
   useGetTreeQuery,
   useSearchQuery,
   useListTagsQuery,
-  useGetGraphQuery,
 } = vaultApi;

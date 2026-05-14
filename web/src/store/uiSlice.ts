@@ -5,7 +5,6 @@ interface UIState {
   rightPanelOpen: boolean;
   searchQuery: string;
   activeNoteSlug: string | null;
-  graphVisible: boolean;
 }
 
 const initialState: UIState = {
@@ -13,7 +12,6 @@ const initialState: UIState = {
   rightPanelOpen: true,
   searchQuery: "",
   activeNoteSlug: null,
-  graphVisible: false,
 };
 
 const uiSlice = createSlice({
@@ -38,9 +36,6 @@ const uiSlice = createSlice({
     setActiveNote(state, action: PayloadAction<string | null>) {
       state.activeNoteSlug = action.payload;
     },
-    toggleGraph(state) {
-      state.graphVisible = !state.graphVisible;
-    },
   },
 });
 
@@ -51,7 +46,6 @@ export const {
   setRightPanelOpen,
   setSearchQuery,
   setActiveNote,
-  toggleGraph,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

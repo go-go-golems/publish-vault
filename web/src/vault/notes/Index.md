@@ -13,7 +13,7 @@ This is a **Retro Obsidian Publish** demo vault — a collection of interconnect
 
 ## How to Navigate
 
-Use the **sidebar** on the left to browse notes by folder. Click any `[[wiki link]]` to jump between notes. The **backlinks panel** on the right shows which notes point to the current one. Toggle the **graph view** from the menu bar to see the full connection map.
+Use the **sidebar** on the left to browse notes by folder. Click any `[[wiki link]]` to jump between notes. The **backlinks panel** on the right shows which notes point to the current one.
 
 Press `/` at any time to open the search bar.
 

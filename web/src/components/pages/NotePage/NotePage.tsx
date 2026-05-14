@@ -1,13 +1,12 @@
 /**
  * PAGE: NotePage
- * Design: Retro System 1 — note content + resizable right panel with backlinks + graph.
+ * Design: Retro System 1 — note content + resizable right panel with backlinks.
  * Fetches note by slug via RTK Query.
  */
 import React, { useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { NoteRenderer } from "../../organisms/NoteRenderer/NoteRenderer";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
-import { GraphView } from "../../organisms/GraphView/GraphView";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
 import {
@@ -18,7 +17,6 @@ import {
 import {
   useGetNoteQuery,
   useListNotesQuery,
-  useGetGraphQuery,
 } from "../../../store/vaultApi";
 import { useAppSelector, useAppDispatch } from "../../../hooks/redux";
 import { setActiveNote } from "../../../store/uiSlice";
@@ -30,7 +28,6 @@ export interface NotePageProps {
 export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const dispatch = useAppDispatch();
   const [, navigate] = useLocation();
-  const graphVisible = useAppSelector((s) => s.ui.graphVisible);
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
 
   const handleNavigate = useCallback(
@@ -53,7 +50,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   } = useGetNoteQuery(slug, { skip: !slug });
 
   const { data: allNotes } = useListNotesQuery();
-  const { data: graphData } = useGetGraphQuery(undefined, { skip: !graphVisible });
 
   const allSlugs = useMemo(
     () => allNotes?.map((n) => n.slug) ?? [],
@@ -103,33 +99,13 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   }
 
   const rightPanelContent = (
-    <>
-      {/* Graph */}
-      {graphVisible && graphData && (
-        <div className="border-b border-[var(--color-ink)]">
-          <div className="retro-window-title bg-[var(--color-ink)] text-[var(--color-paper)] text-[10px] font-bold uppercase tracking-widest px-2 py-1 flex items-center gap-1">
-            <Icon name="graph" size={10} />
-            Graph
-          </div>
-          <GraphView
-            data={graphData}
-            activeNodeId={slug}
-            onNodeClick={handleNavigate}
-            width={224}
-            height={200}
-          />
-        </div>
-      )}
-
-      {/* Backlinks */}
-      <div className="flex-1 overflow-hidden">
-        <BacklinksPanel
-          backlinks={backlinkEntries}
-          onNavigate={handleNavigate}
-          maxHeight="100%"
-        />
-      </div>
-    </>
+    <div className="flex-1 overflow-hidden">
+      <BacklinksPanel
+        backlinks={backlinkEntries}
+        onNavigate={handleNavigate}
+        maxHeight="100%"
+      />
+    </div>
   );
 
   return rightPanelOpen ? (

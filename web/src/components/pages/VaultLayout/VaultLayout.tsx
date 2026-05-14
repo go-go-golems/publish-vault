@@ -25,7 +25,6 @@ import {
   toggleRightPanel,
   setSearchQuery,
   setActiveNote,
-  toggleGraph,
 } from "../../../store/uiSlice";
 
 export interface VaultLayoutProps {
@@ -41,7 +40,6 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
   const [, navigate] = useLocation();
   const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
-  const graphVisible = useAppSelector((s) => s.ui.graphVisible);
   const activeSlug = useAppSelector((s) => s.ui.activeNoteSlug);
   const { data: tree, isLoading: treeLoading } = useGetTreeQuery();
 
@@ -107,18 +105,6 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           title="Toggle right panel"
         >
           <Icon name="panel-right" size={13} />
-        </button>
-
-        <button
-          type="button"
-          className={clsx(
-            "retro-menubar-item",
-            graphVisible && "bg-[var(--color-paper)] text-[var(--color-ink)]"
-          )}
-          onClick={() => dispatch(toggleGraph())}
-          title="Toggle graph view"
-        >
-          <Icon name="graph" size={13} />
         </button>
 
         <span className="retro-menubar-item text-[10px] tabular-nums select-none">
