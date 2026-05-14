@@ -138,29 +138,62 @@ func parseWikiLinkInner(inner string) (target, alias, heading string) {
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
 // The frontend renderer will later resolve slugs to actual paths.
 func replaceWikiLinks(src []byte) []byte {
-	return wikiLinkRegex.ReplaceAllFunc(src, func(match []byte) []byte {
-		isEmbed := match[0] == '!'
-		inner := string(match)
-		if isEmbed {
-			inner = inner[3 : len(inner)-2] // strip ![[  ]]
-		} else {
-			inner = inner[2 : len(inner)-2] // strip [[  ]]
+	frontmatter, body := splitFrontmatter(src)
+	replacedBody := wikiLinkRegex.ReplaceAllFunc(body, wikiLinkHTML)
+	if len(frontmatter) == 0 {
+		return replacedBody
+	}
+	out := make([]byte, 0, len(frontmatter)+len(replacedBody))
+	out = append(out, frontmatter...)
+	out = append(out, replacedBody...)
+	return out
+}
+
+// splitFrontmatter separates an initial YAML frontmatter block from the Markdown
+// body. Wiki-link placeholders must not be injected into frontmatter: doing so
+// turns valid YAML such as `"[[Note]]"` into invalid raw HTML and makes
+// goldmark-meta treat the entire preamble as visible document content.
+func splitFrontmatter(src []byte) (frontmatter, body []byte) {
+	if !bytes.HasPrefix(src, []byte("---\n")) && !bytes.HasPrefix(src, []byte("---\r\n")) {
+		return nil, src
+	}
+	lines := bytes.SplitAfter(src, []byte("\n"))
+	if len(lines) == 0 {
+		return nil, src
+	}
+	offset := len(lines[0])
+	for i := 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(string(lines[i]))
+		offset += len(lines[i])
+		if trimmed == "---" {
+			return src[:offset], src[offset:]
 		}
-		target, alias, heading := parseWikiLinkInner(inner)
-		slug := slugify(target)
-		display := alias
-		if display == "" {
-			display = target
-		}
-		if isEmbed {
-			return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
-		}
-		href := "/note/" + slug
-		if heading != "" {
-			href += "#" + slugify(heading)
-		}
-		return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-alias="` + alias + `">` + display + `</a>`)
-	})
+	}
+	return nil, src
+}
+
+func wikiLinkHTML(match []byte) []byte {
+	isEmbed := match[0] == '!'
+	inner := string(match)
+	if isEmbed {
+		inner = inner[3 : len(inner)-2] // strip ![[  ]]
+	} else {
+		inner = inner[2 : len(inner)-2] // strip [[  ]]
+	}
+	target, alias, heading := parseWikiLinkInner(inner)
+	slug := slugify(target)
+	display := alias
+	if display == "" {
+		display = target
+	}
+	if isEmbed {
+		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
+	}
+	href := "/note/" + slug
+	if heading != "" {
+		href += "#" + slugify(heading)
+	}
+	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-alias="` + alias + `">` + display + `</a>`)
 }
 
 // slugify converts a note title to a URL-safe slug.

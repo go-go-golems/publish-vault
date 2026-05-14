@@ -103,6 +103,32 @@ func TestCalloutWithTitle(t *testing.T) {
 	}
 }
 
+func TestFrontmatterWikiLinksAreNotRenderedAsPreamble(t *testing.T) {
+	src := []byte(`---
+title: Report
+related_reports:
+  - "[[PROJECT REPORT - Keycloak OS1 Login Theme - A Technical Deep Dive]]"
+---
+
+# Report
+
+See [[PROJECT REPORT - Keycloak OS1 Login Theme - A Technical Deep Dive]].
+`)
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if parsed.Title != "Report" {
+		t.Fatalf("Title = %q, want Report", parsed.Title)
+	}
+	if contains(parsed.HTML, "related_reports:") || contains(parsed.HTML, "<!-- yaml:") {
+		t.Fatalf("frontmatter should not render as document preamble, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `class="wiki-link"`) {
+		t.Fatalf("body wiki link should still render, got: %s", parsed.HTML)
+	}
+}
+
 func TestWikiLinkDataRaw(t *testing.T) {
 	parsed, err := Parse([]byte("# Test\n\nSee [[Tribal/App-Auth]] and [[Fundamentals/Access|Custom Alias]].\n"))
 	if err != nil {
