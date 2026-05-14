@@ -24,11 +24,12 @@ type Command struct {
 
 // Settings are decoded from the Glazed default command section.
 type Settings struct {
-	Vault          string `glazed:"vault"`
-	Port           string `glazed:"port"`
-	ServeWeb       bool   `glazed:"serve-web"`
-	Watch          bool   `glazed:"watch"`
-	ReloadTokenEnv string `glazed:"reload-token-env"`
+	Vault               string `glazed:"vault"`
+	Port                string `glazed:"port"`
+	ServeWeb            bool   `glazed:"serve-web"`
+	Watch               bool   `glazed:"watch"`
+	ReloadTokenEnv      string `glazed:"reload-token-env"`
+	ReloadAllowLoopback bool   `glazed:"reload-allow-loopback"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -52,6 +53,7 @@ Examples:
   retro-obsidian-publish serve --vault ./vault-example --port 8080 --serve-web
   VAULT_DIR=/path/to/vault retro-obsidian-publish serve --serve-web
   RETRO_RELOAD_TOKEN=secret retro-obsidian-publish serve --vault /git/root/current --watch=false
+  retro-obsidian-publish serve --vault /git/root/current --watch=false --reload-allow-loopback
 `),
 		cmds.WithFlags(
 			fields.New("vault", fields.TypeString,
@@ -71,7 +73,11 @@ Examples:
 			),
 			fields.New("reload-token-env", fields.TypeString,
 				fields.WithDefault("RETRO_RELOAD_TOKEN"),
-				fields.WithHelp("Environment variable containing the bearer token for POST /api/admin/reload. Empty value disables reload endpoint."),
+				fields.WithHelp("Environment variable containing the bearer token for POST /api/admin/reload. Empty value disables token auth for the reload endpoint."),
+			),
+			fields.New("reload-allow-loopback", fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Allow POST /api/admin/reload without a bearer token from loopback clients such as a git-sync sidecar calling 127.0.0.1."),
 			),
 		),
 		cmds.WithSections(glazedSection, commandSettingsSection),
@@ -103,5 +109,5 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.ReloadTokenEnv != "" {
 		reloadToken = os.Getenv(settings.ReloadTokenEnv)
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken})
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback})
 }

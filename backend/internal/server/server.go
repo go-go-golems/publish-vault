@@ -21,11 +21,12 @@ import (
 
 // Config holds the runtime settings for the Retro Obsidian Publish server.
 type Config struct {
-	VaultDir    string
-	Port        string
-	ServeWeb    bool
-	Watch       bool
-	ReloadToken string
+	VaultDir            string
+	Port                string
+	ServeWeb            bool
+	Watch               bool
+	ReloadToken         string
+	ReloadAllowLoopback bool
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -67,10 +68,10 @@ func Run(ctx context.Context, cfg Config) error {
 	h := api.NewWithProvider(state)
 	h.Register(r)
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
-	if cfg.ReloadToken != "" {
-		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken)).Methods("POST")
+	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
+		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback)).Methods("POST")
 	} else {
-		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env")
+		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env, or enable --reload-allow-loopback")
 	}
 	if cfg.ServeWeb {
 		r.PathPrefix("/").Handler(web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"}))
@@ -126,9 +127,9 @@ func healthHandler(state *RuntimeState) http.HandlerFunc {
 	}
 }
 
-func reloadHandler(state *RuntimeState, token string) http.HandlerFunc {
+func reloadHandler(state *RuntimeState, token string, allowLoopback bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !validBearerToken(r.Header.Get("Authorization"), token) {
+		if !validReloadRequest(r, token, allowLoopback) {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
@@ -141,6 +142,21 @@ func reloadHandler(state *RuntimeState, token string) http.HandlerFunc {
 		log.Printf("reload: loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func validReloadRequest(r *http.Request, token string, allowLoopback bool) bool {
+	if validBearerToken(r.Header.Get("Authorization"), token) {
+		return true
+	}
+	if !allowLoopback {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func validBearerToken(header, token string) bool {

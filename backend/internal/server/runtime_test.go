@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +62,19 @@ func TestValidBearerToken(t *testing.T) {
 	}
 	if validBearerToken("Bearer secret", "") {
 		t.Fatal("empty configured token accepted")
+	}
+}
+
+func TestValidReloadRequestAllowsLoopback(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/admin/reload", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	if !validReloadRequest(req, "", true) {
+		t.Fatal("loopback reload request rejected")
+	}
+
+	req.RemoteAddr = "10.0.0.5:12345"
+	if validReloadRequest(req, "", true) {
+		t.Fatal("non-loopback reload request accepted")
 	}
 }
 
