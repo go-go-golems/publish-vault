@@ -456,3 +456,85 @@ Final observed Argo CD/Pod state:
 Synced Healthy Succeeded 46f48d82f45a7adba4389aee3e12b306be988a3d
 retro-obsidian-publish-f644bd75-s627q   2/2   Running   0
 ```
+
+
+## Step 5: Fix homepage selection, JSON frontmatter encoding, and verify git-sync
+
+After the deployment was healthy, the public homepage exposed a confusing failure: `/` selected `research/institute/technical-reports/2026-04-15-x264-go-page-fault-analysis/sources/index`, and the note appeared to exist in `/api/notes` but failed in the full note endpoint.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead do both. then also commit new files in go-go-parc and push so we can check that the git-sync works"
+
+**Assistant interpretation:** Fix both the homepage selection heuristic and the backend full-note serialization bug, redeploy the app, then push a real vault commit and verify that git-sync pulls and reloads it.
+
+**Commit (retro app):** `6c22a66 Fix home note selection and frontmatter JSON encoding`.
+
+**Commit (k3s GitOps):** `6294b1d Deploy frontmatter and home page fixes`.
+
+**Commit (go-go-parc):** `e468e03 Add Providence therapist search dashboard article`.
+
+### What I did
+
+- Reproduced the live API split:
+  - `/api/notes` included the slug.
+  - `/api/notes/{slug}` returned `500 {"error":"encoding failed"}`.
+- Confirmed the encoding error locally as `json: unsupported type: map[interface {}]interface {}`.
+- Added recursive frontmatter normalization in `backend/internal/parser/parser.go` so nested YAML maps become `map[string]interface{}` before they enter `Note.Frontmatter`.
+- Added `TestNestedFrontmatterIsJSONEncodable`.
+- Changed frontend home selection in `web/src/App.tsx` to prefer explicit project/index candidates and exclude `/sources/index` notes from fallback index selection.
+- Ran validation:
+  - `cd backend && go test ./...`
+  - `pnpm --dir web check`
+- Built and pushed `ghcr.io/go-go-golems/retro-obsidian-publish:sha-6c22a66`.
+- Updated the k3s deployment image and let Argo CD roll it out.
+- Verified the previously failing source index detail endpoint now returns HTTP 200 with normalized nested frontmatter.
+- Committed the new vault article in `go-go-parc` and pushed to `main`.
+- Watched git-sync detect remote commit `e468e03cf578db6e600251034b7a96bff0324a3c`, update the worktree, and call the reload webhook.
+- Verified `/api/healthz` changed from 513 notes at the old worktree to 516 notes at the new worktree.
+- Verified search and full note fetch for the new article.
+
+### Why
+
+The homepage bug had two independent causes. The frontend selected a poor candidate because no root `Index.md` exists, and the backend failed to serve that selected note because nested docmgr-style YAML frontmatter was not JSON-normalized. Fixing only one side would leave either a bad homepage or future 500s for valid notes.
+
+### What worked
+
+- The parser-level normalization fixed the issue for all API consumers because every loaded note now stores JSON-encodable frontmatter.
+- The new deployment rolled out cleanly with zero restarts.
+- git-sync end-to-end behavior is now verified against a real vault commit.
+
+### What didn't work
+
+No new blocker. The live browser could not be inspected with Playwright because the local browser profile was already in use, so validation used API responses and deployment logs.
+
+### What I learned
+
+`goldmark-meta` can return nested `map[interface{}]interface{}` values even when the top-level metadata map is `map[string]interface{}`. Any app serving parsed YAML as JSON should recursively normalize it before response encoding.
+
+### What should be done in the future
+
+- Consider adding an explicit configurable home slug rather than keeping production behavior encoded in a frontend heuristic.
+- Consider adding reload metrics or a `/api/healthz` field for the last successful reload time/commit.
+
+### Technical details
+
+Previously failing endpoint after the fix:
+
+```text
+GET /api/notes/research/institute/technical-reports/2026-04-15-x264-go-page-fault-analysis/sources/index -> 200
+```
+
+Final git-sync evidence:
+
+```text
+git-sync remote: e468e03cf578db6e600251034b7a96bff0324a3c
+app reload: loaded 516 notes from /git/root/.worktrees/e468e03cf578db6e600251034b7a96bff0324a3c
+```
+
+New article verified via search/detail API:
+
+```text
+projects/2026/05/14/article-providence-therapist-search-a-retro-monochrome-research-dashboard
+Providence Therapist Search: A Retro Monochrome Research Dashboard
+```

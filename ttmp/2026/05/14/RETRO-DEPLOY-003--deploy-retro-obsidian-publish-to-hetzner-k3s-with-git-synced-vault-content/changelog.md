@@ -32,3 +32,11 @@ Validated ticket with docmgr doctor and uploaded design/diary bundle to reMarkab
 - Added Argo CD/kustomize deployment for `retro-obsidian-publish` with git-sync vault content, VSO-managed git credentials, VSO-managed GHCR image pull secret, service, ingress, and TLS.
 - Fixed rollout failures: git-sync secret permissions, private GHCR image pull auth, and app startup/reload probe timing.
 - Verified live site at `https://parc.yolo.scapegoat.dev` and health endpoint reporting 513 notes from `/git/root/current`.
+
+
+## 2026-05-14 - Fixed homepage/frontmatter bug and verified git-sync update
+
+- Fixed nested YAML frontmatter serialization by recursively normalizing YAML maps before JSON responses.
+- Improved homepage note selection so the deployed vault prefers `projects/00-project-index-repos-and-concepts` instead of nested `sources/index` notes.
+- Deployed image `ghcr.io/go-go-golems/retro-obsidian-publish:sha-6c22a66` through Argo CD.
+- Committed and pushed new go-go-parc article `e468e03`; git-sync pulled it and the app reloaded from 513 to 516 notes.
