@@ -20,6 +20,6 @@
 
 ## Round 3
 
-- [ ] 3.1: Remove node graph from the UI for now — remove graph toggle, panel, and frontend graph fetching
-- [ ] 3.2: Preserve wiki-link heading fragments when resolving slugs and navigating `[[Note#Heading]]`
-- [ ] 3.3: Respect explicit wiki-link aliases — keep `[[Target|Alias]]` display text while using note titles only for unaliased links
+- [x] 3.1: Remove node graph from the UI for now — remove graph toggle, panel, and frontend graph fetching (f334504)
+- [x] 3.2: Preserve wiki-link heading fragments when resolving slugs and navigating `[[Note#Heading]]` (4554af0)
+- [x] 3.3: Respect explicit wiki-link aliases — keep `[[Target|Alias]]` display text while using note titles only for unaliased links (4554af0)

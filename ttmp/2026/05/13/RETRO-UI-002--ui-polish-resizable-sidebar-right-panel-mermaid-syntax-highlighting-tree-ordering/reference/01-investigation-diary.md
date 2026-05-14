@@ -7,10 +7,16 @@ DocType: ""
 Intent: ""
 Owners: []
 RelatedFiles:
+    - Path: backend/internal/parser/parser.go
+      Note: Wiki-link alias and heading-fragment handling
     - Path: backend/internal/search/search.go
       Note: Fuzzy MatchQuery and prefix queries (Step 4)
     - Path: web/src/components/organisms/NoteRenderer/NoteRenderer.tsx
       Note: Embeds
+    - Path: web/src/components/pages/NotePage/NotePage.tsx
+      Note: Graph panel removed; hash-aware navigation
+    - Path: web/src/components/pages/VaultLayout/VaultLayout.tsx
+      Note: Graph toggle removed in Round 3
     - Path: web/src/index.css
       Note: Copy button
 ExternalSources: []
@@ -19,6 +25,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -693,4 +700,150 @@ Validate:
 ```bash
 # Check that headings have IDs
 curl -fsS http://127.0.0.1:8080/api/notes/research/institute/proposals/2026/05/11/proposal-goja-sites-hosting-service | python3 -c 'import re,sys; html=sys.stdin.read(); ids=re.findall(r"<h[1-6] id=\"([^\"]*)\"", html); print(f"Heading IDs: {len(ids)}"); [print(f"  {i}") for i in ids[:5]]'
+```
+
+## Step 9: Round 3 task setup and node graph removal
+
+The next takeover request asked to continue the project, add tasks first, commit at intervals, and keep the diary current. The explicit new request was to remove the node graph for now, so I created Round 3 tasks before touching code.
+
+### Prompt Context
+
+**User prompt (verbatim):** "We are taking over for your little brother. Add the requested features, add tasks to do it, and then execute, commit at appropriate intervals, keep a diary as you go"
+
+**User prompt (verbatim):** "also remove the node graph for now."
+
+**Assistant interpretation:** Add a new Round 3 section to the ticket, then implement the requested graph removal and adjacent wiki-link refinements in focused commits.
+
+**Inferred user intent:** Continue disciplined ticket-driven implementation and temporarily simplify the UI by removing the graph feature.
+
+**Commit (tasks):** 213cb65 — Tasks: add round 3 graph removal and wiki-link refinements
+**Commit (code):** f334504 — Remove node graph from frontend UI
+
+### What I did
+
+- Added Round 3 tasks to `tasks.md`:
+  - 3.1 remove the node graph from the UI for now.
+  - 3.2 preserve wiki-link heading fragments.
+  - 3.3 preserve explicit wiki-link aliases.
+- Removed the graph toggle button from `VaultLayout.tsx`.
+- Removed `graphVisible` state and `toggleGraph` from `uiSlice.ts`.
+- Removed `GraphView` import, `useGetGraphQuery`, graph panel rendering, and graph fetch from `NotePage.tsx`.
+- Removed `getGraph` from `vaultApi.ts` exports/endpoints, so the frontend no longer fetches `/api/graph`.
+- Removed the stale static demo text that told users to toggle the graph view.
+- Removed the unused `.retro-graph-canvas` CSS rule.
+
+### Why
+
+The graph was expensive and visually noisy for the current polish phase. Removing the UI and frontend query keeps the right panel focused on backlinks while preserving backend graph code for a possible future reintroduction.
+
+### What worked
+
+- TypeScript caught all frontend graph references after the removals.
+- The right panel became simpler: it now contains only backlinks.
+
+### What didn't work
+
+N/A
+
+### What I learned
+
+The graph feature was mostly isolated: menu toggle, Redux flag, RTK endpoint, and NotePage panel. Removing those leaves the backend endpoint intact but removes all visible frontend entry points.
+
+### What was tricky to build
+
+The static vault still builds graph data internally for demo mode. I left that code in place because removing it would be a larger static-vault refactor and is unnecessary once the `getGraph` endpoint is no longer exported or used.
+
+### What warrants a second pair of eyes
+
+- Whether the backend `/api/graph` endpoint should also be removed now, or kept as dormant functionality for later.
+- Whether the `GraphView` component/story files should be deleted or kept for future revival.
+
+### What should be done in the future
+
+- If graph remains removed long-term, delete `GraphView`, static graph construction, graph types, and backend `/api/graph`.
+- If graph returns, consider a dedicated page rather than a small right-panel canvas.
+
+### Code review instructions
+
+Review:
+- `web/src/components/pages/VaultLayout/VaultLayout.tsx` — graph menu button removed.
+- `web/src/components/pages/NotePage/NotePage.tsx` — graph panel and graph API query removed.
+- `web/src/store/uiSlice.ts` — graph Redux state removed.
+- `web/src/store/vaultApi.ts` — frontend graph endpoint removed.
+
+Validate:
+```bash
+pnpm --dir web check
+rg -n "graphVisible|toggleGraph|useGetGraphQuery|GraphView" web/src/components web/src/store
+```
+
+## Step 10: Preserve wiki-link heading fragments and explicit aliases
+
+While finishing Round 3, I hardened two wiki-link edge cases: `[[Note#Heading]]` links now preserve the heading fragment through backend slug resolution and SPA navigation, and `[[Target|Alias]]` links keep their explicit alias instead of being overwritten by the target note title.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 9)
+
+**Assistant interpretation:** Finish Round 3 wiki-link refinements in a focused commit.
+
+**Inferred user intent:** Make Obsidian-style wiki links behave closer to Obsidian Publish semantics.
+
+**Commit (code):** 4554af0 — Preserve wiki-link heading fragments and aliases
+
+### What I did
+
+- Changed generated wiki-link anchors to store:
+  - `data-raw` = original target path.
+  - `data-alias` = explicit alias, if provided.
+- Updated `hrefNoteRe` in `parser.go` to split `/note/{slug}` from an optional `#fragment`, resolve only the slug, then reattach the fragment.
+- Updated `ReplaceWikiLinkDisplay()` to skip title replacement when `data-alias` is non-empty.
+- Updated `NoteRenderer` wiki-link click handling to read the hash fragment from the anchor href and pass `{target}#{hash}` to navigation.
+- Updated `NotePage` navigation to keep `activeNoteSlug` hash-free while navigating to `/note/{slug}#{hash}`.
+- Added parser tests for heading fragment preservation and alias preservation.
+
+### Why
+
+The earlier display-title fix was too aggressive for aliased links, and the earlier heading-scroll feature only handled already-loaded hash links. It did not preserve wiki-link fragments through backend slug resolution and SPA navigation.
+
+### What worked
+
+- Backend tests now verify `/note/tribal/app-auth#authorization-flow` resolves to `/note/research/kb/tribal/app-auth#authorization-flow`.
+- Aliased links now remain as the author wrote them.
+- TypeScript check passes after the navigation change.
+
+### What didn't work
+
+N/A
+
+### What I learned
+
+Heading fragments should not be part of vault slug resolution. The resolver should only receive the note slug, then the fragment can be reattached unchanged.
+
+### What was tricky to build
+
+The frontend needs two notions of target: the slug used for active note/sidebar state, and the slug+hash used for actual navigation. Passing `slug#hash` through `onNavigate` works, but `NotePage` must split at `#` before calling `setActiveNote()`.
+
+### What warrants a second pair of eyes
+
+- The alias detection in `ReplaceWikiLinkDisplay()` is still regex-based HTML manipulation. It is tested for simple anchors but not nested markup inside anchors.
+- The `onNavigate` contract now accepts `slug` or `slug#hash`; callers should avoid treating the whole string as a pure slug.
+
+### What should be done in the future
+
+- Consider replacing regex HTML mutations with an HTML tokenizer/DOM transform for wiki-link post-processing.
+- Add an end-to-end browser check for clicking `[[Note#Heading]]`.
+
+### Code review instructions
+
+Review:
+- `backend/internal/parser/parser.go` — `data-alias`, fragment-preserving `hrefNoteRe`, alias-preserving `ReplaceWikiLinkDisplay()`.
+- `backend/internal/parser/parser_test.go` — heading fragment and alias tests.
+- `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` — wiki-link click hash extraction.
+- `web/src/components/pages/NotePage/NotePage.tsx` — active slug split before navigation.
+
+Validate:
+```bash
+cd backend && go test ./internal/parser -count=1
+pnpm --dir web check
 ```

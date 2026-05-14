@@ -96,3 +96,24 @@ Step 8: Heading permalink anchors and hash-scroll navigation (bd03a56)
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Heading permalink injection and hash-scroll effect
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/index.css — heading-anchor and callout-collapsible styles
 
+
+## 2026-05-14
+
+Step 9: Round 3 tasks and frontend node graph removal (213cb65, f334504)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/pages/NotePage/NotePage.tsx — Removed graph panel and graph query
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/pages/VaultLayout/VaultLayout.tsx — Removed graph toggle
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/store/uiSlice.ts — Removed graphVisible state
+
+
+## 2026-05-14
+
+Step 10: Preserve wiki-link heading fragments and explicit aliases (4554af0)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/parser/parser.go — Fragment-preserving href resolution and data-alias support
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Preserve hash when navigating wiki links
+
