@@ -17,6 +17,7 @@ import type {
   SearchResult,
   TagCount,
 } from "../types";
+import type { SiteConfig } from "../store/vaultApi";
 
 // ── Marked wiki-link extension ───────────────────────────────────
 // We register a custom inline token so marked never sees raw HTML —
@@ -429,4 +430,12 @@ export function staticGetDefaultSlug(): string {
   const list = staticListNotes();
   const idx = list.find((n) => n.slug === "index");
   return idx?.slug ?? list[0]?.slug ?? "";
+}
+
+/** Return site config for static mode */
+export function staticGetConfig(): SiteConfig {
+  return {
+    vaultName: "Demo Vault",
+    notes: getVault().list.length,
+  };
 }

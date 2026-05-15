@@ -5,11 +5,12 @@ import { VaultLayout } from "./components/pages/VaultLayout/VaultLayout";
 import { NotePage } from "./components/pages/NotePage/NotePage";
 import { SearchPage } from "./components/pages/SearchPage/SearchPage";
 import { Icon } from "./components/atoms/Icon/Icon";
-import { useListNotesQuery, type NoteListItem } from "./store/vaultApi";
+import { useListNotesQuery, useGetConfigQuery, type NoteListItem } from "./store/vaultApi";
 
 function Router() {
+  const { data: config } = useGetConfigQuery();
   return (
-    <VaultLayout>
+    <VaultLayout vaultName={config?.vaultName}>
       <Switch>
         <Route path="/" component={HomeRedirect} />
         <Route path="/note/*" component={NoteRoute} />

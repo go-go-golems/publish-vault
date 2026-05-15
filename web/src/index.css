@@ -682,4 +682,45 @@
     border: 1px solid var(--color-ink) !important;
     border-radius: 0 !important;
   }
+
+  /* ── Mobile Responsive Overrides (<768px) ── */
+  @media (max-width: 767px) {
+    html {
+      font-size: 15px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* Larger tap targets for tree items */
+    .retro-tree-item {
+      padding: 6px 12px;
+      font-size: 13px;
+      min-height: 36px;
+    }
+
+    /* Search input larger on mobile */
+    .retro-search {
+      padding: 8px 10px;
+      font-size: 16px; /* prevents iOS zoom on focus */
+    }
+
+    /* Note prose adjusts for narrow screens */
+    .note-prose {
+      padding: 0 4px;
+    }
+    .note-prose pre {
+      font-size: 11px;
+      padding: 8px;
+    }
+    .note-prose table {
+      font-size: 11px;
+      display: block;
+      overflow-x: auto;
+    }
+
+    /* Safe area padding for notched devices */
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+  }
 }

@@ -74,12 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </ScrollArea>
-
-      {/* Footer */}
-      <div className="border-t border-[var(--color-ink)] px-2 py-1 flex items-center gap-1 text-[10px] text-[var(--color-muted-foreground)]">
-        <Icon name="book" size={10} />
-        <span>Obsidian Publish</span>
-      </div>
     </aside>
   );
 };

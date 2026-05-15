@@ -8,8 +8,8 @@ interface UIState {
 }
 
 const initialState: UIState = {
-  sidebarOpen: true,
-  rightPanelOpen: true,
+  sidebarOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
+  rightPanelOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   searchQuery: "",
   activeNoteSlug: null,
 };

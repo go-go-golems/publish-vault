@@ -1,6 +1,7 @@
 /**
  * PAGE: NotePage
  * Design: Retro System 1 — note content + resizable right panel with backlinks.
+ * Mobile (<768px): backlinks render inline below note body, no right panel.
  * Fetches note by slug via RTK Query.
  */
 import React, { useMemo, useCallback, useEffect } from "react";
@@ -106,19 +107,36 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     );
   }
 
-  const rightPanelContent = (
-    <div className="flex-1 overflow-hidden">
-      <BacklinksPanel
-        backlinks={backlinkEntries}
-        onNavigate={handleNavigate}
-        maxHeight="100%"
-      />
+  // ── Inline backlinks section (used on mobile below the note body) ──
+  const inlineBacklinks = backlinkEntries.length > 0 && (
+    <div className="border-t border-[var(--color-ink)] mt-8 pt-4">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-2 flex items-center gap-2">
+        <Icon name="link" size={12} />
+        Linked Mentions ({backlinkEntries.length})
+      </h3>
+      <div className="flex flex-col gap-2">
+        {backlinkEntries.map((entry) => (
+          <button
+            key={entry.slug}
+            type="button"
+            className="text-left p-2 border border-[var(--color-ink)] bg-[var(--color-panel)] hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)] transition-colors text-xs"
+            onClick={() => handleNavigate(entry.slug)}
+          >
+            <span className="font-bold">{entry.title}</span>
+            {entry.excerpt && (
+              <span className="block text-[var(--color-muted-foreground)] mt-1 text-[11px] line-clamp-2">
+                {entry.excerpt}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
-  return rightPanelOpen ? (
+  // ── Desktop: resizable panel group with right panel ──
+  const desktopLayout = rightPanelOpen ? (
     <ResizablePanelGroup direction="horizontal" className="h-full">
-      {/* Note content */}
       <ResizablePanel defaultSize={75} minSize={40} order={1}>
         <ScrollArea className="h-full p-6">
           <NoteRenderer
@@ -133,10 +151,15 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
 
       <ResizableHandle withHandle className="retro-resize-handle" />
 
-      {/* Right panel */}
       <ResizablePanel defaultSize={25} minSize={12} maxSize={40} order={2}>
         <aside className="h-full border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
-          {rightPanelContent}
+          <div className="flex-1 overflow-hidden">
+            <BacklinksPanel
+              backlinks={backlinkEntries}
+              onNavigate={handleNavigate}
+              maxHeight="100%"
+            />
+          </div>
         </aside>
       </ResizablePanel>
     </ResizablePanelGroup>
@@ -152,5 +175,28 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
         />
       </ScrollArea>
     </div>
+  );
+
+  // ── Mobile: full-width note with inline backlinks, no right panel ──
+  const mobileLayout = (
+    <ScrollArea className="h-full p-4">
+      <NoteRenderer
+        note={note}
+        allSlugs={allSlugs}
+        onNavigate={handleNavigate}
+        onTagClick={handleTagClick}
+        className="max-w-5xl"
+      />
+      {inlineBacklinks}
+    </ScrollArea>
+  );
+
+  return (
+    <>
+      {/* Desktop layout */}
+      <div className="hidden md:block h-full">{desktopLayout}</div>
+      {/* Mobile layout */}
+      <div className="md:hidden h-full">{mobileLayout}</div>
+    </>
   );
 };

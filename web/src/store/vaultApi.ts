@@ -45,12 +45,33 @@ function notFound(): { error: FetchBaseQueryError } {
 
 // ── API Slice ─────────────────────────────────────────────────────
 
+export interface SiteConfig {
+  vaultName: string;
+  notes: number;
+}
+
 export const vaultApi = createApi({
   reducerPath: "vaultApi",
   // baseQuery is used only in backend mode; static mode uses queryFn
   baseQuery: fetchBaseQuery({ baseUrl: API_BASE }),
-  tagTypes: ["Note", "Notes", "Tree", "Tags"],
+  tagTypes: ["Note", "Notes", "Tree", "Tags", "Config"],
   endpoints: (builder) => ({
+
+    // ── Site config ─────────────────────────────────────────────
+    getConfig: builder.query<SiteConfig, void>(
+      IS_STATIC
+        ? {
+            queryFn: async (): Promise<{ data: SiteConfig }> => {
+              const s = await getStatic();
+              return ok(s.staticGetConfig());
+            },
+            providesTags: ["Config"] as const,
+          }
+        : {
+            query: () => "/api/config",
+            providesTags: ["Config"] as const,
+          }
+    ),
 
     // ── List all notes ──────────────────────────────────────────
     listNotes: builder.query<NoteListItem[], void>(
@@ -133,6 +154,7 @@ export const vaultApi = createApi({
 });
 
 export const {
+  useGetConfigQuery,
   useListNotesQuery,
   useGetNoteQuery,
   useGetTreeQuery,
