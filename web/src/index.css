@@ -430,7 +430,7 @@
   .note-prose h3 { font-size: 1.05rem; margin: 1em 0 0.3em; }
   .note-prose h4 { font-size: 0.95rem; margin: 0.8em 0 0.2em; font-style: italic; }
   .note-prose p  { margin: 0 0 0.8em; }
-  .note-prose ul, .note-prose ol { margin: 0 0 0.8em 1.4em; }
+  .note-prose ul, .note-prose ol { margin: 0 0 0.8em 1.4em; list-style: revert; }
   .note-prose li { margin: 0.2em 0; }
   .note-prose blockquote {
     border-left: 3px solid var(--color-ink);
