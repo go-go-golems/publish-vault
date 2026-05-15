@@ -39,9 +39,10 @@ Searchable unique phrase.
 	}
 
 	r := mux.NewRouter()
-	New(v, si).Register(r)
+	New(v, si, "TestVault").Register(r)
 
 	cases := []string{
+		"/api/config",
 		"/api/notes",
 		"/api/notes/index",
 		"/api/tree",

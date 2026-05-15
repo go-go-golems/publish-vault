@@ -38,26 +38,43 @@ func (p staticProvider) Snapshot() (*vault.Vault, *search.Index) {
 
 // Handler holds dependencies for the API.
 type Handler struct {
-	provider SnapshotProvider
+	provider  SnapshotProvider
+	vaultName string
 }
 
 // New creates a new API Handler backed by fixed vault/search pointers.
-func New(v *vault.Vault, si *search.Index) *Handler {
-	return NewWithProvider(staticProvider{vault: v, search: si})
+func New(v *vault.Vault, si *search.Index, vaultName string) *Handler {
+	return NewWithProvider(staticProvider{vault: v, search: si}, vaultName)
 }
 
 // NewWithProvider creates a new API Handler backed by a dynamic provider.
-func NewWithProvider(provider SnapshotProvider) *Handler {
-	return &Handler{provider: provider}
+func NewWithProvider(provider SnapshotProvider, vaultName string) *Handler {
+	return &Handler{provider: provider, vaultName: vaultName}
 }
 
 // Register mounts all routes on the given router.
 func (h *Handler) Register(r *mux.Router) {
+	r.HandleFunc("/api/config", h.getConfig).Methods("GET")
 	r.HandleFunc("/api/notes", h.listNotes).Methods("GET")
 	r.HandleFunc("/api/notes/{slug:.*}", h.getNote).Methods("GET")
 	r.HandleFunc("/api/tree", h.getTree).Methods("GET")
 	r.HandleFunc("/api/search", h.searchNotes).Methods("GET")
 	r.HandleFunc("/api/tags", h.listTags).Methods("GET")
+}
+
+// SiteConfig is the public site configuration returned by /api/config.
+type SiteConfig struct {
+	VaultName string `json:"vaultName"`
+	Notes     int    `json:"notes"`
+}
+
+// getConfig returns public site configuration.
+func (h *Handler) getConfig(w http.ResponseWriter, r *http.Request) {
+	v, _ := h.provider.Snapshot()
+	jsonResponse(w, SiteConfig{
+		VaultName: h.vaultName,
+		Notes:     len(v.AllNotes()),
+	})
 }
 
 // NoteListItem is the lightweight note representation for listing.

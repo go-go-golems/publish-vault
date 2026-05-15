@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 // Config holds the runtime settings for the Retro Obsidian Publish server.
 type Config struct {
 	VaultDir            string
+	VaultName           string
 	Port                string
 	ServeWeb            bool
 	Watch               bool
@@ -51,6 +53,13 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	v, si := state.Snapshot()
+
+	// Derive vault name from directory basename if not explicitly set.
+	vaultName := cfg.VaultName
+	if vaultName == "" {
+		vaultName = filepath.Base(cfg.VaultDir)
+	}
+
 	log.Printf("Loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
 
 	if cfg.Watch {
@@ -65,7 +74,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	r := mux.NewRouter()
-	h := api.NewWithProvider(state)
+	h := api.NewWithProvider(state, vaultName)
 	h.Register(r)
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
 	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
