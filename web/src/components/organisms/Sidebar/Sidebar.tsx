@@ -3,12 +3,11 @@
  * Design: Retro System 1 — fixed-width panel with window chrome, file tree, search.
  * Integrates RTK Query for tree data; search is passed as callback.
  */
-import React, { useState } from "react";
+import React from "react";
 import { clsx } from "clsx";
 import { SearchBar } from "../../molecules/SearchBar/SearchBar";
 import { FileTreeItem } from "../../molecules/FileTreeItem/FileTreeItem";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
-import { Divider } from "../../atoms/Divider/Divider";
 import { Icon } from "../../atoms/Icon/Icon";
 import type { FileNode } from "../../../types";
 
@@ -39,13 +38,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className
       )}
     >
-      {/* Title bar */}
-      <div className="retro-window-title">
-        <Icon name="book" size={11} />
-        <span className="truncate">{vaultName}</span>
-        <div className="retro-titlebar-stripes" />
-      </div>
-
       {/* Search */}
       <div className="p-2 border-b border-[var(--color-ink)]">
         <SearchBar onSearch={onSearch} />

@@ -177,6 +177,15 @@
   ::-webkit-scrollbar-thumb:hover { background: #333; }
   ::-webkit-scrollbar-corner { background: var(--color-panel); }
 
+  /* Mobile: hide scrollbar (touch scrolling) */
+  @media (max-width: 767px) {
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: transparent; }
+    ::-webkit-scrollbar-corner { background: transparent; }
+    * { scrollbar-width: none; }
+  }
+
   /* Cursor */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

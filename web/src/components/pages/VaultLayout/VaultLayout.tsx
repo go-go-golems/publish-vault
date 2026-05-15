@@ -158,24 +158,22 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
       {/* ── Body with responsive layout ── */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* ── Mobile: sidebar as off-canvas drawer ── */}
-        <div
-          className={clsx(
-            "fixed inset-y-0 left-0 z-40 w-[80vw] max-w-[320px] md:hidden",
-            "transition-transform duration-200 ease-in-out",
-            sidebarOpen ? "translate-x-0" : "-translate-x-full",
-            "top-[28px]" /* below menubar */
-          )}
-        >
-          <Sidebar
-            tree={tree ?? null}
-            activeSlug={activeSlug ?? undefined}
-            onSelectNote={handleNavigate}
-            onSearch={handleSearch}
-            vaultName={vaultName}
-            isLoading={treeLoading}
-            className="h-full border-r border-[var(--color-ink)]"
-          />
-        </div>
+        {sidebarOpen && (
+          <div
+            className="fixed inset-y-0 left-0 z-40 w-[80vw] max-w-[320px] md:hidden"
+            style={{ top: 28 }}
+          >
+            <Sidebar
+              tree={tree ?? null}
+              activeSlug={activeSlug ?? undefined}
+              onSelectNote={handleNavigate}
+              onSearch={handleSearch}
+              vaultName={vaultName}
+              isLoading={treeLoading}
+              className="h-full"
+            />
+          </div>
+        )}
 
         {/* ── Desktop: resizable panel group ── */}
         {sidebarOpen ? (
