@@ -1,0 +1,57 @@
+name: publish-image
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/publish-image.yaml
+      - backend/Dockerfile
+      - backend/go.mod
+      - backend/go.sum
+      - backend/cmd/**
+      - backend/internal/**
+      - web/src/**
+      - web/package.json
+      - web/pnpm-lock.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-image.yaml
+      - backend/Dockerfile
+      - backend/go.mod
+      - backend/go.sum
+      - backend/cmd/**
+      - backend/internal/**
+      - web/src/**
+      - web/package.json
+      - web/pnpm-lock.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
+    secrets: inherit
+    with:
+      dockerfile: ./backend/Dockerfile
+      build_context: .
+      test_command: |
+        cd backend && go test ./...
+      go_version_file: backend/go.mod
+      gitops_target_config: deploy/gitops-targets.json
+      push_image: ${{ github.event_name != 'pull_request' }}
+      open_gitops_pr: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      gitops_pr_token_source: vault
+      vault_role: retro-obsidian-publish-gitops-pr
+      vault_secret_path: kv/data/ci/github/retro-obsidian-publish/gitops-pr-token
+      tooling_repository: go-go-golems/infra-tooling
+      tooling_ref: main

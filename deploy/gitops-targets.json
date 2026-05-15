@@ -1,0 +1,11 @@
+{
+  "targets": [
+    {
+      "name": "retro-obsidian-publish",
+      "gitops_repo": "wesen/2026-03-27--hetzner-k3s",
+      "gitops_branch": "main",
+      "manifest_path": "gitops/kustomize/retro-obsidian-publish/deployment.yaml",
+      "container_name": "app"
+    }
+  ]
+}
