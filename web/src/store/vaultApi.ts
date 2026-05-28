@@ -47,6 +47,7 @@ function notFound(): { error: FetchBaseQueryError } {
 
 export interface SiteConfig {
   vaultName: string;
+  pageTitle: string;
   notes: number;
 }
 
