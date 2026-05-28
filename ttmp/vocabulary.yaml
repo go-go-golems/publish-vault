@@ -37,6 +37,14 @@ topics:
       description: Obsidian Markdown vault content and metadata
     - slug: retro-obsidian-publish
       description: Retro Obsidian Publish application for serving vault content
+    - slug: assets
+      description: Static and dynamic asset serving concerns
+    - slug: config
+      description: Runtime and deployment configuration
+    - slug: images
+      description: Image rendering and image asset handling
+    - slug: page-title
+      description: Browser document title and page title configuration
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
