@@ -205,6 +205,27 @@ func TestReplaceWikiLinkDisplayPreservesAlias(t *testing.T) {
 	}
 }
 
+func TestRewriteImageSources(t *testing.T) {
+	html := `<p><img src="images/planet.png" alt="Planet" /> <img src='Sketch Folder/m5 dial.png' /></p>`
+	got := RewriteImageSources(html, func(src string) string {
+		return "/assets/" + strings.ReplaceAll(src, " ", "%20")
+	})
+	if !contains(got, `src="/assets/images/planet.png"`) {
+		t.Fatalf("double-quoted image src was not rewritten, got: %s", got)
+	}
+	if !contains(got, `src='/assets/Sketch%20Folder/m5%20dial.png'`) {
+		t.Fatalf("single-quoted image src was not rewritten, got: %s", got)
+	}
+}
+
+func TestRewriteImageSourcesPreservesMismatchedQuote(t *testing.T) {
+	html := `<img src="broken.png' alt="Broken" />`
+	got := RewriteImageSources(html, func(string) string { return "/assets/changed.png" })
+	if got != html {
+		t.Fatalf("mismatched quote should be preserved, got: %s", got)
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

@@ -5,6 +5,7 @@ package parser
 import (
 	"bytes"
 	"fmt"
+	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -212,6 +213,7 @@ var (
 	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
 	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"#]+)(#[^"]*)?"`)
 	dataRawRe    = regexp.MustCompile(`data-raw="([^"]*)"`)
+	imgSrcRe     = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)(["'])`)
 )
 
 func ReplaceWikiLinksString(html string, resolver func(string) string) string {
@@ -241,6 +243,27 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 // ReplaceWikiLinkDisplay replaces the display text of wiki links when the
 // resolved target differs from the raw text. The titleResolver maps a
 // resolved slug to its note title (or "" if unknown).
+// RewriteImageSources rewrites image src attributes in rendered HTML.
+// The resolver receives the unescaped src value and returns the desired public
+// URL. Attribute quoting and unrelated attributes are preserved.
+func RewriteImageSources(htmlIn string, resolver func(string) string) string {
+	return imgSrcRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
+		sub := imgSrcRe.FindStringSubmatch(match)
+		if len(sub) < 5 {
+			return match
+		}
+		prefix, quote, src, closingQuote := sub[1], sub[2], sub[3], sub[4]
+		if quote != closingQuote {
+			return match
+		}
+		resolved := resolver(stdhtml.UnescapeString(src))
+		if resolved == "" {
+			resolved = src
+		}
+		return prefix + quote + stdhtml.EscapeString(resolved) + quote
+	})
+}
+
 func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) string {
 	// Match <a ... data-raw="X" ...>Y</a> — replace Y with the resolved title
 	// We do this by finding each wiki-link anchor and replacing its content.

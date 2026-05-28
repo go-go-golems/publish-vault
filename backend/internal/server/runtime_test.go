@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -50,6 +51,53 @@ func TestRuntimeStateResolvesSymlinkRootAndReloads(t *testing.T) {
 	}
 }
 
+func TestAssetHandlerServesVaultFiles(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+	writeVaultFile(t, root, "images/planet.png", "png-bytes")
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/assets/images/planet.png", nil)
+	rr := httptest.NewRecorder()
+	assetHandler(state).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("asset status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Body.String(); got != "png-bytes" {
+		t.Fatalf("asset body = %q, want png-bytes", got)
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "public, max-age=300" {
+		t.Fatalf("Cache-Control = %q", got)
+	}
+}
+
+func TestAssetHandlerRejectsUnsafePaths(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+	writeVaultFile(t, root, "images/planet.png", "png-bytes")
+	writeVaultFile(t, root, ".hidden/secret.png", "secret")
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	for _, target := range []string{
+		"/assets/../images/planet.png",
+		"/assets/.hidden/secret.png",
+		"/assets/Index.md",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rr := httptest.NewRecorder()
+		assetHandler(state).ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s status = %d, want 404", target, rr.Code)
+		}
+	}
+}
+
 func TestValidBearerToken(t *testing.T) {
 	if !validBearerToken("Bearer secret", "secret") {
 		t.Fatal("valid token rejected")
@@ -79,6 +127,10 @@ func TestValidReloadRequestAllowsLoopback(t *testing.T) {
 }
 
 func writeVaultNote(t *testing.T, root, rel, body string) {
+	writeVaultFile(t, root, rel, body)
+}
+
+func writeVaultFile(t *testing.T, root, rel, body string) {
 	t.Helper()
 	path := filepath.Join(root, rel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
