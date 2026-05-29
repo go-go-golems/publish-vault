@@ -37,3 +37,14 @@ Resolved docmgr vocabulary warnings for RETRO-ASSETS-005 topics and confirmed do
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/tasks.md — Checked final doctor task
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/vocabulary.yaml — Added assets/config/images/page-title topic vocabulary
 
+
+## 2026-05-28
+
+Fixed real-vault browser test regression: moved vault content assets from /assets/ to /vault-assets/ so Vite CSS/JS under /assets/ are served by the SPA handler (commit 2f9f40f).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/server/server.go — Route prefix changed to /vault-assets/
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — Rendered vault image URLs changed to /vault-assets/
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded CSS/JS 404 diagnosis and fix
+

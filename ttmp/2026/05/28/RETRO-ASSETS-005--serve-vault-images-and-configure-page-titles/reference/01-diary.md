@@ -385,3 +385,76 @@ The build command also exercised the Dagger-based frontend production build and 
   - `curl -fsS http://127.0.0.1:18080/api/config`
   - `curl -fsS http://127.0.0.1:18080/api/notes/projects/2026/05/28/demo`
   - `curl -fsS http://127.0.0.1:18080/assets/projects/2026/05/28/images/planet.png`
+
+## Step 5: Fix SPA bundle asset route collision discovered during real-vault testing
+
+When the PARC vault was served from tmux, the note images worked but the SPA's own CSS and JavaScript returned 404. The root cause was a route-prefix collision: Vite emits bundled frontend files under `/assets/...`, and the new vault asset handler had been registered at the same `/assets/` prefix before the SPA handler.
+
+I moved vault-served files to `/vault-assets/...` so `/assets/...` remains owned by the embedded SPA bundle. This keeps the application shell and vault attachments in separate URL namespaces.
+
+### Prompt Context
+
+**User prompt (verbatim):** "404 on css and js"
+
+**Assistant interpretation:** The local tmux test server loads the page shell but bundled frontend CSS/JS requests are failing, likely because of the newly added asset route.
+
+**Inferred user intent:** Make the local test server usable in the browser while preserving vault image serving.
+
+**Commit (code):** 2f9f40f29dde11745dc4aed05f623590d1ad4415 — "Avoid SPA asset route conflict for vault files"
+
+### What I did
+
+- Changed the vault asset route from `/assets/` to `/vault-assets/` in `backend/internal/server/server.go`.
+- Changed rendered note image URLs from `/assets/...` to `/vault-assets/...` in `backend/internal/vault/vault.go`.
+- Updated backend tests in `backend/internal/server/runtime_test.go` and `backend/internal/vault/vault_test.go`.
+- Ran `cd backend && go test ./... -count=1`.
+- Restarted tmux session `retro-parc`.
+- Verified:
+  - `/api/healthz` returns 617 notes.
+  - `/assets/index-C29_Oxvd.css` returns `HTTP/1.1 200 OK`.
+  - `/assets/index-CryKyRHX.js` returns `HTTP/1.1 200 OK`.
+  - The target note now emits `/vault-assets/Projects/2026/05/28/assets/m5dial-proper-3d-renderer/poster-terrain.png`.
+  - That vault image returns `HTTP/1.1 200 OK`.
+
+### Why
+
+- `/assets/` is already the Vite production bundle namespace. Using it for vault attachments stole frontend bundle requests before they could reach the embedded SPA handler.
+- `/vault-assets/` is explicit and avoids ambiguity between application assets and vault content assets.
+
+### What worked
+
+- Backend tests passed after updating the expected prefix.
+- Restarted PARC server served both app bundle assets and vault image assets correctly.
+
+### What didn't work
+
+- The original `/assets/` design caused CSS/JS 404s in real browser testing because those paths were routed to the vault asset handler and looked up inside the PARC vault instead of the embedded web bundle.
+
+### What I learned
+
+- Route prefix ownership must account for generated frontend build output, not only handwritten API routes.
+- The real-vault tmux test caught a conflict that API-only smoke tests did not catch because those tests did not load the SPA bundle.
+
+### What was tricky to build
+
+- The issue was not with embedded build output; it was route ordering and prefix collision. The fix was to separate namespaces instead of trying to make one handler infer whether a path belongs to Vite or the vault.
+
+### What warrants a second pair of eyes
+
+- Review whether `/vault-assets/` is the final preferred public URL name or whether it should be configurable.
+- Update public/operator docs if any external references already mention `/assets/` for vault files.
+
+### What should be done in the future
+
+- Add an integration test that verifies SPA bundle assets and vault assets can both be served in the same router.
+
+### Code review instructions
+
+- Review `backend/internal/server/server.go` for route prefix separation.
+- Review `backend/internal/vault/vault.go` for emitted URL prefix.
+- Validate by loading `http://127.0.0.1:8080` and checking CSS/JS plus note images.
+
+### Technical details
+
+- Application bundle namespace: `/assets/...`.
+- Vault content asset namespace: `/vault-assets/...`.
