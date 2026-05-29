@@ -18,15 +18,17 @@ jobs:
           go-version: '1.25.x'
           cache-dependency-path: backend/go.sum
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Enable corepack
-        run: corepack enable
 
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
