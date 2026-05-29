@@ -73,3 +73,14 @@ Addressed PR #2 review by validating resolved symlink targets before serving /va
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/server/server.go — Resolved symlink target validation in assetHandler
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded PR review response
 
+
+## 2026-05-28
+
+Fixed CI failures: local embed copy now removes existing .gitkeep before os.CopyFS, and golangci-lint workflow points to ../.golangci-lint-version from backend working directory (commit 84c14a5).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/lint.yml — Correct version-file path for backend working directory
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/cmd/retro-obsidian-publish/commands/build/web.go — Embed public cleanup before CopyFS
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded CI failure fixes
+

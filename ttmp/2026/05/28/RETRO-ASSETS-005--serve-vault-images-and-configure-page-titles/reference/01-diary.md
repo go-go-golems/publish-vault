@@ -658,3 +658,96 @@ I fixed the handler to resolve the requested file path with `filepath.EvalSymlin
 - PR review comment ID: `3321337866`.
 - Review concern: `leak.png -> /etc/passwd` could be served through `/vault-assets/leak.png`.
 - Fixed behavior: any resolved symlink target outside `RuntimeState.ResolvedRoot()` receives 404.
+
+## Step 8: Fix CI failures for embed copy and golangci-lint version lookup
+
+GitHub Actions surfaced two CI-only failures after the standards-alignment commit. The embedded web build failed because `os.CopyFS` refuses to overwrite an existing `.gitkeep` in `backend/internal/web/embed/public`, and the lint workflow looked for `.golangci-lint-version` relative to the `backend` working directory.
+
+I fixed the embed copy by making the destination cleanup remove every existing entry, including `.gitkeep`, before copying the freshly built `dist` tree. I fixed the lint workflow by making `version-file` explicitly point back to the root version file from the backend working directory.
+
+### Prompt Context
+
+**User prompt (verbatim):** "https://github.com/go-go-golems/publish-vault/actions/runs/26610163260/job/78414071636
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 10.65s
+Error: copy to embed/public: open /home/runner/work/publish-vault/publish-vault/backend/internal/web/embed/public/.gitkeep: file exists
+
+
+
+Install
+Error: Failed to run: Error: The specified golangci-lint version file at: backend/.golangci-lint-version does not exist, Error: The specified golangci-lint version file at: backend/.golangci-lint-version does not exist
+    at getRequestedVersion (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:59627:19)
+    at getVersion (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:59673:24)
+    at install (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:58743:56)
+    at /home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:59317:81
+    at Object.<anonymous> (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:4281:28)
+    at Generator.next (<anonymous>)
+    at /home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:4003:71
+    at new Promise (<anonymous>)
+    at __webpack_modules__.37484.__awaiter (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:3999:12)
+    at Object.group (/home/runner/work/_actions/golangci/golangci-lint-action/v9/dist/run/index.js:4277:12)
+Error: The specified golangci-lint version file at: backend/.golangci-lint-version does not exist"
+
+**Assistant interpretation:** Fix the two reported CI failures: embed copy conflict with `.gitkeep` and golangci-lint-action looking for the version file in the wrong directory.
+
+**Inferred user intent:** Get PR #2 checks green after the CI standards work.
+
+**Commit (code):** 84c14a5fb66f28992c4a245eb40e815266467aaf — "Fix CI lint version path and embed copy"
+
+### What I did
+
+- Updated `.github/workflows/lint.yml` so `version-file` is `../.golangci-lint-version` when `working-directory: backend` is set.
+- Updated `backend/cmd/retro-obsidian-publish/commands/build/web.go` cleanup behavior to remove `.gitkeep` before `os.CopyFS` copies the built web dist.
+- Ran:
+  - `make lint`
+  - `make test`
+  - `make gosec`
+  - `cd backend && BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local`
+- Committed the fix. Lefthook also ran backend lint/test successfully during commit.
+
+### Why
+
+- `os.CopyFS` is intentionally conservative and errors if the destination file already exists. Preserving `.gitkeep` in the destination directory was incompatible with copying a dist tree that also contains `.gitkeep`.
+- The golangci-lint action resolves `version-file` relative to its working directory. Since the action runs in `backend`, a root file must be referenced as `../.golangci-lint-version`.
+
+### What worked
+
+- Local embedded web build now succeeds with the local fallback path.
+- Lint/test/gosec continue to pass.
+
+### What didn't work
+
+- The Vite chunk-size warning still appears, but it is a warning and not the cause of the CI failure.
+
+### What I learned
+
+- For generated embed directories, preserving `.gitkeep` is less important than making the copy operation idempotent in CI.
+- GitHub action input paths can become relative to `working-directory`, not always repository root.
+
+### What was tricky to build
+
+- The embed copy failure only appears when the destination already contains `.gitkeep`; local runs after prior exports may or may not reproduce unless the cleanup path preserves that file.
+
+### What warrants a second pair of eyes
+
+- Confirm whether `.gitkeep` should remain tracked under `backend/internal/web/embed/public`; it is harmless if absent after generated assets are exported, but it may still be useful in a clean checkout before build.
+
+### What should be done in the future
+
+- If generated embed assets should never include `.gitkeep`, consider excluding it from the web dist or explicitly removing it before export.
+
+### Code review instructions
+
+- Review `.github/workflows/lint.yml` for the version-file path.
+- Review `recreate` in `backend/cmd/retro-obsidian-publish/commands/build/web.go`.
+- Validate with `cd backend && BUILD_WEB_LOCAL=1 go run ./cmd/retro-obsidian-publish build web --local`.
+
+### Technical details
+
+- CI failure 1: `open .../backend/internal/web/embed/public/.gitkeep: file exists`.
+- CI failure 2: `backend/.golangci-lint-version does not exist`.
