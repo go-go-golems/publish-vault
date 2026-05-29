@@ -62,3 +62,14 @@ Aligned CI/CD, lefthook, golangci-lint, gosec, and local Makefile checks with go
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/Makefile — Standard quality targets
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/lefthook.yml — Active local hooks
 
+
+## 2026-05-28
+
+Addressed PR #2 review by validating resolved symlink targets before serving /vault-assets files and adding symlink escape regression tests (commit a46173b).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/server/runtime_test.go — Symlink escape regression tests
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/server/server.go — Resolved symlink target validation in assetHandler
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded PR review response
+

@@ -577,3 +577,84 @@ In fact, adjust CICD and lefthook and golangcilint and gosec check from ~/code/w
   - `make gosec`
   - `make web-check`
 - The CI pnpm setup-order fix from the earlier commit is retained and standardized in `.github/workflows/ci.yml`.
+
+## Step 7: Address PR review — reject symlinked vault assets
+
+Codex review on PR #2 pointed out that the `/vault-assets/...` handler validated the requested path string but then used `os.Stat` and `http.ServeFile`, both of which follow symlinks. A malicious vault could therefore include a symlink such as `leak.png -> /etc/passwd` and expose a readable file outside the vault root.
+
+I fixed the handler to resolve the requested file path with `filepath.EvalSymlinks` and verify that the resolved target is still inside the active resolved vault root before serving. I also added regression tests covering both a symlinked file and a symlinked directory that point outside the vault.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Addres code review issue: https://github.com/go-go-golems/publish-vault/pull/2"
+
+**Assistant interpretation:** Inspect PR #2 review comments, identify the requested code change, implement it, validate it, and commit the fix.
+
+**Inferred user intent:** Resolve the automated review blocker so the PR is safer and ready to merge.
+
+**Commit (code):** a46173b596afa1cbe51f165cd501cbc68fc1f8bc — "Reject symlinked vault assets"
+
+### What I did
+
+- Fetched PR review comments with `gh api repos/go-go-golems/publish-vault/pulls/2/comments --paginate`.
+- Found the review issue on `backend/internal/server/server.go`: symlinked vault assets could point outside `ResolvedRoot`.
+- Updated `assetHandler` to:
+  - keep the existing cleaned path root-prefix check,
+  - resolve the cleaned path using `filepath.EvalSymlinks`,
+  - reject the request unless the resolved path is still inside the cleaned resolved vault root.
+- Added `isInsideRoot` helper to centralize root-boundary checks.
+- Added `TestAssetHandlerRejectsSymlinks` covering:
+  - `/vault-assets/leak.png` where `leak.png` is a symlink to an outside file,
+  - `/vault-assets/linked-dir/secret.png` where `linked-dir` is a symlink to an outside directory.
+- Ran:
+  - `make lint`
+  - `make test`
+  - `make gosec`
+- Committed the fix. The newly configured lefthook pre-commit also ran `backend-lint` and `backend-test` successfully during commit.
+
+### Why
+
+- The vault content can be synced from git or collaborative sources, so the public asset route must not trust symlink targets.
+- Validating only the lexical path is insufficient because the filesystem may resolve that path to a target outside the vault.
+
+### What worked
+
+- The regression test fails the old behavior conceptually and now verifies 404 responses for symlink file and symlink directory cases.
+- `make lint`, `make test`, and `make gosec` all pass.
+- Lefthook ran the staged Go checks during commit and passed.
+
+### What didn't work
+
+- My first attempt used per-component `os.Lstat` checks to reject symlinks, but `gosec` flagged the tainted `Lstat` path as `G703`.
+- I changed the implementation to `filepath.EvalSymlinks` plus resolved-root validation, which satisfies gosec while addressing the review concern.
+
+### What I learned
+
+- A lexical root-prefix check must be paired with resolved-target validation when serving filesystem paths from user-controlled trees.
+- The configured gosec check catches tainted filesystem operations even in helper validation code.
+
+### What was tricky to build
+
+- There is a tension between strict symlink rejection and gosec's taint analysis. Resolved-target validation is simpler and permits safe in-vault symlinks while rejecting links that escape the vault root.
+- The root comparison must allow the root itself and paths with the root plus path separator; plain string prefix checks would incorrectly treat sibling paths with shared prefixes as inside.
+
+### What warrants a second pair of eyes
+
+- Review whether allowing symlinks that resolve inside the vault is acceptable, or whether the policy should reject all symlinks regardless of target.
+- Consider whether `http.ServeFile` after `EvalSymlinks` leaves a small TOCTOU window for a malicious local writer. For git-synced static vault content this is likely acceptable, but a future hardened implementation could serve the resolved path directly or use root-scoped file APIs.
+
+### What should be done in the future
+
+- If vault content is treated as fully untrusted at runtime, consider using Go root-scoped filesystem APIs or opening the resolved file directly rather than calling `ServeFile` on the original path.
+
+### Code review instructions
+
+- Review `backend/internal/server/server.go` around `assetHandler` and `isInsideRoot`.
+- Review `backend/internal/server/runtime_test.go` `TestAssetHandlerRejectsSymlinks`.
+- Validate with `make lint && make test && make gosec`.
+
+### Technical details
+
+- PR review comment ID: `3321337866`.
+- Review concern: `leak.png -> /etc/passwd` could be served through `/vault-assets/leak.png`.
+- Fixed behavior: any resolved symlink target outside `RuntimeState.ResolvedRoot()` receives 404.
