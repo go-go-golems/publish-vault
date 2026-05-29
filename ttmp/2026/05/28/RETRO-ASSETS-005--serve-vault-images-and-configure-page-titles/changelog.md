@@ -48,3 +48,17 @@ Fixed real-vault browser test regression: moved vault content assets from /asset
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/vault/vault.go — Rendered vault image URLs changed to /vault-assets/
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded CSS/JS 404 diagnosis and fix
 
+
+## 2026-05-28
+
+Aligned CI/CD, lefthook, golangci-lint, gosec, and local Makefile checks with go-go-golems go-template standards, adapted for backend/ and web/ paths (commit eeb5b70).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/ci.yml — CI setup-node/pnpm and Makefile-backed checks
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/dependency-scanning.yml — govulncheck and gosec workflow
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.github/workflows/lint.yml — Standard golangci-lint workflow
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/.golangci.yml — Template-derived lint config
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/Makefile — Standard quality targets
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/lefthook.yml — Active local hooks
+

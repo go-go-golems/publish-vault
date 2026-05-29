@@ -458,3 +458,122 @@ I moved vault-served files to `/vault-assets/...` so `/assets/...` remains owned
 
 - Application bundle namespace: `/assets/...`.
 - Vault content asset namespace: `/vault-assets/...`.
+
+## Step 6: Align CI, lefthook, golangci-lint, and gosec with go-template standards
+
+After opening the PR, GitHub Actions failed before dependency installation because `actions/setup-node` tried to configure `cache: pnpm` before a `pnpm` executable existed on `PATH`. I first fixed that setup-order issue, then aligned the repository's broader quality plumbing with `~/code/wesen/go-go-golems/go-template` while adapting paths for this repository's `backend/` Go module and `web/` pnpm project.
+
+This step adds standard lint/security workflows, a root golangci-lint v2 config, a pinned golangci-lint version file, useful Makefile quality targets, and active lefthook pre-commit/pre-push commands. Enabling the standard linters also surfaced existing backend lint and gosec findings, which I fixed rather than weakening the checks.
+
+### Prompt Context
+
+**User prompt (verbatim):** "https://github.com/go-go-golems/publish-vault/pull/2
+
+In fact, adjust CICD and lefthook and golangcilint and gosec check from ~/code/wesen/go-go-golems/go-template/ so that we match the right standards."
+
+**Assistant interpretation:** Bring this repo's CI/CD and local quality hooks in line with the go-go-golems template, including pnpm setup, golangci-lint, gosec, and lefthook, while keeping monorepo paths correct.
+
+**Inferred user intent:** PR #2 should pass standard go-go-golems quality gates and future commits should be checked consistently locally and in GitHub Actions.
+
+**Commit (code):** eeb5b70ef2952d5cf0018ffc1fc8435bc91f9a5b — "Align CI and quality checks with go template"
+
+### What I did
+
+- Read `go-template` workflow/config files from `~/code/wesen/go-go-golems/go-template/`.
+- Added root `.golangci.yml` based on the template's v2 golangci-lint config.
+- Added `.golangci-lint-version`.
+- Replaced placeholder `lefthook.yml` with active pre-commit and pre-push commands.
+- Expanded `Makefile` with standard-style targets:
+  - `lint`
+  - `lintmax`
+  - `docker-lint`
+  - `gosec`
+  - `govulncheck`
+  - `test`
+  - `web-check`
+  - `ci-check`
+- Updated `.github/workflows/ci.yml` to use `pnpm/action-setup@v4` before `actions/setup-node`, use `go-version-file: backend/go.mod`, and call Makefile targets.
+- Added template-style workflows adapted for the backend module:
+  - `.github/workflows/lint.yml`
+  - `.github/workflows/dependency-scanning.yml`
+  - `.github/workflows/codeql-analysis.yml`
+  - `.github/workflows/secret-scanning.yml`
+- Fixed lint findings in backend code:
+  - checked/ignored close/remove errors explicitly,
+  - removed unused `healthResponse` and `dataRawRe`,
+  - removed named returns from parser helpers,
+  - replaced deprecated `strings.Title` usage with a tiny ASCII title helper.
+- Fixed a gosec `G122` finding in `copyTree` by switching to `os.CopyFS` instead of opening files from a `WalkDir` callback.
+
+### Why
+
+- The template's standard checks would have failed on this repository as-is because the repo is a Go+web monorepo with `go.mod` under `backend/` and `package.json` under `web/`.
+- The GitHub Actions pnpm cache step must only run after `pnpm` has been installed/provisioned.
+- It is better to make the code pass the standard checks than to add exclusions for real lint/security findings.
+
+### What worked
+
+- `make lint` passes.
+- `make test` passes.
+- `make gosec` passes with zero issues.
+- `make web-check` passes.
+- The Makefile now provides local equivalents for CI checks.
+
+### What didn't work
+
+- Initial `make lint` found 10 issues:
+  - unchecked `os.RemoveAll`, `Close`, and watcher close returns,
+  - named return values in parser helpers,
+  - deprecated `strings.Title`,
+  - unused `dataRawRe`,
+  - unused `healthResponse`.
+- Initial `make gosec` found one issue:
+  - `G122` in `backend/cmd/retro-obsidian-publish/commands/build/web.go` because `filepath.WalkDir` callback opened paths directly.
+- I fixed these issues and reran the checks successfully.
+
+### What I learned
+
+- `actions/setup-node` with `cache: pnpm` requires `pnpm` to exist during the setup-node step; `pnpm/action-setup` must run first.
+- The go-template assumptions need path adaptation for this repo because the Go module is in `backend/`, not the repository root.
+- Newer gosec versions flag direct opens inside `WalkDir` callbacks as `G122`; `os.CopyFS` provides a cleaner implementation for the web-dist copy step.
+
+### What was tricky to build
+
+- The challenge was matching template standards without blindly copying root-module paths. CI jobs and Make targets need to run Go commands from `backend/` with root config paths like `../.golangci.yml`.
+- The lint config intentionally enables strict checks such as `errcheck`, `nonamedreturns`, and `unused`, so enabling it required cleaning existing backend code.
+
+### What warrants a second pair of eyes
+
+- Confirm whether all template workflows are desired for this repo, especially CodeQL and TruffleHog on every PR.
+- Confirm whether `golangci/golangci-lint-action@v9`'s `working-directory: backend` behavior is accepted by GitHub Actions as expected; local `make lint` validates the same command path.
+- Confirm whether `dependency-review-action` should run for all PRs or only non-fork PRs if permissions become noisy.
+
+### What should be done in the future
+
+- Push the branch and watch PR #2 to confirm all newly added workflow jobs pass on GitHub.
+- If GitHub Actions reports an action-version or permissions issue, adjust the workflow while keeping the same Makefile-backed local checks.
+
+### Code review instructions
+
+- Review `.github/workflows/ci.yml` first for pnpm setup ordering and monorepo paths.
+- Review `.github/workflows/lint.yml` and `.github/workflows/dependency-scanning.yml` for golangci-lint/gosec/govulncheck behavior.
+- Review `.golangci.yml`, `Makefile`, and `lefthook.yml` for local/CI parity.
+- Review backend cleanup changes in:
+  - `backend/cmd/retro-obsidian-publish/commands/build/web.go`
+  - `backend/internal/parser/parser.go`
+  - `backend/internal/server/server.go`
+  - `backend/internal/watcher/watcher.go`
+- Validate locally with:
+  - `make lint`
+  - `make test`
+  - `make gosec`
+  - `make web-check`
+
+### Technical details
+
+- Local validation commands run successfully:
+  - `make lint`
+  - `make test`
+  - `make gosec`
+  - `make web-check`
+- The CI pnpm setup-order fix from the earlier commit is retained and standardized in `.github/workflows/ci.yml`.
