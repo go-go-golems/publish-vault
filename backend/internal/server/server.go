@@ -160,34 +160,30 @@ func assetHandler(state *RuntimeState) http.Handler {
 			return
 		}
 
-		root := state.ResolvedRoot()
-		abs := filepath.Join(root, filepath.FromSlash(rel))
-		cleanRoot := filepath.Clean(root)
-		cleanAbs := filepath.Clean(abs)
-		if !isInsideRoot(cleanRoot, cleanAbs) {
+		root, err := os.OpenRoot(state.ResolvedRoot())
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
+		defer func() { _ = root.Close() }()
 
-		resolvedAbs, err := filepath.EvalSymlinks(cleanAbs)
-		if err != nil || !isInsideRoot(cleanRoot, filepath.Clean(resolvedAbs)) {
+		assetName := filepath.FromSlash(rel)
+		file, err := root.Open(assetName)
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
+		defer func() { _ = file.Close() }()
 
-		info, err := os.Stat(cleanAbs)
-		if err != nil || info.IsDir() || strings.EqualFold(filepath.Ext(cleanAbs), ".md") {
+		info, err := file.Stat()
+		if err != nil || info.IsDir() || strings.EqualFold(filepath.Ext(assetName), ".md") {
 			http.NotFound(w, r)
 			return
 		}
 
 		w.Header().Set("Cache-Control", "public, max-age=300")
-		http.ServeFile(w, r, cleanAbs)
+		http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 	})
-}
-
-func isInsideRoot(root, candidate string) bool {
-	return candidate == root || strings.HasPrefix(candidate, root+string(os.PathSeparator))
 }
 
 func validAssetPath(rel string) bool {
