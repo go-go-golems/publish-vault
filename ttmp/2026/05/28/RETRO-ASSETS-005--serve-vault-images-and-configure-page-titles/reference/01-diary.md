@@ -751,3 +751,80 @@ Error: The specified golangci-lint version file at: backend/.golangci-lint-versi
 
 - CI failure 1: `open .../backend/internal/web/embed/public/.gitkeep: file exists`.
 - CI failure 2: `backend/.golangci-lint-version does not exist`.
+
+## Step 9: Fix govulncheck findings and CodeQL path-injection alert
+
+I ran `make govulncheck` as requested and it reported reachable vulnerabilities in `golang.org/x/net` plus multiple Go standard-library vulnerabilities in the currently selected Go toolchain. I updated the backend module to require Go `1.25.10` and bumped `golang.org/x/net` to `v0.55.0`, which also updated `golang.org/x/sys`.
+
+I also addressed CodeQL code-scanning alert #3 by replacing the remaining user-controlled path operations in `/vault-assets` serving with Go's root-scoped filesystem API. The handler now opens the active vault root with `os.OpenRoot`, opens the requested asset through that root, and serves the opened file with `http.ServeContent` instead of passing a user-derived path to `http.ServeFile`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "run make govulncheck and fix and address and push"
+
+**Assistant interpretation:** Run the vulnerability scanner, update dependencies/toolchain requirements or code until it passes, address the CodeQL/path-injection concern, commit the result, and push the branch.
+
+**Inferred user intent:** PR #2 should pass the new security checks, including govulncheck and CodeQL.
+
+**Commit (code):** 5c2dd7e625839fd65d734218a9c28944707ce2cc — "Fix govulncheck and CodeQL asset findings"
+
+### What I did
+
+- Ran `make govulncheck`.
+- Updated `backend/go.mod` from `go 1.25.0` to `go 1.25.10`.
+- Ran `cd backend && GOWORK=off go get golang.org/x/net@v0.55.0 && GOWORK=off go mod tidy`.
+- Updated `/vault-assets` serving in `backend/internal/server/server.go` to use:
+  - `os.OpenRoot(state.ResolvedRoot())`,
+  - `root.Open(assetName)`,
+  - `file.Stat()`,
+  - `http.ServeContent(...)`.
+- Ran:
+  - `make lint`
+  - `make test`
+  - `make gosec`
+  - `make govulncheck`
+- Committed the fix.
+
+### Why
+
+- `govulncheck` identified reachable vulnerabilities fixed by newer Go standard library/toolchain releases and `golang.org/x/net@v0.55.0`.
+- CodeQL still considered the prior filesystem path operations user-controlled. `os.OpenRoot` is the root-scoped API designed for this class of issue.
+
+### What worked
+
+- `make govulncheck` now reports: `No vulnerabilities found. Your code is affected by 0 vulnerabilities.`
+- `make lint`, `make test`, and `make gosec` pass.
+- Lefthook pre-commit reran backend lint/test successfully.
+
+### What didn't work
+
+- The first govulncheck run reported 13 reachable vulnerabilities from `golang.org/x/net` and the Go standard library. These were not code bugs in this repo, but they required dependency/toolchain version updates.
+
+### What I learned
+
+- The Go version in `go.mod` influences automatic toolchain selection (`GOTOOLCHAIN=auto`) and govulncheck's standard-library vulnerability assessment.
+- CodeQL prefers root-scoped filesystem APIs over manual path cleaning plus symlink resolution for user-derived path handling.
+
+### What was tricky to build
+
+- The asset handler needed to preserve the previous behavior and tests while removing direct use of user-derived absolute paths. `os.OpenRoot` lets the handler keep relative path validation and delegate escape prevention to the standard library.
+
+### What warrants a second pair of eyes
+
+- Confirm CI runners can fetch/use Go `1.25.10` through `actions/setup-go` from `backend/go.mod`.
+- Confirm CodeQL closes alert #3 after the next analysis run.
+
+### What should be done in the future
+
+- Keep `backend/go.mod` Go patch versions current when standard-library advisories are published.
+
+### Code review instructions
+
+- Review `backend/go.mod` / `backend/go.sum` version changes.
+- Review `backend/internal/server/server.go` `assetHandler` for `os.OpenRoot` and `http.ServeContent` use.
+- Validate with `make govulncheck` in addition to the normal lint/test/gosec checks.
+
+### Technical details
+
+- Initial vulnerable dependency: `golang.org/x/net@v0.54.0`; fixed by `v0.55.0`.
+- Initial Go version: `1.25.5` local toolchain / `go 1.25.0` module directive; fixed by module directive `go 1.25.10` and auto toolchain selection.

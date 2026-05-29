@@ -84,3 +84,15 @@ Fixed CI failures: local embed copy now removes existing .gitkeep before os.Copy
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/cmd/retro-obsidian-publish/commands/build/web.go — Embed public cleanup before CopyFS
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded CI failure fixes
 
+
+## 2026-05-28
+
+Ran make govulncheck and fixed reachable findings by requiring Go 1.25.10, bumping golang.org/x/net to v0.55.0, and replacing /vault-assets path serving with os.OpenRoot + ServeContent for CodeQL path-injection hardening (commit 5c2dd7e).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/go.mod — Go patch version and x/net dependency update
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/go.sum — Dependency checksum updates
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/backend/internal/server/server.go — Root-scoped vault asset serving
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/28/RETRO-ASSETS-005--serve-vault-images-and-configure-page-titles/reference/01-diary.md — Recorded govulncheck and CodeQL fix
+
