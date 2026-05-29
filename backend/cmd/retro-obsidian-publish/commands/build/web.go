@@ -230,9 +230,6 @@ func recreate(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		if e.Name() == ".gitkeep" {
-			continue
-		}
 		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
 			return err
 		}

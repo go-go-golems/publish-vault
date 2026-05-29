@@ -33,6 +33,6 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version-file: .golangci-lint-version
+          version-file: ../.golangci-lint-version
           working-directory: backend
           args: -c ../.golangci.yml --timeout=5m
