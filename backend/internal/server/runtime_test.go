@@ -74,6 +74,35 @@ func TestAssetHandlerServesVaultFiles(t *testing.T) {
 	}
 }
 
+func TestAssetHandlerRejectsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+	writeVaultFile(t, outside, "secret.png", "secret")
+	if err := os.Symlink(filepath.Join(outside, "secret.png"), filepath.Join(root, "leak.png")); err != nil {
+		t.Fatalf("symlink file: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked-dir")); err != nil {
+		t.Fatalf("symlink dir: %v", err)
+	}
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	for _, target := range []string{
+		"/vault-assets/leak.png",
+		"/vault-assets/linked-dir/secret.png",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rr := httptest.NewRecorder()
+		assetHandler(state).ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s status = %d, want 404", target, rr.Code)
+		}
+	}
+}
+
 func TestAssetHandlerRejectsUnsafePaths(t *testing.T) {
 	root := t.TempDir()
 	writeVaultNote(t, root, "Index.md", "# Index\n")

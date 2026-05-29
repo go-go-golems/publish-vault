@@ -164,7 +164,13 @@ func assetHandler(state *RuntimeState) http.Handler {
 		abs := filepath.Join(root, filepath.FromSlash(rel))
 		cleanRoot := filepath.Clean(root)
 		cleanAbs := filepath.Clean(abs)
-		if cleanAbs != cleanRoot && !strings.HasPrefix(cleanAbs, cleanRoot+string(os.PathSeparator)) {
+		if !isInsideRoot(cleanRoot, cleanAbs) {
+			http.NotFound(w, r)
+			return
+		}
+
+		resolvedAbs, err := filepath.EvalSymlinks(cleanAbs)
+		if err != nil || !isInsideRoot(cleanRoot, filepath.Clean(resolvedAbs)) {
 			http.NotFound(w, r)
 			return
 		}
@@ -178,6 +184,10 @@ func assetHandler(state *RuntimeState) http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=300")
 		http.ServeFile(w, r, cleanAbs)
 	})
+}
+
+func isInsideRoot(root, candidate string) bool {
+	return candidate == root || strings.HasPrefix(candidate, root+string(os.PathSeparator))
 }
 
 func validAssetPath(rel string) bool {
