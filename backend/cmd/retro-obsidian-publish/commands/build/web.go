@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -144,7 +142,7 @@ func runDagger(ctx context.Context, repoRoot, builderImage, pnpmVersion string) 
 	if err != nil {
 		return fmt.Errorf("temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if _, err := container.Directory("/src/dist").Export(ctx, tmpDir); err != nil {
 		return fmt.Errorf("export dist: %w", err)
@@ -232,9 +230,6 @@ func recreate(dir string) error {
 		return err
 	}
 	for _, e := range entries {
-		if e.Name() == ".gitkeep" {
-			continue
-		}
 		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
 			return err
 		}
@@ -243,29 +238,5 @@ func recreate(dir string) error {
 }
 
 func copyTree(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		in, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := os.Create(target)
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-		_, err = io.Copy(out, in)
-		return err
-	})
+	return os.CopyFS(dst, os.DirFS(src))
 }

@@ -38,18 +38,21 @@ func (p staticProvider) Snapshot() (*vault.Vault, *search.Index) {
 
 // Handler holds dependencies for the API.
 type Handler struct {
-	provider  SnapshotProvider
-	vaultName string
+	provider SnapshotProvider
+	config   PublicConfig
 }
 
 // New creates a new API Handler backed by fixed vault/search pointers.
 func New(v *vault.Vault, si *search.Index, vaultName string) *Handler {
-	return NewWithProvider(staticProvider{vault: v, search: si}, vaultName)
+	return NewWithProvider(staticProvider{vault: v, search: si}, PublicConfig{VaultName: vaultName, PageTitle: vaultName})
 }
 
 // NewWithProvider creates a new API Handler backed by a dynamic provider.
-func NewWithProvider(provider SnapshotProvider, vaultName string) *Handler {
-	return &Handler{provider: provider, vaultName: vaultName}
+func NewWithProvider(provider SnapshotProvider, config PublicConfig) *Handler {
+	if config.PageTitle == "" {
+		config.PageTitle = config.VaultName
+	}
+	return &Handler{provider: provider, config: config}
 }
 
 // Register mounts all routes on the given router.
@@ -62,9 +65,16 @@ func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/api/tags", h.listTags).Methods("GET")
 }
 
+// PublicConfig is the operator-configured public site metadata returned by /api/config.
+type PublicConfig struct {
+	VaultName string `json:"vaultName"`
+	PageTitle string `json:"pageTitle"`
+}
+
 // SiteConfig is the public site configuration returned by /api/config.
 type SiteConfig struct {
 	VaultName string `json:"vaultName"`
+	PageTitle string `json:"pageTitle"`
 	Notes     int    `json:"notes"`
 }
 
@@ -72,7 +82,8 @@ type SiteConfig struct {
 func (h *Handler) getConfig(w http.ResponseWriter, r *http.Request) {
 	v, _ := h.provider.Snapshot()
 	jsonResponse(w, SiteConfig{
-		VaultName: h.vaultName,
+		VaultName: h.config.VaultName,
+		PageTitle: h.config.PageTitle,
 		Notes:     len(v.AllNotes()),
 	})
 }

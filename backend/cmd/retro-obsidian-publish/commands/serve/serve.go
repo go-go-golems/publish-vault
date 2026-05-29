@@ -27,6 +27,7 @@ type Settings struct {
 	Vault               string `glazed:"vault"`
 	Port                string `glazed:"port"`
 	VaultName           string `glazed:"vault-name"`
+	PageTitle           string `glazed:"page-title"`
 	ServeWeb            bool   `glazed:"serve-web"`
 	Watch               bool   `glazed:"watch"`
 	ReloadTokenEnv      string `glazed:"reload-token-env"`
@@ -67,6 +68,10 @@ Examples:
 			fields.New("vault-name", fields.TypeString,
 				fields.WithDefault(""),
 				fields.WithHelp("Display name for the vault in the web UI. Defaults to the vault directory basename."),
+			),
+			fields.New("page-title", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Browser page title returned by /api/config. Defaults to --vault-name or the vault directory basename."),
 			),
 			fields.New("serve-web", fields.TypeBool,
 				fields.WithDefault(true),
@@ -114,5 +119,5 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.ReloadTokenEnv != "" {
 		reloadToken = os.Getenv(settings.ReloadTokenEnv)
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback})
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback})
 }

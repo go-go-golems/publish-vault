@@ -126,6 +126,41 @@ func TestWikiLinkResolution(t *testing.T) {
 	}
 }
 
+func TestImageSourcesRewriteToAssets(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Projects/Article.md", "# Article\n\n![Planet](images/planet.png)\n![Absolute](/global/map.png)\n![Remote](https://example.com/remote.png)\n")
+	writeVaultTestFile(t, root, "Projects/images/planet.png", "png")
+	writeVaultTestFile(t, root, "global/map.png", "map")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	note, ok := v.GetNote("projects/article")
+	if !ok {
+		t.Fatal("article note not found")
+	}
+	if !strings.Contains(note.HTML, `src="/vault-assets/Projects/images/planet.png"`) {
+		t.Fatalf("relative image was not rewritten relative to note path, got: %s", note.HTML)
+	}
+	if !strings.Contains(note.HTML, `src="/vault-assets/global/map.png"`) {
+		t.Fatalf("root-relative image was not rewritten as vault-root asset, got: %s", note.HTML)
+	}
+	if !strings.Contains(note.HTML, `src="https://example.com/remote.png"`) {
+		t.Fatalf("remote image should be preserved, got: %s", note.HTML)
+	}
+}
+
+func TestResolveAssetURLRejectsTraversal(t *testing.T) {
+	v := &Vault{}
+	if got := v.ResolveAssetURL("Projects/Article.md", "../../secret.png"); got != "../../secret.png" {
+		t.Fatalf("escaping traversal should be preserved, got: %q", got)
+	}
+	if got := v.ResolveAssetURL("Projects/Article.md", "../shared/image.png"); got != "/vault-assets/shared/image.png" {
+		t.Fatalf("in-vault parent traversal should resolve, got: %q", got)
+	}
+}
+
 func TestBacklinksMarshalAsEmptyArray(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "Index.md")
@@ -171,5 +206,16 @@ func TestBacklinksMarshalAsEmptyArray(t *testing.T) {
 	}
 	if !strings.Contains(jsonText, `"frontmatter":{}`) {
 		t.Fatalf("frontmatter did not marshal as {}: %s", jsonText)
+	}
+}
+
+func writeVaultTestFile(t *testing.T, root, rel, body string) {
+	t.Helper()
+	path := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

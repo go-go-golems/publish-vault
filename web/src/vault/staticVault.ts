@@ -436,6 +436,7 @@ export function staticGetDefaultSlug(): string {
 export function staticGetConfig(): SiteConfig {
   return {
     vaultName: "Demo Vault",
+    pageTitle: "Demo Vault",
     notes: getVault().list.length,
   };
 }

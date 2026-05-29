@@ -10,13 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: git fetch --force --tags
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.x'
+          go-version-file: backend/go.mod
+          cache: true
           cache-dependency-path: backend/go.sum
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -25,24 +35,17 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Enable corepack
-        run: corepack enable
-
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
 
       - name: Type-check web
-        run: pnpm --dir web check
+        run: make web-check
 
       - name: Build web
-        run: pnpm --dir web build
+        run: make web
 
-      - name: Test devctl plugin handshake
-        run: python3 -m unittest plugins/test_retro_plugin.py
-
-      - name: Test backend
-        working-directory: backend
-        run: go test ./...
+      - name: Test backend and plugin
+        run: make test
 
       - name: Build web assets for embedding using local fallback
         working-directory: backend

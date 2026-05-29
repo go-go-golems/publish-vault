@@ -24,6 +24,7 @@ import (
 type Config struct {
 	VaultDir            string
 	VaultName           string
+	PageTitle           string
 	Port                string
 	ServeWeb            bool
 	Watch               bool
@@ -54,10 +55,14 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	v, si := state.Snapshot()
 
-	// Derive vault name from directory basename if not explicitly set.
+	// Derive vault name and page title from directory basename if not explicitly set.
 	vaultName := cfg.VaultName
 	if vaultName == "" {
 		vaultName = filepath.Base(cfg.VaultDir)
+	}
+	pageTitle := cfg.PageTitle
+	if pageTitle == "" {
+		pageTitle = vaultName
 	}
 
 	log.Printf("Loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
@@ -74,9 +79,10 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	r := mux.NewRouter()
-	h := api.NewWithProvider(state, vaultName)
+	h := api.NewWithProvider(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle})
 	h.Register(r)
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
+	r.PathPrefix("/vault-assets/").Handler(assetHandler(state)).Methods("GET", "HEAD")
 	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
 		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback)).Methods("POST")
 	} else {
@@ -120,13 +126,6 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 }
 
-type healthResponse struct {
-	OK             bool   `json:"ok"`
-	Notes          int    `json:"notes"`
-	VaultRoot      string `json:"vaultRoot"`
-	ConfiguredRoot string `json:"configuredRoot"`
-}
-
 func healthHandler(state *RuntimeState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, _ := state.Snapshot()
@@ -151,6 +150,54 @@ func reloadHandler(state *RuntimeState, token string, allowLoopback bool) http.H
 		log.Printf("reload: loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func assetHandler(state *RuntimeState) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rel := strings.TrimPrefix(r.URL.Path, "/vault-assets/")
+		if !validAssetPath(rel) {
+			http.NotFound(w, r)
+			return
+		}
+
+		root, err := os.OpenRoot(state.ResolvedRoot())
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer func() { _ = root.Close() }()
+
+		assetName := filepath.FromSlash(rel)
+		file, err := root.Open(assetName)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer func() { _ = file.Close() }()
+
+		info, err := file.Stat()
+		if err != nil || info.IsDir() || strings.EqualFold(filepath.Ext(assetName), ".md") {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+	})
+}
+
+func validAssetPath(rel string) bool {
+	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	if rel == "" || strings.HasPrefix(rel, "/") {
+		return false
+	}
+	parts := strings.Split(rel, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+			return false
+		}
+	}
+	return true
 }
 
 func validReloadRequest(r *http.Request, token string, allowLoopback bool) bool {

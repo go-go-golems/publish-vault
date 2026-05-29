@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Provider } from "react-redux";
 import { Route, Switch, useLocation } from "wouter";
 import { store } from "./store/store";
@@ -9,6 +10,11 @@ import { useListNotesQuery, useGetConfigQuery, type NoteListItem } from "./store
 
 function Router() {
   const { data: config } = useGetConfigQuery();
+
+  useEffect(() => {
+    document.title = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
+  }, [config?.pageTitle, config?.vaultName]);
+
   return (
     <VaultLayout vaultName={config?.vaultName}>
       <Switch>

@@ -5,6 +5,7 @@ package parser
 import (
 	"bytes"
 	"fmt"
+	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -121,7 +122,9 @@ func extractWikiLinks(src []byte) []WikiLink {
 }
 
 // parseWikiLinkInner parses "Target#Heading|Alias" into its parts.
-func parseWikiLinkInner(inner string) (target, alias, heading string) {
+func parseWikiLinkInner(inner string) (string, string, string) {
+	alias := ""
+	heading := ""
 	// Split alias
 	if idx := strings.Index(inner, "|"); idx >= 0 {
 		alias = strings.TrimSpace(inner[idx+1:])
@@ -132,8 +135,8 @@ func parseWikiLinkInner(inner string) (target, alias, heading string) {
 		heading = strings.TrimSpace(inner[idx+1:])
 		inner = inner[:idx]
 	}
-	target = strings.TrimSpace(inner)
-	return
+	target := strings.TrimSpace(inner)
+	return target, alias, heading
 }
 
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
@@ -154,7 +157,7 @@ func replaceWikiLinks(src []byte) []byte {
 // body. Wiki-link placeholders must not be injected into frontmatter: doing so
 // turns valid YAML such as `"[[Note]]"` into invalid raw HTML and makes
 // goldmark-meta treat the entire preamble as visible document content.
-func splitFrontmatter(src []byte) (frontmatter, body []byte) {
+func splitFrontmatter(src []byte) ([]byte, []byte) {
 	if !bytes.HasPrefix(src, []byte("---\n")) && !bytes.HasPrefix(src, []byte("---\r\n")) {
 		return nil, src
 	}
@@ -211,7 +214,7 @@ func slugify(s string) string {
 var (
 	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
 	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"#]+)(#[^"]*)?"`)
-	dataRawRe    = regexp.MustCompile(`data-raw="([^"]*)"`)
+	imgSrcRe     = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)(["'])`)
 )
 
 func ReplaceWikiLinksString(html string, resolver func(string) string) string {
@@ -241,6 +244,27 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 // ReplaceWikiLinkDisplay replaces the display text of wiki links when the
 // resolved target differs from the raw text. The titleResolver maps a
 // resolved slug to its note title (or "" if unknown).
+// RewriteImageSources rewrites image src attributes in rendered HTML.
+// The resolver receives the unescaped src value and returns the desired public
+// URL. Attribute quoting and unrelated attributes are preserved.
+func RewriteImageSources(htmlIn string, resolver func(string) string) string {
+	return imgSrcRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
+		sub := imgSrcRe.FindStringSubmatch(match)
+		if len(sub) < 5 {
+			return match
+		}
+		prefix, quote, src, closingQuote := sub[1], sub[2], sub[3], sub[4]
+		if quote != closingQuote {
+			return match
+		}
+		resolved := resolver(stdhtml.UnescapeString(src))
+		if resolved == "" {
+			resolved = src
+		}
+		return prefix + quote + stdhtml.EscapeString(resolved) + quote
+	})
+}
+
 func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) string {
 	// Match <a ... data-raw="X" ...>Y</a> — replace Y with the resolved title
 	// We do this by finding each wiki-link anchor and replacing its content.
@@ -307,7 +331,7 @@ func renderCallouts(html string) string {
 		}
 
 		// Map callout types to icons/labels
-		label := strings.Title(calloutType)
+		label := titleASCII(calloutType)
 		switch calloutType {
 		case "summary":
 			label = "Summary"
@@ -363,6 +387,13 @@ func renderCallouts(html string) string {
 		b.WriteString(`</div>`)
 		return b.String()
 	})
+}
+
+func titleASCII(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func calloutIcon(typ string) string {

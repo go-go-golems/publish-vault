@@ -2,7 +2,9 @@
 package vault
 
 import (
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -224,7 +226,84 @@ func (v *Vault) rebuildHTML() {
 			}
 			return ""
 		})
+		note.HTML = parser.RewriteImageSources(note.HTML, func(src string) string {
+			return v.ResolveAssetURL(note.Path, src)
+		})
 	}
+}
+
+// ResolveAssetURL maps a Markdown image src to a public /vault-assets URL. Relative
+// image paths are resolved against the note's directory; root-relative image
+// paths are treated as vault-root-relative paths. External and already-routed
+// application URLs are left unchanged.
+func (v *Vault) ResolveAssetURL(notePath, src string) string {
+	trimmed := strings.TrimSpace(src)
+	if trimmed == "" || shouldLeaveAssetURL(trimmed) {
+		return src
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return src
+	}
+	if parsed.Scheme != "" || parsed.Host != "" {
+		return src
+	}
+
+	assetPath := parsed.Path
+	if assetPath == "" {
+		return src
+	}
+	if strings.HasPrefix(assetPath, "/") {
+		assetPath = strings.TrimPrefix(assetPath, "/")
+	} else {
+		base := path.Dir(filepath.ToSlash(notePath))
+		if base == "." {
+			base = ""
+		}
+		assetPath = path.Join(base, assetPath)
+	}
+
+	cleaned := cleanVaultRelativePath(assetPath)
+	if cleaned == "" {
+		return src
+	}
+	parsed.Path = "/vault-assets/" + escapeAssetPath(cleaned)
+	parsed.RawPath = ""
+	return parsed.String()
+}
+
+func shouldLeaveAssetURL(src string) bool {
+	lower := strings.ToLower(src)
+	return strings.HasPrefix(src, "#") ||
+		strings.HasPrefix(src, "//") ||
+		strings.HasPrefix(lower, "data:") ||
+		strings.HasPrefix(lower, "mailto:") ||
+		strings.HasPrefix(lower, "tel:") ||
+		strings.HasPrefix(src, "/assets/") ||
+		strings.HasPrefix(src, "/vault-assets/") ||
+		strings.HasPrefix(src, "/api/") ||
+		strings.HasPrefix(src, "/note/")
+}
+
+func cleanVaultRelativePath(p string) string {
+	p = strings.TrimSpace(filepath.ToSlash(p))
+	if p == "" || strings.HasPrefix(p, "/") {
+		return ""
+	}
+	cleaned := path.Clean(p)
+	if cleaned == "." || cleaned == "" || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return ""
+	}
+	return cleaned
+}
+
+func escapeAssetPath(p string) string {
+	parts := strings.Split(p, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 // buildBacklinks populates the Backlinks field for every note.
