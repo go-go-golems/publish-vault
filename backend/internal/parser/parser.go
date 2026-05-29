@@ -122,7 +122,9 @@ func extractWikiLinks(src []byte) []WikiLink {
 }
 
 // parseWikiLinkInner parses "Target#Heading|Alias" into its parts.
-func parseWikiLinkInner(inner string) (target, alias, heading string) {
+func parseWikiLinkInner(inner string) (string, string, string) {
+	alias := ""
+	heading := ""
 	// Split alias
 	if idx := strings.Index(inner, "|"); idx >= 0 {
 		alias = strings.TrimSpace(inner[idx+1:])
@@ -133,8 +135,8 @@ func parseWikiLinkInner(inner string) (target, alias, heading string) {
 		heading = strings.TrimSpace(inner[idx+1:])
 		inner = inner[:idx]
 	}
-	target = strings.TrimSpace(inner)
-	return
+	target := strings.TrimSpace(inner)
+	return target, alias, heading
 }
 
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
@@ -155,7 +157,7 @@ func replaceWikiLinks(src []byte) []byte {
 // body. Wiki-link placeholders must not be injected into frontmatter: doing so
 // turns valid YAML such as `"[[Note]]"` into invalid raw HTML and makes
 // goldmark-meta treat the entire preamble as visible document content.
-func splitFrontmatter(src []byte) (frontmatter, body []byte) {
+func splitFrontmatter(src []byte) ([]byte, []byte) {
 	if !bytes.HasPrefix(src, []byte("---\n")) && !bytes.HasPrefix(src, []byte("---\r\n")) {
 		return nil, src
 	}
@@ -212,7 +214,6 @@ func slugify(s string) string {
 var (
 	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
 	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"#]+)(#[^"]*)?"`)
-	dataRawRe    = regexp.MustCompile(`data-raw="([^"]*)"`)
 	imgSrcRe     = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)(["'])`)
 )
 
@@ -330,7 +331,7 @@ func renderCallouts(html string) string {
 		}
 
 		// Map callout types to icons/labels
-		label := strings.Title(calloutType)
+		label := titleASCII(calloutType)
 		switch calloutType {
 		case "summary":
 			label = "Summary"
@@ -386,6 +387,13 @@ func renderCallouts(html string) string {
 		b.WriteString(`</div>`)
 		return b.String()
 	})
+}
+
+func titleASCII(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func calloutIcon(typ string) string {

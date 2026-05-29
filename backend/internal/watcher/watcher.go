@@ -59,7 +59,7 @@ func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
 		}
 		return nil
 	}); err != nil {
-		fw.Close()
+		_ = fw.Close()
 		return nil, err
 	}
 
@@ -70,7 +70,7 @@ func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
 // Close stops the watcher.
 func (vw *VaultWatcher) Close() {
 	close(vw.done)
-	vw.watcher.Close()
+	_ = vw.watcher.Close()
 }
 
 // loop processes fsnotify events with debouncing.

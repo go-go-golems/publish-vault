@@ -126,13 +126,6 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 }
 
-type healthResponse struct {
-	OK             bool   `json:"ok"`
-	Notes          int    `json:"notes"`
-	VaultRoot      string `json:"vaultRoot"`
-	ConfiguredRoot string `json:"configuredRoot"`
-}
-
 func healthHandler(state *RuntimeState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, _ := state.Snapshot()
