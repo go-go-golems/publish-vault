@@ -232,7 +232,7 @@ func (v *Vault) rebuildHTML() {
 	}
 }
 
-// ResolveAssetURL maps a Markdown image src to a public /assets URL. Relative
+// ResolveAssetURL maps a Markdown image src to a public /vault-assets URL. Relative
 // image paths are resolved against the note's directory; root-relative image
 // paths are treated as vault-root-relative paths. External and already-routed
 // application URLs are left unchanged.
@@ -268,7 +268,7 @@ func (v *Vault) ResolveAssetURL(notePath, src string) string {
 	if cleaned == "" {
 		return src
 	}
-	parsed.Path = "/assets/" + escapeAssetPath(cleaned)
+	parsed.Path = "/vault-assets/" + escapeAssetPath(cleaned)
 	parsed.RawPath = ""
 	return parsed.String()
 }
@@ -281,6 +281,7 @@ func shouldLeaveAssetURL(src string) bool {
 		strings.HasPrefix(lower, "mailto:") ||
 		strings.HasPrefix(lower, "tel:") ||
 		strings.HasPrefix(src, "/assets/") ||
+		strings.HasPrefix(src, "/vault-assets/") ||
 		strings.HasPrefix(src, "/api/") ||
 		strings.HasPrefix(src, "/note/")
 }

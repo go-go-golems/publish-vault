@@ -140,10 +140,10 @@ func TestImageSourcesRewriteToAssets(t *testing.T) {
 	if !ok {
 		t.Fatal("article note not found")
 	}
-	if !strings.Contains(note.HTML, `src="/assets/Projects/images/planet.png"`) {
+	if !strings.Contains(note.HTML, `src="/vault-assets/Projects/images/planet.png"`) {
 		t.Fatalf("relative image was not rewritten relative to note path, got: %s", note.HTML)
 	}
-	if !strings.Contains(note.HTML, `src="/assets/global/map.png"`) {
+	if !strings.Contains(note.HTML, `src="/vault-assets/global/map.png"`) {
 		t.Fatalf("root-relative image was not rewritten as vault-root asset, got: %s", note.HTML)
 	}
 	if !strings.Contains(note.HTML, `src="https://example.com/remote.png"`) {
@@ -156,7 +156,7 @@ func TestResolveAssetURLRejectsTraversal(t *testing.T) {
 	if got := v.ResolveAssetURL("Projects/Article.md", "../../secret.png"); got != "../../secret.png" {
 		t.Fatalf("escaping traversal should be preserved, got: %q", got)
 	}
-	if got := v.ResolveAssetURL("Projects/Article.md", "../shared/image.png"); got != "/assets/shared/image.png" {
+	if got := v.ResolveAssetURL("Projects/Article.md", "../shared/image.png"); got != "/vault-assets/shared/image.png" {
 		t.Fatalf("in-vault parent traversal should resolve, got: %q", got)
 	}
 }

@@ -60,7 +60,7 @@ func TestAssetHandlerServesVaultFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuntimeState() error = %v", err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/assets/images/planet.png", nil)
+	req := httptest.NewRequest(http.MethodGet, "/vault-assets/images/planet.png", nil)
 	rr := httptest.NewRecorder()
 	assetHandler(state).ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -85,9 +85,9 @@ func TestAssetHandlerRejectsUnsafePaths(t *testing.T) {
 		t.Fatalf("NewRuntimeState() error = %v", err)
 	}
 	for _, target := range []string{
-		"/assets/../images/planet.png",
-		"/assets/.hidden/secret.png",
-		"/assets/Index.md",
+		"/vault-assets/../images/planet.png",
+		"/vault-assets/.hidden/secret.png",
+		"/vault-assets/Index.md",
 	} {
 		req := httptest.NewRequest(http.MethodGet, target, nil)
 		rr := httptest.NewRecorder()

@@ -82,7 +82,7 @@ func Run(ctx context.Context, cfg Config) error {
 	h := api.NewWithProvider(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle})
 	h.Register(r)
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
-	r.PathPrefix("/assets/").Handler(assetHandler(state)).Methods("GET", "HEAD")
+	r.PathPrefix("/vault-assets/").Handler(assetHandler(state)).Methods("GET", "HEAD")
 	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
 		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback)).Methods("POST")
 	} else {
@@ -161,7 +161,7 @@ func reloadHandler(state *RuntimeState, token string, allowLoopback bool) http.H
 
 func assetHandler(state *RuntimeState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rel := strings.TrimPrefix(r.URL.Path, "/assets/")
+		rel := strings.TrimPrefix(r.URL.Path, "/vault-assets/")
 		if !validAssetPath(rel) {
 			http.NotFound(w, r)
 			return
