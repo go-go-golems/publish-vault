@@ -45,6 +45,14 @@ topics:
       description: Image rendering and image asset handling
     - slug: page-title
       description: Browser document title and page title configuration
+    - slug: html-rendering
+      description: HTML rendering and post-processing of parsed content
+    - slug: parser
+      description: Markdown parsing, wiki-link extraction, and HTML generation
+    - slug: regression
+      description: Bug regression testing and prevention
+    - slug: wiki-link
+      description: Obsidian [[wiki link]] syntax support
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
