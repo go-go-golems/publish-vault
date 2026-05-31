@@ -271,3 +271,78 @@ func TestOpenCallout(t *testing.T) {
 		t.Fatalf("[!type]+ should NOT be collapsible, got: %s", parsed.HTML)
 	}
 }
+
+func TestReplaceWikiLinkDisplayPreservesAnchorTag(t *testing.T) {
+	html := `<td><a href="/note/target" class="wiki-link" data-target="target" data-raw="Target" data-alias="">Target</a></td>`
+	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
+		if slug == "target" {
+			return "Resolved Title"
+		}
+		return ""
+	})
+	if !strings.HasPrefix(got, "<td><a ") {
+		t.Fatalf("Missing <a> opening tag, got: %s", got)
+	}
+	if !strings.Contains(got, ">Resolved Title</a>") {
+		t.Fatalf("Display text not replaced, got: %s", got)
+	}
+	// Adjacent td content must not bleed into anchor
+	if strings.Contains(got, "</td></a>") {
+		t.Fatalf("td boundary crossed into anchor: %s", got)
+	}
+}
+
+func TestReplaceWikiLinkDisplayInTable(t *testing.T) {
+	html := `<table><tbody><tr><td><a href="/note/t" class="wiki-link" data-target="t" data-raw="T" data-alias="">T</a></td><td>2026-05-23</td><td>Canonical description</td></tr></tbody></table>`
+	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
+		if slug == "t" {
+			return "DMETA Design System Factory"
+		}
+		return ""
+	})
+	// Adjacent cell content must NOT be inside the anchor
+	if strings.Contains(got, "2026-05-23</a>") {
+		t.Fatalf("Date bled into anchor text: %s", got)
+	}
+	if strings.Contains(got, "Canonical description</a>") {
+		t.Fatalf("Description bled into anchor text: %s", got)
+	}
+	if !strings.Contains(got, ">DMETA Design System Factory</a>") {
+		t.Fatalf("Display not replaced correctly: %s", got)
+	}
+}
+
+func TestReplaceWikiLinkDisplayPreservesExplicitAlias(t *testing.T) {
+	html := `<a href="/note/t" class="wiki-link" data-target="t" data-raw="T" data-alias="My Alias">My Alias</a>`
+	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
+		return "Resolved Title"
+	})
+	if !strings.Contains(got, ">My Alias</a>") {
+		t.Fatalf("Explicit alias was overwritten: %s", got)
+	}
+}
+
+func TestWikiLinkInTableRendersCleanly(t *testing.T) {
+	src := []byte("| Report | Date |\n| --- | --- |\n| [[ARTICLE - DMETA Factory]] | 2026-05-23 |\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	// The initial parse should produce clean HTML
+	if !contains(parsed.HTML, `<a href="/note/article-dmeta-factory" class="wiki-link"`) {
+		t.Fatalf("Wiki link not rendered correctly, got: %s", parsed.HTML)
+	}
+	// Simulate ReplaceWikiLinkDisplay as rebuildHTML does
+	got := ReplaceWikiLinkDisplay(parsed.HTML, func(slug string) string {
+		if slug == "article-dmeta-factory" {
+			return "DMETA Factory: Full Title"
+		}
+		return ""
+	})
+	if !strings.Contains(got, "<a href") {
+		t.Fatalf("<a> tag missing after display replacement: %s", got)
+	}
+	if strings.Contains(got, "2026-05-23</a>") {
+		t.Fatalf("Table date bled into anchor after display replacement: %s", got)
+	}
+}

@@ -291,7 +291,7 @@ func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) stri
 			return match
 		}
 		// Rebuild the anchor with the new display text
-		prefix := sub[1] + `class="wiki-link"` + sub[2] + `data-raw="` + sub[3] + `"` + sub[4] + ">"
+		prefix := `<a` + sub[1] + `class="wiki-link"` + sub[2] + `data-raw="` + sub[3] + `"` + sub[4] + ">"
 		return prefix + title + "</a>"
 	})
 	return html
