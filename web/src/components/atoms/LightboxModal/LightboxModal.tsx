@@ -57,9 +57,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         className={
           "fixed inset-0 z-50 flex items-center justify-center " +
           "bg-black/90 border-none rounded-none p-0 gap-0 " +
-          "max-w-none w-screen h-screen " +
           // Override default card-like styling
-          "translate-x-0 translate-y-0 " +
           "shadow-none " +
           // Animation: fade in/out
           "data-[state=open]:animate-in data-[state=closed]:animate-out " +
@@ -67,8 +65,21 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           "data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 " +
           "duration-200"
         }
-        // Remove the default centered positioning from DialogContent
-        style={{ top: 0, left: 0, transform: "none" }}
+        // Use inline styles to guarantee full-screen dimensions.
+        // Tailwind cn() can lose to responsive variants like sm:max-w-lg
+        // from the base DialogContent, and w-screen/h-screen may not
+        // resolve correctly in Tailwind v4.
+        style={{
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100vw",
+          height: "100vh",
+          maxWidth: "none",
+          transform: "none",
+          translate: "none",
+        }}
       >
         {/* Visually-hidden accessible title/description */}
         <DialogTitle className="sr-only">{label}</DialogTitle>

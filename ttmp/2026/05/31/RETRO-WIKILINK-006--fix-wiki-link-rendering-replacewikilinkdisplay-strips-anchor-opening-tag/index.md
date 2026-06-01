@@ -1,7 +1,7 @@
 ---
 Title: 'Fix wiki-link rendering: ReplaceWikiLinkDisplay strips anchor opening tag'
 Ticket: RETRO-WIKILINK-006
-Status: active
+Status: complete
 Topics:
     - parser
     - wiki-link
@@ -13,10 +13,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-05-31T14:39:15.503569321-04:00
+LastUpdated: 2026-05-31T21:48:05.503822222-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Fix wiki-link rendering: ReplaceWikiLinkDisplay strips anchor opening tag
 

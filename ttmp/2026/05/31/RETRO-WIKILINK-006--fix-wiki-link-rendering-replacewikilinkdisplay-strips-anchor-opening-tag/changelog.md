@@ -32,3 +32,8 @@ Step 3: Uploaded docs to reMarkable. All tasks complete.
 
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-WIKILINK-006--fix-wiki-link-rendering-replacewikilinkdisplay-strips-anchor-opening-tag/design-doc/01-wiki-link-rendering-analysis-and-implementation-guide.md — Comprehensive analysis and implementation guide
 
+
+## 2026-05-31
+
+Ticket closed
+
