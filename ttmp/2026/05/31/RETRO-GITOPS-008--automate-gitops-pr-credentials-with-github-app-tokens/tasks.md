@@ -9,3 +9,4 @@
 - [x] Patch infra-tooling reusable workflow to support gitops_pr_token_source=github_app
 - [x] Patch publish-vault workflow to use GitHub App token source
 - [x] Verify GitHub App installation token can push and clean up a temporary GitOps branch
+- [x] Publish image through GitOps PR and verify Argo rollout

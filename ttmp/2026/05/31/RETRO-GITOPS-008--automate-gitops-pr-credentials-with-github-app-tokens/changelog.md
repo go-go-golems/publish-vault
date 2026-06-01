@@ -35,3 +35,18 @@ Verified GitHub App installation and write access: token minted, git ls-remote s
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/02-verify-github-app-secret-and-token.sh — Read/token verification script
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/06-verify-github-app-gitops-write-access.sh — Write verification script
 
+
+## 2026-05-31
+
+Published sha-e61c800 through GitHub App GitOps PR automation; merged PR #97 and verified Argo rollout plus public endpoint health
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/reference/01-implementation-diary.md — Diary updated with full publish and rollout proof
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/07-check-published-deployment.sh — Deployment verification script
+
+
+## 2026-05-31
+
+Ticket closed
+

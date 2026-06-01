@@ -29,12 +29,15 @@ RelatedFiles:
       Note: Retraceable script that patched publish-vault workflow
     - Path: ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/06-verify-github-app-gitops-write-access.sh
       Note: Retraceable script that verifies GitHub App installation token can push and delete a temporary GitOps branch
+    - Path: ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/07-check-published-deployment.sh
+      Note: Retraceable deployment verification script for GitOps PR
 ExternalSources: []
 Summary: Chronological implementation diary for replacing expiring GitOps PR PATs with GitHub App installation tokens.
 LastUpdated: 2026-05-31T23:08:00-04:00
 WhatFor: Track GitHub App GitOps PR automation implementation steps, failures, scripts, and validation commands.
 WhenToUse: Use when resuming RETRO-GITOPS-008 or auditing how GitHub App credentials were stored and verified.
 ---
+
 
 
 
@@ -465,3 +468,163 @@ verify/github-app-token-20260601T032708Z-2138688
 ```
 
 It was deleted by the script after successful push.
+
+## Step 4: Publish through GitOps and verify production rollout
+
+This step exercised the whole replacement path end to end. After pushing `infra-tooling` first, the `publish-vault` workflow consumed the new `github_app` token source, published a new image, opened a GitOps pull request, and the pull request was merged into the k3s GitOps repository.
+
+Argo CD needed a hard refresh before it noticed the new GitOps revision, but after refresh it synced to the merged commit and rolled out `ghcr.io/go-go-golems/publish-vault:sha-e61c800`. The public endpoint returns HTTP 200 and `/api/healthz` is healthy.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** With GitHub App installation verified, finish the deploy path and confirm the site is updated.
+
+**Inferred user intent:** Publish the fixed version of the site and prove the GitHub App automation can replace the expired PAT in practice.
+
+**Commit (code/docs):** `e61c800` in `/home/manuel/code/wesen/2026-05-13--retro-obsidian-publish` — `docs: verify RETRO-GITOPS-008 GitHub App installation and write access`
+
+**External commit:** `6dd57888d3e471f9c1286729f268454cfe8f9e89` in `wesen/2026-03-27--hetzner-k3s` — GitOps PR #97 merge commit.
+
+### What I did
+
+- Pushed `infra-tooling` first:
+
+```bash
+cd /home/manuel/code/wesen/go-go-golems/infra-tooling
+git push origin main
+```
+
+- Pushed `publish-vault` second:
+
+```bash
+cd /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish
+git push origin main
+```
+
+- The `publish-vault` pre-push hook ran and passed:
+  - `golangci-lint`
+  - backend `go test ./...`
+  - plugin unittest `python3 -m unittest plugins/test_retro_plugin.py`
+  - `gosec`
+  - `pnpm --dir web check`
+- Watched GitHub Actions run:
+  - `https://github.com/go-go-golems/publish-vault/actions/runs/26733550677`
+- Confirmed both jobs passed:
+  - `release / publish`: success
+  - `release / Open GitOps PR`: success
+- Confirmed GitOps PR #97 was opened:
+  - `https://github.com/wesen/2026-03-27--hetzner-k3s/pull/97`
+- Reviewed the PR diff; it changed only:
+
+```diff
+- image: ghcr.io/go-go-golems/publish-vault:sha-f58480f
++ image: ghcr.io/go-go-golems/publish-vault:sha-e61c800
+```
+
+- Merged PR #97 with squash merge and branch deletion.
+- Argo CD initially still showed the previous revision/image, so I forced a hard refresh:
+
+```bash
+kubectl -n argocd annotate application retro-obsidian-publish argocd.argoproj.io/refresh=hard --overwrite
+```
+
+- Waited for rollout and verified:
+  - image: `ghcr.io/go-go-golems/publish-vault:sha-e61c800`
+  - Argo: `Synced Healthy`
+  - revision: `6dd57888d3e471f9c1286729f268454cfe8f9e89`
+- Added retrace script:
+  - `scripts/07-check-published-deployment.sh`
+- Ran it successfully.
+
+### Why
+
+- The only way to prove the GitHub App replacement works is to run the same workflow path that previously failed at GitOps clone time.
+- The rollout verification confirms the automation did more than open a PR: the GitOps merge actually changed the live Kubernetes deployment.
+
+### What worked
+
+- The reusable workflow successfully used `gitops_pr_token_source: github_app`.
+- GitHub Actions opened GitOps PR #97 with the expected image tag.
+- GitOps PR #97 merged cleanly.
+- Argo CD synced the new revision after hard refresh.
+- Kubernetes rollout completed successfully.
+- Public endpoint is healthy:
+
+```text
+HTTP/2 200
+```
+
+- `/api/healthz` returned:
+
+```json
+{
+  "ok": true,
+  "notes": 652,
+  "vaultRoot": "/git/root/.worktrees/be5a9688ac6f4a9909c4e71b26c4446470e919e9",
+  "configuredRoot": "/git/root/current"
+}
+```
+
+### What didn't work
+
+- The first kubeconfig attempted (`kubeconfig-91.98.46.169.yaml`) timed out. The Tailscale kubeconfig worked:
+
+```text
+kubeconfig-k3s-demo-1.tail879302.ts.net.yaml
+```
+
+- Argo CD did not immediately notice the merged GitOps revision. A hard refresh was needed before it reported revision `6dd57888d3e471f9c1286729f268454cfe8f9e89` and rolled out the new image.
+
+### What I learned
+
+- The new GitHub App token path works in real CI, not just from local scripts.
+- The public site is now running image `sha-e61c800`.
+- For this cluster, the Tailscale kubeconfig is the reliable operator path from this machine.
+
+### What was tricky to build
+
+- The deployment pipeline crosses three repositories (`publish-vault`, `infra-tooling`, and `2026-03-27--hetzner-k3s`) plus Vault and Argo CD. Push order matters because `publish-vault` references `infra-tooling@main`.
+- Argo's polling delay could have looked like a failed deployment if we only checked immediately after merge. Forcing a hard refresh made the desired state converge quickly.
+
+### What warrants a second pair of eyes
+
+- Confirm the hard-refresh requirement was just polling delay and not a repository credential/cache issue in Argo CD.
+- Confirm the generated GitOps PR branch naming and commit body are acceptable for future automated image bumps.
+
+### What should be done in the future
+
+- Consider documenting the Tailscale kubeconfig as the preferred verification path for this cluster.
+- After a few successful releases, remove the old expired PAT secret path from Vault.
+- Consider closing `RETRO-GITOPS-008` now that the end-to-end path has been proven.
+
+### Code review instructions
+
+- Review GitHub Actions run `26733550677`.
+- Review GitOps PR #97.
+- Re-run deployment check:
+
+```bash
+ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/07-check-published-deployment.sh
+```
+
+### Technical details
+
+Final deployed image:
+
+```text
+ghcr.io/go-go-golems/publish-vault:sha-e61c800
+```
+
+GitOps PR:
+
+```text
+https://github.com/wesen/2026-03-27--hetzner-k3s/pull/97
+```
+
+GitOps merge commit:
+
+```text
+6dd57888d3e471f9c1286729f268454cfe8f9e89
+```

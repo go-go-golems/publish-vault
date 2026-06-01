@@ -1,7 +1,7 @@
 ---
 Title: Automate GitOps PR credentials with GitHub App tokens
 Ticket: RETRO-GITOPS-008
-Status: active
+Status: complete
 Topics:
     - gitops
     - deployment
@@ -13,10 +13,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-05-31T23:04:08.059556038-04:00
+LastUpdated: 2026-05-31T23:37:01.750072417-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Automate GitOps PR credentials with GitHub App tokens
 
