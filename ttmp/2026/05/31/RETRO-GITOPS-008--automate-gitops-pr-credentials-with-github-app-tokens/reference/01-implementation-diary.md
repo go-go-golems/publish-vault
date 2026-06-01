@@ -214,7 +214,7 @@ I also patched the `publish-vault` workflow to request that new token source. Th
 
 **Commit (code):** `d066320` in `/home/manuel/code/wesen/go-go-golems/infra-tooling` — `feat(gitops): support GitHub App token source for image publish PRs`
 
-**Commit (code/docs):** `4dbdd96` in `/home/manuel/code/wesen/2026-05-13--retro-obsidian-publish` — `feat(ci): use GitHub App credentials for GitOps PR automation`
+**Commit (code/docs):** `f6de83b` in `/home/manuel/code/wesen/2026-05-13--retro-obsidian-publish` — `feat(ci): use GitHub App credentials for GitOps PR automation`
 
 ### What I did
 
