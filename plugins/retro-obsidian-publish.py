@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import socket
 import sys
 from pathlib import Path
 
@@ -11,8 +12,39 @@ def emit(obj):
     sys.stdout.flush()
 
 
+def log(msg):
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+
 def repo_root(ctx):
     return Path(ctx.get("repo_root") or os.getcwd()).resolve()
+
+
+def port_in_use(port, host="127.0.0.1"):
+    """Return True if something is already listening on host:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex((host, port)) == 0
+
+
+def find_free_port(preferred, host="127.0.0.1", max_tries=100):
+    """Return the first free port starting from *preferred*.
+
+    If *preferred* is free it is returned immediately.  Otherwise the
+    search increments until a free port is found or *max_tries* is
+    exhausted (raises RuntimeError).
+    """
+    for port in range(preferred, preferred + max_tries):
+        if not port_in_use(port, host):
+            if port != preferred:
+                log(f"port {preferred} in use, using {port}")
+            return port
+    raise RuntimeError(f"no free port found in range {preferred}-{preferred + max_tries - 1}")
+
+
+# ── Cached ports (set by handle_config, read by handle_launch) ──
+_resolved_ports = {}  # {"backend": int, "web": int}
 
 
 emit({
@@ -26,18 +58,37 @@ emit({
 def handle_config(rid, ctx):
     vault = os.environ.get("VAULT_DIR", "backend/vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
+
+    # Resolve ports — env overrides take precedence, then probe from defaults
+    backend_port = find_free_port(
+        int(os.environ.get("BACKEND_PORT", "8080"))
+    )
+    web_port = find_free_port(
+        int(os.environ.get("WEB_PORT", "3000"))
+    )
+
+    # Cache for handle_launch
+    _resolved_ports["backend"] = backend_port
+    _resolved_ports["web"] = web_port
+
     config_set = {
         "env.vault_dir": vault,
         "paths.backend": "backend",
         "paths.web": "web",
-        "services.backend.port": 8080,
-        "services.backend.url": "http://127.0.0.1:8080",
-        "services.web.port": 3000,
-        "services.web.url": "http://127.0.0.1:3000",
-        "services.web.api_url": "http://127.0.0.1:8080",
+        "services.backend.port": backend_port,
+        "services.backend.url": f"http://127.0.0.1:{backend_port}",
+        "services.web.port": web_port,
+        "services.web.url": f"http://127.0.0.1:{web_port}",
+        "services.web.api_url": f"http://127.0.0.1:{backend_port}",
     }
     if vault_name:
         config_set["env.vault_name"] = vault_name
+
+    if backend_port != 8080:
+        config_set["env.backend_port_shifted"] = "true"
+    if web_port != 3000:
+        config_set["env.web_port_shifted"] = "true"
+
     emit({
         "type": "response",
         "request_id": rid,
@@ -90,6 +141,7 @@ def handle_validate(rid, ctx):
 def handle_launch(rid, ctx):
     vault = os.environ.get("VAULT_DIR", "backend/vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
+
     # Resolve vault path relative to repo root for the backend command
     root = repo_root(ctx)
     vault_path = Path(vault)
@@ -98,8 +150,15 @@ def handle_launch(rid, ctx):
     else:
         vault_arg = vault
 
+    # Use ports resolved by handle_config (fall back to defaults if
+    # handle_config was never called — shouldn't happen in practice)
+    backend_port = _resolved_ports.get("backend", 8080)
+    web_port = _resolved_ports.get("web", 3000)
+
     backend_cmd = ["go", "run", "./cmd/retro-obsidian-publish", "serve",
-                   "--vault", vault_arg, "--port", "8080", "--serve-web=false"]
+                   "--vault", vault_arg,
+                   "--port", str(backend_port),
+                   "--serve-web=false"]
     if vault_name:
         backend_cmd.extend(["--vault-name", vault_name])
 
@@ -116,14 +175,14 @@ def handle_launch(rid, ctx):
                 "cwd": "backend",
                 "command": backend_cmd,
                 "env": {},
-                "health": {"type": "http", "url": "http://127.0.0.1:8080/api/notes", "timeout_ms": health_timeout},
+                "health": {"type": "http", "url": f"http://127.0.0.1:{backend_port}/api/notes", "timeout_ms": health_timeout},
             },
             {
                 "name": "web",
                 "cwd": "web",
-                "command": ["pnpm", "dev", "--host", "127.0.0.1", "--port", "3000"],
-                "env": {"VITE_API_URL": "http://127.0.0.1:8080"},
-                "health": {"type": "http", "url": "http://127.0.0.1:3000", "timeout_ms": 30000},
+                "command": ["pnpm", "dev", "--host", "127.0.0.1", "--port", str(web_port)],
+                "env": {"VITE_API_URL": f"http://127.0.0.1:{backend_port}"},
+                "health": {"type": "http", "url": f"http://127.0.0.1:{web_port}", "timeout_ms": 30000},
             },
         ]}},
     )
