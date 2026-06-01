@@ -53,6 +53,12 @@ topics:
       description: Bug regression testing and prevention
     - slug: wiki-link
       description: Obsidian [[wiki link]] syntax support
+    - slug: lightbox
+      description: Full-screen image/diagram viewer modal
+    - slug: image
+      description: Image rendering and asset handling
+    - slug: modal
+      description: Dialog/modal overlay components
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
