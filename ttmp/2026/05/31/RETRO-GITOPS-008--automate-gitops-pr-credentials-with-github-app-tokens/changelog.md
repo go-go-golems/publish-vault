@@ -25,3 +25,13 @@ Extended Vault policy and patched infra-tooling/publish-vault workflows for GitH
 - /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/reference/01-implementation-diary.md — Diary updated with Steps 1-2
 - /home/manuel/code/wesen/go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml — Reusable workflow now supports github_app token source
 
+
+## 2026-05-31
+
+Verified GitHub App installation and write access: token minted, git ls-remote succeeded, temporary GitOps branch push/delete succeeded
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/02-verify-github-app-secret-and-token.sh — Read/token verification script
+- /home/manuel/code/wesen/2026-05-13--retro-obsidian-publish/ttmp/2026/05/31/RETRO-GITOPS-008--automate-gitops-pr-credentials-with-github-app-tokens/scripts/06-verify-github-app-gitops-write-access.sh — Write verification script
+
