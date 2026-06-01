@@ -4,7 +4,7 @@
  * syntax highlighting, and mermaid diagram rendering.
  * Handles click events on wiki-links for SPA navigation.
  */
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import hljs from "highlight.js";
 import mermaid from "mermaid";
@@ -12,7 +12,16 @@ import { nanoid } from "nanoid";
 import { resolveWikiLinks, buildSlugSet } from "../../../lib/wikiLinks";
 import { FrontmatterPanel } from "../../molecules/FrontmatterPanel/FrontmatterPanel";
 import { BreadcrumbBar } from "../../molecules/BreadcrumbBar/BreadcrumbBar";
+import { LightboxModal } from "../../atoms/LightboxModal/LightboxModal";
 import type { Note } from "../../../types";
+
+/** Lightbox content descriptor */
+interface LightboxState {
+  type: "image" | "mermaid";
+  src?: string;
+  alt?: string;
+  svgHtml?: string;
+}
 
 export interface NoteRendererProps {
   note: Note;
@@ -32,6 +41,9 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
   className,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Lightbox state for full-screen image/mermaid viewing
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
   // Build slug set for broken-link detection
   const slugSet = useMemo(() => buildSlugSet(allSlugs), [allSlugs]);
@@ -58,6 +70,29 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
           body.style.display = isHidden ? "" : "none";
           if (toggle) toggle.textContent = isHidden ? "\u25BC" : "\u25B6";
         }
+        return;
+      }
+
+      // Image click → open lightbox
+      const img = target.closest("img");
+      if (img && contentRef.current?.contains(img)) {
+        e.preventDefault();
+        setLightbox({
+          type: "image",
+          src: img.src,
+          alt: img.alt || undefined,
+        });
+        return;
+      }
+
+      // Mermaid diagram click → open lightbox
+      const mermaidEl = target.closest(".mermaid-svg");
+      if (mermaidEl && contentRef.current?.contains(mermaidEl)) {
+        e.preventDefault();
+        setLightbox({
+          type: "mermaid",
+          svgHtml: mermaidEl.innerHTML,
+        });
         return;
       }
 
@@ -279,6 +314,15 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         ref={contentRef}
         className="note-prose"
         dangerouslySetInnerHTML={{ __html: resolvedHtml }}
+      />
+
+      {/* Lightbox for full-screen image/mermaid viewing */}
+      <LightboxModal
+        open={lightbox !== null}
+        onOpenChange={(open) => { if (!open) setLightbox(null); }}
+        imageSrc={lightbox?.type === "image" ? lightbox.src : undefined}
+        imageAlt={lightbox?.type === "image" ? lightbox.alt : undefined}
+        svgHtml={lightbox?.type === "mermaid" ? lightbox.svgHtml : undefined}
       />
     </article>
   );

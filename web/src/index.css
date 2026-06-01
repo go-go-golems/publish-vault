@@ -474,7 +474,8 @@
   .note-prose th { background: var(--color-ink); color: var(--color-paper); font-weight: 700; }
   .note-prose tr:nth-child(even) td { background: var(--color-panel); }
   .note-prose hr { border: none; border-top: 1px solid var(--color-ink); margin: 1.2em 0; }
-  .note-prose img { max-width: 100%; border: 1px solid var(--color-ink); }
+  .note-prose img { max-width: 100%; border: 1px solid var(--color-ink); cursor: zoom-in; }
+  .note-prose img:hover { outline: 2px solid var(--color-link); outline-offset: 2px; transition: outline 0.15s; }
   .note-prose a { color: var(--color-link); }
   .note-prose a:hover { background: var(--color-link); color: #fff; text-decoration: none; }
 
@@ -636,6 +637,8 @@
   .hljs-link { color: #aaddff; text-decoration: underline; }
 
   /* ── Mermaid SVG retro styling ── */
+  .mermaid-svg { cursor: zoom-in; }
+  .mermaid-svg:hover { outline: 2px solid var(--color-link); outline-offset: 2px; transition: outline 0.15s; }
   .mermaid-svg svg {
     max-width: 100%;
     height: auto;
@@ -732,4 +735,24 @@
       padding-right: env(safe-area-inset-right);
     }
   }
+}
+
+/* ── Lightbox modal ── */
+.lightbox-content img {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  border: none;
+}
+.lightbox-content .mermaid-display svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Lightbox close button — white on dark overlay */
+[data-slot="dialog-content"]:has(.lightbox-content) [data-slot="dialog-close"] {
+  color: #fff;
+  opacity: 0.8;
+}
+[data-slot="dialog-content"]:has(.lightbox-content) [data-slot="dialog-close"]:hover {
+  opacity: 1;
 }
