@@ -50,8 +50,10 @@ jobs:
       gitops_target_config: deploy/gitops-targets.json
       push_image: ${{ github.event_name != 'pull_request' }}
       open_gitops_pr: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
-      gitops_pr_token_source: vault
+      gitops_pr_token_source: github_app
       vault_role: retro-obsidian-publish-gitops-pr
-      vault_secret_path: kv/data/ci/github/retro-obsidian-publish/gitops-pr-token
+      gitops_app_secret_path: kv/data/ci/github/retro-obsidian-publish/gitops-pr-app
+      gitops_app_owner: wesen
+      gitops_app_repositories: 2026-03-27--hetzner-k3s
       tooling_repository: go-go-golems/infra-tooling
       tooling_ref: main
