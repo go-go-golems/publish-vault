@@ -224,6 +224,16 @@ export default defineConfig({
     port: 3000,
     strictPort: false, // Will find next available port if 3000 is busy
     host: "127.0.0.1",
+    // Proxy /api/ and /vault-assets/ to the Go backend so that images,
+    // wiki-links, and API calls all resolve correctly in dev mode.
+    // The backend URL is taken from VITE_API_URL (e.g. http://127.0.0.1:8080).
+    proxy: (() => {
+      const backend = process.env.VITE_API_URL || "http://127.0.0.1:8080";
+      return {
+        "/api": { target: backend, changeOrigin: true },
+        "/vault-assets": { target: backend, changeOrigin: true },
+      };
+    })(),
     allowedHosts: [
       ".manuspre.computer",
       ".manus.computer",
