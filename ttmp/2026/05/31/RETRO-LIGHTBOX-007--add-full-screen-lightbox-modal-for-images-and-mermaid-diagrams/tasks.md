@@ -9,4 +9,4 @@
 - [x] Add cursor and hover styles for clickable images and mermaid diagrams
 - [x] Add LightboxModal story to Storybook
 - [x] Smoke test with real vault (images + mermaid diagrams)
-- [ ] Write implementation guide doc and upload to reMarkable
+- [x] Write implementation guide doc and upload to reMarkable
