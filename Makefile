@@ -1,4 +1,4 @@
-.PHONY: all backend web frontend storybook dev clean build-web lint lintmax docker-lint gosec govulncheck test web-check build ci-check
+.PHONY: all backend web frontend storybook dev clean build-web lint lintmax docker-lint gosec govulncheck test web-check build ci-check devctl-example devctl-parc
 
 # Build everything
 all: backend web
@@ -64,6 +64,14 @@ storybook:
 # Run both backend and frontend in parallel (requires GNU make)
 dev:
 	$(MAKE) -j2 backend-dev frontend-dev
+
+# Start devctl with the example vault profile (default)
+devctl-example:
+	devctl up --profile example
+
+# Start devctl with the go-go-parc vault profile
+devctl-parc:
+	devctl up --profile go-go-parc
 
 # Clean build artifacts
 clean:

@@ -25,20 +25,24 @@ emit({
 
 def handle_config(rid, ctx):
     vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault_name = os.environ.get("VAULT_NAME", "")
+    config_set = {
+        "env.vault_dir": vault,
+        "paths.backend": "backend",
+        "paths.web": "web",
+        "services.backend.port": 8080,
+        "services.backend.url": "http://127.0.0.1:8080",
+        "services.web.port": 3000,
+        "services.web.url": "http://127.0.0.1:3000",
+        "services.web.api_url": "http://127.0.0.1:8080",
+    }
+    if vault_name:
+        config_set["env.vault_name"] = vault_name
     emit({
         "type": "response",
         "request_id": rid,
         "ok": True,
-        "output": {"config_patch": {"set": {
-            "env.vault_dir": vault,
-            "paths.backend": "backend",
-            "paths.web": "web",
-            "services.backend.port": 8080,
-            "services.backend.url": "http://127.0.0.1:8080",
-            "services.web.port": 3000,
-            "services.web.url": "http://127.0.0.1:3000",
-            "services.web.api_url": "http://127.0.0.1:8080",
-        }, "unset": []}},
+        "output": {"config_patch": {"set": config_set, "unset": []}},
     })
 
 
@@ -64,8 +68,16 @@ def handle_validate(rid, ctx):
         warnings.append({"code": "W_WEB_DEPS", "message": "web/node_modules missing; run pnpm --dir web install --frozen-lockfile"})
     if not (root / "web" / "dist" / "index.html").exists():
         warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; run cd backend && go run ./cmd/retro-obsidian-publish build web"})
-    if not (root / "backend" / "vault-example").exists():
-        warnings.append({"code": "W_NO_EXAMPLE_VAULT", "message": "backend/vault-example is missing"})
+
+    # Validate vault directory exists
+    vault_dir = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault_path = Path(vault_dir)
+    if not vault_path.is_absolute():
+        vault_path = root / vault_path
+    if not vault_path.exists():
+        errors.append({"code": "E_VAULT_MISSING", "message": f"vault directory not found: {vault_dir}"})
+    elif not any(vault_path.glob("*.md")):
+        warnings.append({"code": "W_VAULT_EMPTY", "message": f"vault directory has no .md files: {vault_dir}"})
 
     emit({
         "type": "response",
@@ -76,6 +88,24 @@ def handle_validate(rid, ctx):
 
 
 def handle_launch(rid, ctx):
+    vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault_name = os.environ.get("VAULT_NAME", "")
+    # Resolve vault path relative to repo root for the backend command
+    root = repo_root(ctx)
+    vault_path = Path(vault)
+    if not vault_path.is_absolute():
+        vault_arg = str(root / vault_path)
+    else:
+        vault_arg = vault
+
+    backend_cmd = ["go", "run", "./cmd/retro-obsidian-publish", "serve",
+                   "--vault", vault_arg, "--port", "8080", "--serve-web=false"]
+    if vault_name:
+        backend_cmd.extend(["--vault-name", vault_name])
+
+    # Larger vaults (absolute paths, e.g. go-go-parc) need more time for the initial load
+    health_timeout = 60000 if vault_path.is_absolute() else 30000
+
     emit({
         "type": "response",
         "request_id": rid,
@@ -84,9 +114,9 @@ def handle_launch(rid, ctx):
             {
                 "name": "backend",
                 "cwd": "backend",
-                "command": ["go", "run", "./cmd/retro-obsidian-publish", "serve", "--vault", "./vault-example", "--port", "8080", "--serve-web=false"],
+                "command": backend_cmd,
                 "env": {},
-                "health": {"type": "http", "url": "http://127.0.0.1:8080/api/notes", "timeout_ms": 30000},
+                "health": {"type": "http", "url": "http://127.0.0.1:8080/api/notes", "timeout_ms": health_timeout},
             },
             {
                 "name": "web",

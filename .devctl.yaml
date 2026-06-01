@@ -1,3 +1,25 @@
+profile:
+  active: example
+
+profiles:
+  example:
+    display_name: Example Vault
+    description: Serve the bundled vault-example with hot-reload frontend
+    plugins:
+      - retro-obsidian-publish
+    env:
+      VAULT_DIR: backend/vault-example
+      VAULT_NAME: vault-example
+
+  go-go-parc:
+    display_name: go-go-parc Vault
+    description: Serve the go-go-parc Obsidian vault (~/code/wesen/go-go-golems/go-go-parc) with hot-reload frontend
+    plugins:
+      - retro-obsidian-publish
+    env:
+      VAULT_DIR: /home/manuel/code/wesen/go-go-golems/go-go-parc
+      VAULT_NAME: go-go-parc
+
 plugins:
   - id: retro-obsidian-publish
     path: python3
