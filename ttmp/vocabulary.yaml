@@ -59,6 +59,12 @@ topics:
       description: Image rendering and asset handling
     - slug: modal
       description: Dialog/modal overlay components
+    - slug: deployment
+      description: deployment topic
+    - slug: github-actions
+      description: github-actions topic
+    - slug: vault
+      description: vault topic
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
