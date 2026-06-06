@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +32,7 @@ type Config struct {
 	Watch               bool
 	ReloadToken         string
 	ReloadAllowLoopback bool
+	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -89,7 +92,15 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env, or enable --reload-allow-loopback")
 	}
 	if cfg.ServeWeb {
-		r.PathPrefix("/").Handler(web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"}))
+		spaHandler := web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"})
+
+		if cfg.SSRURL != "" {
+			log.Printf("SSR sidecar proxy enabled: %s", cfg.SSRURL)
+			ssrProxy := newSSRProxy(cfg.SSRURL, spaHandler)
+			r.PathPrefix("/").Handler(ssrProxy)
+		} else {
+			r.PathPrefix("/").Handler(spaHandler)
+		}
 	}
 
 	c := cors.New(cors.Options{
@@ -224,4 +235,74 @@ func validBearerToken(header, token string) bool {
 		return false
 	}
 	return strings.TrimPrefix(header, prefix) == token
+}
+
+// ---------------------------------------------------------------------------
+// SSR reverse proxy
+// ---------------------------------------------------------------------------
+
+// newSSRProxy returns an http.Handler that reverse-proxies requests to the
+// SSR sidecar. If the sidecar returns an error (connection refused, timeout,
+// 5xx), the handler falls back to the spaHandler so the site stays functional
+// even when the sidecar is unavailable.
+func newSSRProxy(ssrURL string, spaHandler http.Handler) http.Handler {
+	ssrEndpoint, err := url.Parse(ssrURL)
+	if err != nil {
+		log.Printf("Invalid SSR URL %q, falling back to SPA: %v", ssrURL, err)
+		return spaHandler
+	}
+
+	proxy := &http.Client{Timeout: 10 * time.Second}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Build the proxy request to the SSR sidecar.
+		proxyURL := ssrEndpoint.ResolveReference(&url.URL{
+			Path:     r.URL.Path,
+			RawQuery: r.URL.RawQuery,
+		})
+
+		proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL.String(), nil)
+		if err != nil {
+			log.Printf("SSR proxy: failed to create request, falling back to SPA: %v", err)
+			spaHandler.ServeHTTP(w, r)
+			return
+		}
+
+		// Forward useful headers.
+		for _, h := range []string{"Accept", "Accept-Language", "User-Agent", "Cookie"} {
+			if v := r.Header.Get(h); v != "" {
+				proxyReq.Header.Set(h, v)
+			}
+		}
+
+		// Send the request to the SSR sidecar.
+		resp, err := proxy.Do(proxyReq)
+		if err != nil {
+			log.Printf("SSR proxy: sidecar unavailable, falling back to SPA: %v", err)
+			spaHandler.ServeHTTP(w, r)
+			return
+		}
+		defer resp.Body.Close()
+
+		// If the SSR server returns a server error, fall back to SPA.
+		if resp.StatusCode >= 500 {
+			log.Printf("SSR proxy: server error %d, falling back to SPA", resp.StatusCode)
+			spaHandler.ServeHTTP(w, r)
+			return
+		}
+
+		// Copy response headers from the SSR server.
+		for k, vs := range resp.Header {
+			for _, v := range vs {
+				w.Header().Add(k, v)
+			}
+		}
+
+		w.WriteHeader(resp.StatusCode)
+
+		// Stream the response body.
+		if _, err := io.Copy(w, resp.Body); err != nil {
+			log.Printf("SSR proxy: error streaming response: %v", err)
+		}
+	})
 }

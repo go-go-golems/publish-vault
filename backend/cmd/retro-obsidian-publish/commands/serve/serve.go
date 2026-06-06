@@ -32,6 +32,7 @@ type Settings struct {
 	Watch               bool   `glazed:"watch"`
 	ReloadTokenEnv      string `glazed:"reload-token-env"`
 	ReloadAllowLoopback bool   `glazed:"reload-allow-loopback"`
+	SSRURL              string `glazed:"ssr-url"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -89,6 +90,10 @@ Examples:
 				fields.WithDefault(false),
 				fields.WithHelp("Allow POST /api/admin/reload without a bearer token from loopback clients such as a git-sync sidecar calling 127.0.0.1."),
 			),
+			fields.New("ssr-url", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("URL of the SSR sidecar (e.g. http://localhost:8089). When set, page requests are reverse-proxied to the SSR server for server-side rendering. When empty, the SPA fallback serves index.html directly."),
+			),
 		),
 		cmds.WithSections(glazedSection, commandSettingsSection),
 	)}
@@ -119,5 +124,5 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.ReloadTokenEnv != "" {
 		reloadToken = os.Getenv(settings.ReloadTokenEnv)
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback})
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL})
 }
