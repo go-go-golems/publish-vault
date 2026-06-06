@@ -17,18 +17,29 @@ RelatedFiles:
       Note: REST API endpoints that sidecar will fetch from
     - Path: backend/internal/server/server.go
       Note: Go server that needs SSR proxy addition
+    - Path: backend/internal/server/ssr_proxy_test.go
+      Note: SSR proxy tests
+    - Path: web/server.mjs
+      Note: Node.js SSR sidecar
     - Path: web/src/App.tsx
       Note: Client-side Wouter routing that SSR entry must mirror
+    - Path: web/src/entry-client.tsx
+      Note: Client hydration entry
+    - Path: web/src/entry-server.tsx
+      Note: SSR entry with renderApp
     - Path: web/src/store/store.ts
       Note: Redux store singleton that needs makeStore() factory
     - Path: web/src/store/vaultApi.ts
       Note: RTK Query API with upsertQueryData for SSR cache preloading
+    - Path: web/ssr.Dockerfile
+      Note: SSR Docker image
 ExternalSources: []
 Summary: ""
 LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # SSR Sidecar: Analysis and Implementation Guide

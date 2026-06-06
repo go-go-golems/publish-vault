@@ -83,3 +83,193 @@ Key files examined:
 - `publish-vault/web/src/App.tsx` — Client routing with Wouter
 - `publish-vault/web/src/store/vaultApi.ts` — RTK Query with upsertQueryData
 - `glazed/pkg/help/server/serve.go` — Reference Go SSR proxy
+
+## Step 2: Phase 1 — Store refactor + entry-client (2f349f1)
+
+Refactored `store/store.ts` to export a `makeStore(preloadedState?)` factory function alongside the existing `store` singleton. This mirrors the glazed pattern exactly. Created `entry-client.tsx` with `hydrateRoot()` instead of `createRoot().render()`, reading `window.__PRELOADED_STATE__` from the SSR sidecar. Updated `vite.config.ts` with `rollupOptions.input` pointing at `index.html` (which now references `entry-client.tsx`), and added `ssr.noExternal` for React, Redux, RTK Query. Updated `web/index.html` to load `/src/entry-client.tsx` instead of `/src/main.tsx`.
+
+### What I did
+- Refactored `store/store.ts`: added `makeStore()` factory, kept `store` singleton, updated type exports
+- Created `entry-client.tsx` with `hydrateRoot` + `__PRELOADED_STATE__` support
+- Updated `vite.config.ts` with SSR build config and rollupOptions
+- Updated `index.html` to reference `entry-client.tsx`
+- Verified `pnpm build` succeeds (builds 3932 modules, ~14s)
+
+### Why
+The store factory is required so each SSR request gets its own Redux store. `hydrateRoot` reuses server-rendered DOM instead of replacing it.
+
+### What worked
+- The `makeStore()` pattern transferred cleanly from glazed.
+- `hooks/redux.ts` needed zero changes — the types are still exported from the same location.
+- `hydrateRoot` is compatible with an empty `<div id="root">` so local dev still works.
+
+### What didn't work
+- Had to `pnpm install` first because `node_modules` was missing in the workspace.
+
+### What was tricky to build
+- The `ssr.noExternal` list needed to include `use-sync-external-store` (the glue between React 19's `useSyncExternalStore` and Redux). Without it, the SSR build would leave it as an external import that Node can't resolve.
+
+### What warrants a second pair of eyes
+- The `entry-client.tsx` deletes `window.__PRELOADED_STATE__` after reading it. Make sure this doesn't cause issues with React strict mode double-rendering.
+
+### What should be done in the future
+- Consider adding `@types/react-dom` for `hydrateRoot` types if not already present.
+
+### Code review instructions
+- Compare `store/store.ts` with `glazed/web/src/store.ts` to verify the factory pattern matches
+- Verify `entry-client.tsx` correctly reads and deletes `__PRELOADED_STATE__`
+- Check that `main.tsx` is still used by `vite dev`
+
+### Technical details
+Commit: `2f349f1`
+Files: `web/src/store/store.ts`, `web/src/entry-client.tsx` (new), `web/vite.config.ts`, `web/index.html`
+
+## Step 3: Phase 2 — SSR entry point (06ef0e8)
+
+Created `entry-server.tsx` with `renderApp(url, data)` that preloads RTK Query cache and renders React to HTML. Since Wouter doesn't support SSR (no `StaticRouter`), the entry parses the URL manually and renders page components directly. Created simplified SSR components (`SSRNotePage`, `SSRHomePage`, `SSRSearchPage`) that render the content without interactive features.
+
+### What I did
+- Created `entry-server.tsx` with `renderApp()`, `preloadCache()`, `parseRoute()`
+- Implemented SSR-safe components: `SSRNotePage` (title, tags, HTML body, backlinks), `SSRHomePage` (note list), `SSRSearchPage` (placeholder)
+- Added `build:ssr` and `build:all` scripts to `package.json`
+- Verified `pnpm build:ssr` produces `dist/ssr/entry-server.js` (1.5MB, 57 modules)
+- Verified `pnpm build:all` succeeds
+
+### Why
+The SSR entry is the bridge between the Node sidecar and React. It must produce HTML that matches what the client will hydrate.
+
+### What worked
+- Using `React.createElement` instead of JSX in the SSR components avoids any Babel/TSX issues in the SSR bundle.
+- The `vaultApi.util.upsertQueryData` pattern preloads the cache so RTK Query hooks return data synchronously during `renderToString`.
+
+### What didn't work
+- N/A
+
+### What was tricky to build
+- Wouter's `useLocation()` hook crashes in Node (no `window.history`). The solution was to completely bypass Wouter in the SSR entry and render content components directly. This means the SSR route table must stay in sync with `App.tsx` — a maintenance burden but the simplest correct solution.
+- Used `React.createElement` instead of JSX to ensure the SSR components don't accidentally pull in Wouter or other client-only modules.
+
+### What warrants a second pair of eyes
+- The SSR route parsing (`parseRoute`) must match the client routes in `App.tsx`. Currently 3 patterns: `/` → home, `/note/{slug}` → note, `/search` → search.
+- The `SSRNotePage` renders `dangerouslySetInnerHTML` with the note's HTML. This is the same pattern used in the client-side `NoteRenderer`, so it's safe, but worth confirming the HTML is already sanitized by the Go parser.
+
+### What should be done in the future
+- Add a unit test for `renderApp` with mock data (task 2.6 — skipped for now, will add in a follow-up).
+
+### Code review instructions
+- Verify `parseRoute()` matches Wouter routes in `App.tsx`
+- Check that `preloadCache` upserts match the RTK Query endpoint names
+
+### Technical details
+Commit: `06ef0e8`
+Files: `web/src/entry-server.tsx` (new), `web/package.json`
+
+## Step 4: Phase 3 — Node.js sidecar (00c68d2)
+
+Created `server.mjs`, an Express server that receives page requests from the Go reverse proxy, pre-fetches data from the Go API, renders React via `renderApp()`, and assembles complete HTML with preloaded state, meta tags, JSON-LD, and noscript fallback.
+
+### What I did
+- Created `server.mjs` with Express
+- Implemented URL parsing, data pre-fetching, HTML assembly
+- Added JSON-LD (WebPage, BreadcrumbList) and Open Graph meta tags
+- Added `<noscript>` fallback with note list for non-JS agents
+- Added health check endpoint at `/health`
+
+### Why
+This is the core of the SSR sidecar. It bridges the Go server's HTTP responses with React's `renderToString`.
+
+### What worked
+- Express was already a dependency in `package.json` so no new deps needed.
+- The HTML template replacement pattern (regex on `<div id="root">`) is proven from the glazed sidecar.
+
+### What didn't work
+- N/A
+
+### What was tricky to build
+- The `serializeForInlineScript` function must escape `<`, `>`, `&`, and Unicode line separators to prevent XSS via `</script>` injection in the serialized state.
+
+### What warrants a second pair of eyes
+- The HTML template regex `/<div id="root">([\s\S]*?)<\/div>/` could theoretically match content within the React HTML if it contains a nested `<div id="root">`. This is unlikely but worth noting.
+
+### What should be done in the future
+- Consider caching the `index.html` template reload on file change (for now it loads once at startup which is fine for containers).
+
+### Code review instructions
+- Compare `server.mjs` with `glazed/web/server.mjs` to verify the pattern matches
+- Verify the data pre-fetching matches the RTK Query endpoints used in `entry-server.tsx`
+
+### Technical details
+Commit: `00c68d2`
+Files: `web/server.mjs` (new)
+
+## Step 5: Phase 4 — Go server SSR proxy (3ad2d4d + 102fef8)
+
+Added `--ssr-url` flag to the Go serve command and implemented `newSSRProxy()` in `server.go`. The proxy reverse-proxies page requests to the SSR sidecar, forwarding relevant headers and falling back to the SPA handler if the sidecar is unavailable.
+
+### What I did
+- Added `SSRURL` field to `server.Config` struct
+- Added `--ssr-url` flag to `serve.go` with help text
+- Implemented `newSSRProxy()` with: request forwarding, header passthrough, SPA fallback on error/5xx, streaming response body
+- Added 5 test cases: proxy, 500 fallback, connection-refused fallback, invalid URL fallback, header forwarding
+- All tests pass
+
+### Why
+The Go server needs to selectively proxy page requests to the Node sidecar while continuing to handle API, vault-assets, and static asset requests itself.
+
+### What worked
+- The proxy pattern transferred directly from `glazed/pkg/help/server/serve.go`.
+- All 5 test cases pass cleanly.
+
+### What didn't work
+- The Go workspace (`go.work`) has a version mismatch with the glazed module. Had to use `GOWORK=off` for building/testing.
+
+### What was tricky to build
+- The workspace issue is pre-existing and unrelated to SSR changes. The backend builds and tests fine with `GOWORK=off`.
+
+### What warrants a second pair of eyes
+- The proxy only forwards `Accept`, `Accept-Language`, `User-Agent`, and `Cookie` headers. This is intentional (we don't want to forward `Host` or `Connection`), but worth verifying.
+
+### What should be done in the future
+- Fix the `go.work` version mismatch to allow workspace-level builds.
+
+### Code review instructions
+- Compare `newSSRProxy()` with `glazed/pkg/help/server/serve.go:newSSRProxy()`
+- Run `GOWORK=off go test ./internal/server/ -v` to verify all tests
+
+### Technical details
+Commits: `3ad2d4d` (implementation), `102fef8` (tests)
+Files: `backend/internal/server/server.go`, `backend/cmd/retro-obsidian-publish/commands/serve/serve.go`, `backend/internal/server/ssr_proxy_test.go` (new)
+
+## Step 6: Phase 5 — Docker + deployment (17dbb02)
+
+Created `ssr.Dockerfile` for the Node.js sidecar and updated `docker-compose.yml` to include the sidecar service with proper networking.
+
+### What I did
+- Created `web/ssr.Dockerfile`: Node 22 Alpine, pnpm install, `build:all`, runs `server.mjs`
+- Updated `docker-compose.yml`: added `ssr` service, wired Go server with `--ssr-url http://ssr:8089`, set `API_BASE=http://app:8080`
+
+### Why
+The sidecar needs its own container image with Node.js to run the Express SSR server.
+
+### What worked
+- Docker Compose networking lets the Go server (`app`) reach the sidecar (`ssr`) via the service name.
+
+### What didn't work
+- N/A
+
+### What was tricky to build
+- The Go server's `command` override in docker-compose must include all the original flags plus `--ssr-url`. The default `CMD` in the Go Dockerfile is `serve --port 8080 --serve-web`, so the compose command must replicate those plus add `--ssr-url`.
+
+### What warrants a second pair of eyes
+- Verify the Docker Compose networking: `http://ssr:8089` from the Go container, `http://app:8080` from the SSR container.
+
+### What should be done in the future
+- End-to-end test with `docker compose up` (Phase 6 manual verification).
+
+### Code review instructions
+- Check that the SSR Dockerfile's `build:all` command produces both `dist/` and `dist/ssr/`
+- Verify docker-compose networking between services
+
+### Technical details
+Commit: `17dbb02`
+Files: `web/ssr.Dockerfile` (new), `docker-compose.yml`

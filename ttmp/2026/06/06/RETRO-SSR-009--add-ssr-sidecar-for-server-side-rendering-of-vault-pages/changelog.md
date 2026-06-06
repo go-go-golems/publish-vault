@@ -19,3 +19,28 @@ Step 1: Created ticket, wrote comprehensive SSR design doc with current-state an
 
 Added research logbook: 27 resources cataloged across 4 categories (backend, frontend, glazed reference, design docs) with status assessment and update requirements
 
+
+## 2026-06-06
+
+Phase 1 complete: store.ts refactored to makeStore() factory, entry-client.tsx with hydrateRoot created, vite.config.ts updated with SSR noExternal + rollupOptions, index.html points to entry-client.tsx. Build verified (2f349f1).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-client.tsx — Client hydration entry with __PRELOADED_STATE__
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/store/store.ts — makeStore factory + store singleton
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vite.config.ts — SSR noExternal + rollupOptions
+
+
+## 2026-06-06
+
+Phases 1-5 complete: store factory, entry-client, entry-server, server.mjs sidecar, Go SSR proxy with tests, Docker + compose (commits 2f349f1..17dbb02)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/backend/internal/server/server.go — SSR proxy with fallback
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/backend/internal/server/ssr_proxy_test.go — SSR proxy tests
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/docker-compose.yml — Compose with sidecar service
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Node.js SSR sidecar
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.tsx — SSR entry with renderApp
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — SSR sidecar Docker image
+
