@@ -14,3 +14,8 @@ Step 1: Created ticket, wrote comprehensive SSR design doc with current-state an
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/design-doc/01-ssr-sidecar-analysis-and-implementation-guide.md — Primary design document
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/reference/01-implementation-diary.md — Implementation diary
 
+
+## 2026-06-06
+
+Added research logbook: 27 resources cataloged across 4 categories (backend, frontend, glazed reference, design docs) with status assessment and update requirements
+
