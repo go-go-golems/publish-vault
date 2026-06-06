@@ -16,7 +16,7 @@
 - [x] 2.3 Add `build:ssr` script to `package.json`: `vite build --ssr src/entry-server.tsx --outDir dist/ssr`
 - [x] 2.4 Add `build:all` script: `pnpm build && pnpm build:ssr`
 - [x] 2.5 Verify `pnpm build:ssr` produces `dist/ssr/entry-server.js`
-- [ ] 2.6 Write unit test for `entry-server.tsx` (`renderApp` with mock data)
+- [x] 2.6 Write unit test for `entry-server.tsx` (`renderApp` with mock data)
 
 ## Phase 3: Node.js sidecar
 

@@ -44,3 +44,13 @@ Phases 1-5 complete: store factory, entry-client, entry-server, server.mjs sidec
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.tsx — SSR entry with renderApp
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — SSR sidecar Docker image
 
+
+## 2026-06-06
+
+Task 2.6: Added entry-server unit tests (11 passing), exported parseRoute, fixed React key warnings in SSR components (commit 78ffb27)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.test.tsx — 11 unit tests for renderApp and parseRoute
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vitest.config.ts — Vitest config for SSR tests
+
