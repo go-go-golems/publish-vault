@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3000",
     "build": "vite build",
+    "build:ssr": "vite build --ssr src/entry-server.tsx --outDir dist/ssr",
+    "build:all": "pnpm build && pnpm build:ssr",
+    "ssr": "node server.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
