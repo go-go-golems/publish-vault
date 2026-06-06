@@ -65,6 +65,20 @@ topics:
       description: github-actions topic
     - slug: vault
       description: vault topic
+    - slug: a14y
+      description: Agent accessibility and readability audits
+    - slug: hydration
+      description: React hydration (reusing server-rendered DOM on client)
+    - slug: node-js
+      description: Node.js runtime and sidecar
+    - slug: react
+      description: React UI framework
+    - slug: seo
+      description: Search engine optimization
+    - slug: ssr
+      description: Server-side rendering
+    - slug: sidecar
+      description: Sidecar container pattern
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
