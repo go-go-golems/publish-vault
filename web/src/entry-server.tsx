@@ -91,49 +91,58 @@ async function preloadCache(
  * This produces the SEO-visible content that crawlers and agents see.
  */
 function SSRNotePage({ note }: { note: Note }) {
-  return React.createElement("div", { className: "ssr-note" }, [
-    React.createElement("h1", { key: "title", className: "text-xl font-bold" }, note.title),
-    note.tags?.length > 0
-      ? React.createElement(
-          "div",
-          { key: "tags", className: "flex gap-1 mt-2 mb-4 flex-wrap" },
-          note.tags.map((tag) =>
-            React.createElement(
-              "span",
-              { key: tag, className: "text-xs px-1 border border-current" },
-              tag
-            )
+  const elements: React.ReactElement[] = [];
+
+  elements.push(React.createElement("h1", { key: "title", className: "text-xl font-bold" }, note.title));
+
+  if (note.tags?.length > 0) {
+    elements.push(
+      React.createElement(
+        "div",
+        { key: "tags", className: "flex gap-1 mt-2 mb-4 flex-wrap" },
+        note.tags.map((tag) =>
+          React.createElement(
+            "span",
+            { key: tag, className: "text-xs px-1 border border-current" },
+            tag
           )
         )
-      : null,
-    React.createElement("div", {
-      key: "body",
-      className: "note-prose",
-      dangerouslySetInnerHTML: { __html: note.html },
-    }),
-    note.backlinks?.length > 0
-      ? React.createElement("div", { key: "backlinks", className: "mt-8 pt-4 border-t" }, [
-          React.createElement(
-            "h2",
-            { className: "text-sm font-bold uppercase tracking-wider mb-2" },
-            `Linked Mentions (${note.backlinks.length})`
-          ),
-          React.createElement(
-            "ul",
-            { className: "list-disc pl-4" },
-            note.backlinks.map((slug) =>
-              React.createElement("li", { key: slug }, [
-                React.createElement(
-                  "a",
-                  { href: `/note/${slug}`, className: "wiki-link" },
-                  slug
-                ),
-              ])
-            )
-          ),
-        ])
-      : null,
-  ]);
+      )
+    );
+  }
+
+  elements.push(React.createElement("div", {
+    key: "body",
+    className: "note-prose",
+    dangerouslySetInnerHTML: { __html: note.html },
+  }));
+
+  if (note.backlinks?.length > 0) {
+    elements.push(
+      React.createElement("div", { key: "backlinks", className: "mt-8 pt-4 border-t" }, [
+        React.createElement(
+          "h2",
+          { key: "heading", className: "text-sm font-bold uppercase tracking-wider mb-2" },
+          `Linked Mentions (${note.backlinks.length})`
+        ),
+        React.createElement(
+          "ul",
+          { key: "list", className: "list-disc pl-4" },
+          note.backlinks.map((slug) =>
+            React.createElement("li", { key: slug }, [
+              React.createElement(
+                "a",
+                { key: "link", href: `/note/${slug}`, className: "wiki-link" },
+                slug
+              ),
+            ])
+          )
+        ),
+      ])
+    );
+  }
+
+  return React.createElement("div", { className: "ssr-note" }, elements);
 }
 
 /**
@@ -160,13 +169,13 @@ function SSRHomePage({
         React.createElement("li", { key: note.slug }, [
           React.createElement(
             "a",
-            { href: `/note/${note.slug}` },
+            { key: "link", href: `/note/${note.slug}` },
             note.title
           ),
           note.excerpt
             ? React.createElement(
                 "p",
-                { className: "text-sm text-gray-500" },
+                { key: "excerpt", className: "text-sm text-gray-500" },
                 note.excerpt.slice(0, 120)
               )
             : null,
@@ -199,7 +208,7 @@ interface ParsedRoute {
   slug?: string;
 }
 
-function parseRoute(url: string): ParsedRoute {
+export function parseRoute(url: string): ParsedRoute {
   const pathname = url.split("#")[0]?.split("?")[0] || "/";
   if (pathname === "/search") return { type: "search" };
   if (pathname.startsWith("/note/")) {
