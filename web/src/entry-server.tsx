@@ -265,7 +265,7 @@ export async function renderApp(
   }
 
   const html = renderToString(
-    React.createElement(Provider, { store }, content)
+    <Provider store={store}>{content}</Provider>
   );
 
   return { html, preloadedState: store.getState() };
