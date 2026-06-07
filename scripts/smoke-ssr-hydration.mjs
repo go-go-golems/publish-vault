@@ -124,18 +124,33 @@ async function assertRawSSR(baseUrl) {
 
 async function assertBrowserHydration(baseUrl) {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
   const consoleProblems = [];
   const pageErrors = [];
-
-  page.on("console", (message) => {
-    if (["error", "warning"].includes(message.type())) {
-      consoleProblems.push(`${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  const attachProblemListeners = (page) => {
+    page.on("console", (message) => {
+      if (["error", "warning"].includes(message.type())) {
+        consoleProblems.push(`${message.type()}: ${message.text()}`);
+      }
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+  };
 
   try {
+    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    attachProblemListeners(mobilePage);
+    await mobilePage.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+    if ((await mobilePage.getByTestId("mobile-sidebar-backdrop").count()) > 0) {
+      fail("mobile fresh load unexpectedly rendered the sidebar backdrop");
+    }
+    if ((await mobilePage.getByTestId("mobile-sidebar-drawer").count()) > 0) {
+      fail("mobile fresh load unexpectedly rendered the off-canvas sidebar drawer");
+    }
+    await mobilePage.getByRole("button", { name: /Toggle sidebar/i }).click();
+    await mobilePage.getByTestId("mobile-sidebar-drawer").waitFor({ timeout: 10_000 });
+    await mobilePage.close();
+
+    const page = await browser.newPage();
+    attachProblemListeners(page);
     await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
     const homeTitle = await page.title();
     if (!homeTitle.includes("Test Vault")) fail(`Unexpected / title: ${homeTitle}`);
