@@ -359,3 +359,29 @@ The cleanup also removed the final stale client entry (`web/src/main.tsx`) and m
 ### Technical details
 - Raw SSR header after fix includes `X-Powered-By: Express` and non-empty root markup.
 - Browser console after `/`, `/note/index`, and sidebar navigation: `0` errors, `0` warnings.
+
+## Step 5: Obsidian Vault Report
+
+Wrote a comprehensive textbook-style project report for the Obsidian vault at `go-go-parc` documenting the entire React Router SSR hydration cleanup.
+
+**Prompt context:**
+- User: "Write a detailed project report for the obsidiani vault about our progress so far, using a textbook writing style, commit and push the vault once done."
+- Assistant: Wrote the report covering the problem statement, solution architecture, six implementation phases, live debugging of two production-class failures, files changed, key learnings, and future work.
+
+**What I did:**
+- Wrote `publish-vault-ssr-implementation-report.md` (696 lines) in the vault at `~/code/wesen/go-go-golems/go-go-parc`
+- Commit: `c92c049` — "docs: publish-vault SSR hydration implementation report"
+- Pushed to remote `main`
+
+**Report structure:**
+1. Introduction — three-layer architecture overview
+2. The Problem — four concrete manifestations of the divergent architecture
+3. The Solution — architecture diagrams, route architecture, data loading, title architecture
+4. Implementation Phases — six detailed phases with code examples
+5. Live Testing — Bug 1 (duplicate React instances) and Bug 2 (MIME type error) with root cause analysis
+6. Files Changed — comprehensive table
+7. Key Learnings — five numbered insights
+8. Future Work — four actionable follow-ups
+9. Summary
+
+Commit and push successful.
