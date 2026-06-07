@@ -971,3 +971,77 @@ The fix removes the unconditional `COPY web/patches ./patches` from both the SSR
 - Failed job: `release-ssr / publish`, job id `79962807976`.
 - Failed step: `Build and optionally push image`.
 - Root error: `"/web/patches": not found`.
+
+## Step 13: Restore Closed Mobile Sidebar Initial State
+
+This step addressed a PR review finding: making `sidebarOpen` statically `true` fixed SSR/client first-render determinism, but it also meant mobile pages initially rendered the off-canvas drawer and backdrop. The fix keeps the Redux initial state deterministic for hydration, while making the mobile drawer itself mount-safe and applying the old mobile default after the client knows the viewport.
+
+On the server and on the first client render, the desktop sidebar state remains deterministic. After mount, `VaultLayout` checks `window.innerWidth`; for mobile viewports it dispatches `setSidebarOpen(false)` and `setRightPanelOpen(false)`. The mobile drawer/backdrop are also gated by a local `hasMounted` flag, so they are not emitted into SSR/first-hydration markup just because the desktop-safe Redux default is `true`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "P2 Badge Restore the closed mobile sidebar initial state\n\nOn mobile viewports (<768px), this default now makes every fresh page load render the off-canvas sidebar and backdrop immediately, because VaultLayout shows the fixed md:hidden drawer whenever sidebarOpen is true. The previous browser-side default kept mobile navigation closed; for SSR hydration safety this needs a post-mount viewport adjustment or separate mobile default rather than leaving sidebarOpen true for mobile users.\n\nUseful? React with 👍 / 👎.\n\n\nweb/src/store/uiSlice.ts\nconst initialState: UIState = {\n  sidebarOpen: typeof window !== \"undefined\" ? window.innerWidth >= 768 : true,\n  rightPanelOpen: typeof window !== \"undefined\" ? window.innerWidth >= 768 : true,\n  sidebarOpen: true,"
+
+**Assistant interpretation:** Treat the review comment as valid and fix the mobile fresh-load behavior without reintroducing hydration mismatches.
+
+**Inferred user intent:** Restore the old mobile UX where navigation starts closed, while preserving SSR-safe deterministic initial Redux state.
+
+**Commit (code):** 11641d232213c205f5aa7d6725ad554478f67228 — "fix: close mobile sidebar after hydration"
+
+### What I did
+- Updated `web/src/components/pages/VaultLayout/VaultLayout.tsx`:
+  - imported `setSidebarOpen` and `setRightPanelOpen`,
+  - added local `hasMounted` state,
+  - added a mount effect that closes sidebar and right panel on `<768px` viewports,
+  - changed mobile drawer/backdrop rendering from `sidebarOpen` to `mobileSidebarOpen = hasMounted && sidebarOpen`,
+  - added `data-testid` attributes for the mobile backdrop and drawer.
+- Extended `scripts/smoke-ssr-hydration.mjs`:
+  - creates a fresh mobile viewport page,
+  - verifies mobile fresh load does not render the sidebar backdrop/drawer,
+  - clicks the toggle button and verifies the drawer can still open,
+  - then runs the existing desktop hydration/navigation checks.
+
+### Why
+- Reverting `uiSlice` to `window.innerWidth` would reintroduce nondeterministic SSR/client first-render state.
+- The correct fix is to keep the store's SSR-safe initial state and make viewport-dependent behavior happen only after mount.
+
+### What worked
+- TypeScript check passed:
+  - `pnpm --dir web check`
+- Full live smoke test passed:
+  - `pnpm --dir web smoke:ssr`
+  - raw SSR HTML ok,
+  - mobile fresh load closed,
+  - mobile toggle opens drawer,
+  - desktop hydration/navigation has `0` console warnings/errors.
+
+### What didn't work
+- N/A. The first implementation passed validation.
+
+### What I learned
+- A deterministic global UI default can still have viewport-specific rendering consequences if a component directly uses it for mobile-only markup.
+- The clean split is: Redux initial state stays SSR-safe; viewport-specific mobile presentation waits until after mount.
+
+### What was tricky to build
+- The drawer/backdrop needed a local mount gate in addition to the post-mount Redux adjustment. Without the gate, mobile SSR HTML could still include visible `md:hidden` drawer markup until JavaScript runs.
+- The smoke test needed to prove both sides of the behavior: closed on fresh mobile load, still openable from the mobile menu button.
+
+### What warrants a second pair of eyes
+- Confirm that closing `rightPanelOpen` on mobile after mount is still desired; it restores the previous viewport-derived default for both UI panels.
+- Confirm that the mobile drawer not being present in SSR HTML is acceptable for SEO/accessibility; desktop navigation still appears in SSR markup.
+
+### What should be done in the future
+- If responsive state becomes more complex, consider a dedicated hydration-safe viewport hook with explicit user-override semantics.
+
+### Code review instructions
+- Review `VaultLayout.tsx` around `hasMounted`, `mobileSidebarOpen`, and the mount effect.
+- Review `scripts/smoke-ssr-hydration.mjs` mobile viewport assertions.
+- Validate with:
+  - `pnpm --dir web check`
+  - `pnpm --dir web smoke:ssr`
+
+### Technical details
+- Fresh mobile viewport used in the smoke test: `390x844`.
+- New test IDs:
+  - `mobile-sidebar-backdrop`
+  - `mobile-sidebar-drawer`

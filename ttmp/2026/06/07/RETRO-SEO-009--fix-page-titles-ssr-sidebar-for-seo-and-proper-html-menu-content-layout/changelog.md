@@ -128,3 +128,13 @@ Post-close CI fix: removed unconditional Docker COPY of optional web/patches fro
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/Dockerfile — Same optional patches fix for main app image
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — Avoids missing optional web/patches in clean CI checkout
 
+
+## 2026-06-07
+
+Post-close PR review fix: restored closed mobile sidebar initial state with a hydration-safe post-mount viewport adjustment and smoke-test coverage (commit 11641d2).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/scripts/smoke-ssr-hydration.mjs — Mobile fresh-load sidebar regression check
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/components/pages/VaultLayout/VaultLayout.tsx — Hydration-safe mobile sidebar default
+
