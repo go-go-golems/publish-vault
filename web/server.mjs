@@ -12,6 +12,7 @@
 
 import express from "express";
 import { readFileSync } from "fs";
+import { createRequire } from "module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -20,6 +21,50 @@ const PORT = parseInt(process.env.SSR_PORT || "8089", 10);
 const API_BASE = process.env.API_BASE || "http://localhost:8080";
 const BASE_URL = process.env.BASE_URL || "http://localhost:8080";
 const WEB_DIR = dirname(fileURLToPath(import.meta.url));
+const requireFromWeb = createRequire(import.meta.url);
+
+function packageNameForSpecifier(specifier) {
+  if (specifier.startsWith("@")) {
+    const [scope, name] = specifier.split("/");
+    return `${scope}/${name}`;
+  }
+  return specifier.split("/")[0];
+}
+
+function packageVersion(packageName) {
+  try {
+    const packageJsonPath = requireFromWeb.resolve(`${packageName}/package.json`);
+    return JSON.parse(readFileSync(packageJsonPath, "utf-8")).version;
+  } catch {
+    return "unknown";
+  }
+}
+
+async function logSSRDependencyResolution() {
+  if (process.env.SSR_DEBUG_RESOLUTION !== "1") return;
+
+  const specifiers = [
+    "react",
+    "react-dom",
+    "react-dom/server",
+    "react-router",
+    "react-router-dom",
+    "react-resizable-panels",
+  ];
+
+  console.log("SSR dependency resolution diagnostics:");
+  for (const specifier of specifiers) {
+    try {
+      const resolved = await import.meta.resolve(specifier);
+      const version = packageVersion(packageNameForSpecifier(specifier));
+      console.log(`  ${specifier}@${version} -> ${resolved}`);
+    } catch (error) {
+      console.log(`  ${specifier}@unknown -> <unresolved: ${error.message}>`);
+    }
+  }
+}
+
+await logSSRDependencyResolution();
 
 // --- Dynamic import of the SSR bundle ---
 const { renderApp } = await import("./dist/ssr/entry-server.js");
