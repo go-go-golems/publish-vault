@@ -147,6 +147,7 @@ def handle_validate(rid, ctx):
 def handle_launch(rid, ctx):
     vault = os.environ.get("VAULT_DIR", "vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
+    page_title = os.environ.get("PAGE_TITLE", "")
 
     # Resolve vault path relative to repo root for the backend command
     root = repo_root(ctx)
@@ -171,6 +172,8 @@ def handle_launch(rid, ctx):
                    "--ssr-url", f"http://127.0.0.1:{ssr_port}"]
     if vault_name:
         backend_cmd.extend(["--vault-name", vault_name])
+    if page_title:
+        backend_cmd.extend(["--page-title", page_title])
 
     # Larger vaults (absolute paths, e.g. go-go-parc) need more time for the initial load
     health_timeout = 60000 if vault_path.is_absolute() else 30000

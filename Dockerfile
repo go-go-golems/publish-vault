@@ -2,7 +2,8 @@ FROM node:22-alpine AS web-builder
 WORKDIR /src/web
 RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml ./
-COPY web/patches ./patches
+# web/patches is optional; do not copy it unconditionally when no pnpm
+# patchedDependencies are in use.
 RUN pnpm install --frozen-lockfile
 COPY web ./
 ARG VITE_API_URL=

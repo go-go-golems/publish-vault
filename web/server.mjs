@@ -12,11 +12,59 @@
 
 import express from "express";
 import { readFileSync } from "fs";
+import { createRequire } from "module";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 // --- Config ---
 const PORT = parseInt(process.env.SSR_PORT || "8089", 10);
 const API_BASE = process.env.API_BASE || "http://localhost:8080";
 const BASE_URL = process.env.BASE_URL || "http://localhost:8080";
+const WEB_DIR = dirname(fileURLToPath(import.meta.url));
+const requireFromWeb = createRequire(import.meta.url);
+
+function packageNameForSpecifier(specifier) {
+  if (specifier.startsWith("@")) {
+    const [scope, name] = specifier.split("/");
+    return `${scope}/${name}`;
+  }
+  return specifier.split("/")[0];
+}
+
+function packageVersion(packageName) {
+  try {
+    const packageJsonPath = requireFromWeb.resolve(`${packageName}/package.json`);
+    return JSON.parse(readFileSync(packageJsonPath, "utf-8")).version;
+  } catch {
+    return "unknown";
+  }
+}
+
+async function logSSRDependencyResolution() {
+  if (process.env.SSR_DEBUG_RESOLUTION !== "1") return;
+
+  const specifiers = [
+    "react",
+    "react-dom",
+    "react-dom/server",
+    "react-router",
+    "react-router-dom",
+    "react-resizable-panels",
+  ];
+
+  console.log("SSR dependency resolution diagnostics:");
+  for (const specifier of specifiers) {
+    try {
+      const resolved = await import.meta.resolve(specifier);
+      const version = packageVersion(packageNameForSpecifier(specifier));
+      console.log(`  ${specifier}@${version} -> ${resolved}`);
+    } catch (error) {
+      console.log(`  ${specifier}@unknown -> <unresolved: ${error.message}>`);
+    }
+  }
+}
+
+await logSSRDependencyResolution();
 
 // --- Dynamic import of the SSR bundle ---
 const { renderApp } = await import("./dist/ssr/entry-server.js");
@@ -40,7 +88,7 @@ async function fetchAPI(path) {
   }
 }
 
-// Parse URL path into route type + optional slug
+// Parse URL path into route type + optional slug.
 function parseRoute(pathname) {
   if (pathname === "/search") return { type: "search" };
   if (pathname.startsWith("/note/")) {
@@ -50,10 +98,51 @@ function parseRoute(pathname) {
   return { type: "home" };
 }
 
+// Keep this in sync with web/src/App.tsx chooseHomeSlug(). The SSR sidecar
+// needs to prefetch the same home note that the hydrated app will render.
+function chooseHomeSlug(notes) {
+  if (!Array.isArray(notes) || notes.length === 0) return null;
+
+  const normalized = notes.map((note) => ({
+    note,
+    slug: String(note.slug || "").toLowerCase(),
+    title: String(note.title || "").toLowerCase(),
+    path: String(note.path || "").toLowerCase(),
+  }));
+
+  const preferredHomeSlugs = [
+    "index",
+    "home",
+    "readme",
+    "projects/00-project-index-repos-and-concepts",
+    "research/institute/guidelines/guidelines-index",
+  ];
+
+  const indexScore = (item) => {
+    const depth = item.slug.split("/").length;
+    const sourcePenalty = item.slug.includes("/sources/") || item.path.includes("/sources/") ? 1000 : 0;
+    const titlePenalty = item.title === "index" ? 0 : 10;
+    return sourcePenalty + depth + titlePenalty;
+  };
+
+  const eligibleIndexes = normalized
+    .filter(({ slug, path }) => (slug === "index" || slug.endsWith("/index")) && !slug.includes("/sources/") && !path.includes("/sources/"))
+    .sort((a, b) => indexScore(a) - indexScore(b));
+
+  return (
+    preferredHomeSlugs.map((candidate) => normalized.find(({ slug }) => slug === candidate)?.note.slug).find(Boolean) ??
+    normalized.find(({ title }) => ["index", "home", "readme"].includes(title))?.note.slug ??
+    normalized.find(({ path }) => path === "index.md" || path === "home.md" || path === "readme.md")?.note.slug ??
+    eligibleIndexes[0]?.note.slug ??
+    normalized.find(({ slug }) => slug.includes("project-index"))?.note.slug ??
+    notes[0].slug
+  );
+}
+
 // Read the SPA index.html shell (built by Vite)
 function getIndexHtml() {
   try {
-    return readFileSync("./dist/index.html", "utf-8");
+    return readFileSync(join(WEB_DIR, "dist", "index.html"), "utf-8");
   } catch {
     // Fallback: minimal shell
     return `<!doctype html>
@@ -109,6 +198,11 @@ app.get("*", async (req, res) => {
     let note = null;
     if (route.type === "note" && route.slug) {
       note = await fetchAPI(`/api/notes/${encodeURIComponent(route.slug)}`);
+    } else if (route.type === "home" && notes?.length) {
+      const homeSlug = chooseHomeSlug(notes);
+      if (homeSlug) {
+        note = await fetchAPI(`/api/notes/${encodeURIComponent(homeSlug)}`);
+      }
     }
 
     // Missing note routes should be real 404s. Otherwise crawlers treat
@@ -129,9 +223,10 @@ app.get("*", async (req, res) => {
 
     // 4. Determine page title and description
     const vaultName = config?.vaultName || "Vault";
+    const siteTitle = config?.pageTitle || vaultName;
     const title = note?.title
-      ? `${note.title} — ${vaultName}`
-      : `${config?.pageTitle || vaultName}`;
+      ? `${note.title} — ${siteTitle}`
+      : siteTitle;
     const description =
       note?.excerpt ||
       (notes?.length

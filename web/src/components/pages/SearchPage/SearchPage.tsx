@@ -1,16 +1,16 @@
 /**
  * PAGE: SearchPage
  * Design: Retro System 1 — search results list with score, tags, excerpt.
- * Navigation is handled internally via Wouter's useLocation hook.
+ * Navigation is handled internally via React Router's useNavigate hook.
  */
-import React, { useCallback } from "react";
-import { useLocation } from "wouter";
+import React, { useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { NoteCard } from "../../molecules/NoteCard/NoteCard";
 import { SearchBar } from "../../molecules/SearchBar/SearchBar";
 import { Badge } from "../../atoms/Badge/Badge";
 import { Icon } from "../../atoms/Icon/Icon";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
-import { useSearchQuery } from "../../../store/vaultApi";
+import { useGetConfigQuery, useSearchQuery } from "../../../store/vaultApi";
 import { useAppSelector, useAppDispatch } from "../../../hooks/redux";
 import { setSearchQuery, setActiveNote } from "../../../store/uiSlice";
 
@@ -20,8 +20,14 @@ export interface SearchPageProps {
 
 export const SearchPage: React.FC<SearchPageProps> = () => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const query = useAppSelector((s) => s.ui.searchQuery);
+  const { data: config } = useGetConfigQuery();
+
+  useEffect(() => {
+    const siteTitle = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
+    document.title = `Search — ${siteTitle}`;
+  }, [config?.pageTitle, config?.vaultName]);
 
   const { data: results, isFetching } = useSearchQuery(query, {
     skip: query.trim().length < 2,

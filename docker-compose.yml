@@ -19,6 +19,10 @@ services:
       - "--port"
       - "8080"
       - "--serve-web"
+      - "--vault-name"
+      - "${VAULT_NAME:-My Vault}"
+      - "--page-title"
+      - "${PAGE_TITLE:-My Vault}"
       - "--ssr-url"
       - "http://ssr:8089"
     restart: unless-stopped

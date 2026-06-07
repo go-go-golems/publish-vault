@@ -79,6 +79,10 @@ topics:
       description: Server-side rendering
     - slug: sidecar
       description: Sidecar container pattern
+    - slug: html-layout
+      description: HTML layout and semantic structure
+    - slug: meta-tags
+      description: HTML meta tags for SEO (og:title, description, JSON-LD)
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes

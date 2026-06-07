@@ -5,7 +5,7 @@
  * Fetches note by slug via RTK Query.
  */
 import React, { useMemo, useCallback, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { NoteRenderer } from "../../organisms/NoteRenderer/NoteRenderer";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
@@ -16,6 +16,7 @@ import {
   ResizableHandle,
 } from "../../ui/resizable";
 import {
+  useGetConfigQuery,
   useGetNoteQuery,
   useListNotesQuery,
 } from "../../../store/vaultApi";
@@ -28,7 +29,7 @@ export interface NotePageProps {
 
 export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
 
   useEffect(() => {
@@ -57,6 +58,13 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     isLoading,
     isError,
   } = useGetNoteQuery(slug, { skip: !slug });
+  const { data: config } = useGetConfigQuery();
+
+  useEffect(() => {
+    if (!note) return;
+    const siteTitle = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
+    document.title = `${note.title} — ${siteTitle}`;
+  }, [config?.pageTitle, config?.vaultName, note]);
 
   const { data: allNotes } = useListNotesQuery();
 

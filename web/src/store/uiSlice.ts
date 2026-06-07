@@ -7,9 +7,11 @@ interface UIState {
   activeNoteSlug: string | null;
 }
 
+// Keep the initial state independent of browser-only viewport data so the
+// first client render matches the server-rendered markup during hydration.
 const initialState: UIState = {
-  sidebarOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
-  rightPanelOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
+  sidebarOpen: true,
+  rightPanelOpen: true,
   searchQuery: "",
   activeNoteSlug: null,
 };

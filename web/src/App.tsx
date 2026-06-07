@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Provider } from "react-redux";
-import { Route, Switch, useLocation } from "wouter";
+import { BrowserRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { store } from "./store/store";
 import { VaultLayout } from "./components/pages/VaultLayout/VaultLayout";
 import { NotePage } from "./components/pages/NotePage/NotePage";
@@ -8,21 +8,23 @@ import { SearchPage } from "./components/pages/SearchPage/SearchPage";
 import { Icon } from "./components/atoms/Icon/Icon";
 import { useListNotesQuery, useGetConfigQuery, type NoteListItem } from "./store/vaultApi";
 
-function Router() {
+export function AppRoutes() {
   const { data: config } = useGetConfigQuery();
+  const location = useLocation();
 
   useEffect(() => {
+    if (location.pathname === "/" || location.pathname.startsWith("/note/") || location.pathname === "/search") return;
     document.title = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
-  }, [config?.pageTitle, config?.vaultName]);
+  }, [config?.pageTitle, config?.vaultName, location.pathname]);
 
   return (
     <VaultLayout vaultName={config?.vaultName}>
-      <Switch>
-        <Route path="/" component={HomeRedirect} />
-        <Route path="/note/*" component={NoteRoute} />
-        <Route path="/search" component={SearchRoute} />
-        <Route component={NotFoundPage} />
-      </Switch>
+      <Routes>
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/note/*" element={<NoteRoute />} />
+        <Route path="/search" element={<SearchRoute />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     </VaultLayout>
   );
 }
@@ -92,9 +94,9 @@ function indexScore(item: { slug: string; title: string; path: string }) {
   return sourcePenalty + depth + titlePenalty;
 }
 
-function NoteRoute(props: { params?: Record<string, string | undefined> }) {
-  // regexparam (used by Wouter) uses "*" as the key for wildcard segments
-  const raw = props.params?.["*"] ?? "";
+function NoteRoute() {
+  // React Router uses "*" as the key for wildcard path segments.
+  const raw = useParams()["*"] ?? "";
   const slug = decodeURIComponent(raw);
   return slug ? <NotePage slug={slug} /> : <HomeRedirect />;
 }
@@ -120,7 +122,9 @@ function NotFoundPage() {
 export default function App() {
   return (
     <Provider store={store}>
-      <Router />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
     </Provider>
   );
 }

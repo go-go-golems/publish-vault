@@ -8,8 +8,8 @@
  *   - Monochrome base with #0000cc link blue and #005500 tag green accents
  *   - Aged-paper (#faf8f4) background, ink (#1a1a1a) foreground
  */
-import React, { useCallback } from "react";
-import { useLocation } from "wouter";
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import { Sidebar } from "../../organisms/Sidebar/Sidebar";
 import { Icon } from "../../atoms/Icon/Icon";
@@ -22,7 +22,9 @@ import { useGetTreeQuery } from "../../../store/vaultApi";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
 import {
   toggleSidebar,
+  setSidebarOpen,
   toggleRightPanel,
+  setRightPanelOpen,
   setSearchQuery,
   setActiveNote,
 } from "../../../store/uiSlice";
@@ -32,16 +34,41 @@ export interface VaultLayoutProps {
   vaultName?: string;
 }
 
+function HydrationSafeClock() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
+      {mounted ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+    </span>
+  );
+}
+
 export const VaultLayout: React.FC<VaultLayoutProps> = ({
   children,
   vaultName = "Vault",
 }) => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
   const activeSlug = useAppSelector((s) => s.ui.activeNoteSlug);
   const { data: tree, isLoading: treeLoading } = useGetTreeQuery();
+  const [hasMounted, setHasMounted] = useState(false);
+  const mobileSidebarOpen = hasMounted && sidebarOpen;
+
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      dispatch(setSidebarOpen(false));
+      dispatch(setRightPanelOpen(false));
+    }
+    setHasMounted(true);
+  }, [dispatch]);
 
   const handleNavigate = useCallback(
     (slug: string) => {
@@ -141,14 +168,13 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           <Icon name="panel-right" size={13} />
         </button>
 
-        <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
-          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+        <HydrationSafeClock />
       </header>
 
       {/* ── Mobile sidebar backdrop ── */}
-      {sidebarOpen && (
+      {mobileSidebarOpen && (
         <div
+          data-testid="mobile-sidebar-backdrop"
           className="fixed inset-0 bg-black/30 z-30 md:hidden"
           onClick={closeSidebarOnBackdrop}
           aria-hidden="true"
@@ -158,8 +184,9 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
       {/* ── Body with responsive layout ── */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* ── Mobile: sidebar as off-canvas drawer ── */}
-        {sidebarOpen && (
+        {mobileSidebarOpen && (
           <div
+            data-testid="mobile-sidebar-drawer"
             className="fixed inset-y-0 left-0 z-40 w-[80vw] max-w-[320px] md:hidden"
             style={{ top: 28 }}
           >

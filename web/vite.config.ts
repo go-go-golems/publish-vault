@@ -213,6 +213,7 @@ export default defineConfig({
       "@shared": path.resolve(WEB_ROOT, "../shared"),
       "@assets": path.resolve(WEB_ROOT, "assets"),
     },
+    dedupe: ["react", "react-dom", "react-router", "react-router-dom"],
   },
   envDir: WEB_ROOT,
   root: WEB_ROOT,
@@ -227,15 +228,20 @@ export default defineConfig({
   },
 
   // SSR build configuration.
-  // Produces dist/ssr/entry-server.js — a CJS/ESM module that the
-  // Node.js sidecar (server.mjs) imports to render React on the server.
+  // Produces dist/ssr/entry-server.js — an ESM module that the Node.js
+  // sidecar (server.mjs) imports to render React on the server.
   ssr: {
-    noExternal: [
+    // Use a consistent Node SSR dependency model: React and hook-using
+    // React libraries are externalized together and resolved from the
+    // sidecar runtime's web/node_modules tree. This avoids the bad mixed
+    // graph where React is bundled but router/component libraries import a
+    // second external React instance.
+    external: [
       "react",
       "react-dom",
-      "@reduxjs/toolkit",
-      "react-redux",
-      "use-sync-external-store",
+      "react-router",
+      "react-router-dom",
+      "react-resizable-panels",
     ],
   },
   server: {
