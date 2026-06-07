@@ -118,3 +118,13 @@ Closed remaining original tasks: validation is covered by smoke/full checks, and
 
 Ticket closed
 
+
+## 2026-06-07
+
+Post-close CI fix: removed unconditional Docker COPY of optional web/patches from both image Dockerfiles after GitHub Actions failed because the empty directory is not present in clean checkouts.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/Dockerfile — Same optional patches fix for main app image
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — Avoids missing optional web/patches in clean CI checkout
+

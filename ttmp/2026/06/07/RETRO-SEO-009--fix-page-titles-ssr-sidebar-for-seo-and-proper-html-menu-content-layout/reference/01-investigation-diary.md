@@ -904,3 +904,70 @@ The important user-visible fix is that production no longer has to fall back to 
   - `--page-title PARC`
 - Devctl `go-go-parc` profile now exports:
   - `PAGE_TITLE: PARC`
+
+## Step 12: Fix CI Image Build Failure from Optional `web/patches`
+
+After the PR image build ran in GitHub Actions, the SSR image job failed before dependency installation. The Dockerfile unconditionally copied `web/patches`, but that directory was empty and untracked after the Wouter patch was removed. Local builds had an empty directory on disk, so the problem only appeared in a clean CI checkout.
+
+The fix removes the unconditional `COPY web/patches ./patches` from both the SSR sidecar Dockerfile and the main app Dockerfile. There are currently no pnpm `patchedDependencies`, so no patches need to be present before `pnpm install --frozen-lockfile`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "build image failed: https://github.com/go-go-golems/publish-vault/actions/runs/27094051846/job/79962807976?pr=4"
+
+**Assistant interpretation:** Inspect the failed GitHub Actions image-build job, identify the CI-only Docker failure, patch it, validate locally, and commit the fix.
+
+**Inferred user intent:** Unblock the PR image-publish workflow so the new publish-vault and SSR sidecar images can be built before the GitOps deployment update is pushed.
+
+**Commit (code):** 43535c1 — ":ambulance: fix dockerfiles for CICD faiss testing"
+
+### What I did
+- Fetched the failed Actions job log with:
+  - `gh api repos/go-go-golems/publish-vault/actions/jobs/79962807976/logs`
+- Identified the failure:
+  - `ERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum ... "/web/patches": not found`
+  - failing Dockerfile line: `COPY web/patches ./patches`
+- Removed the unconditional `COPY web/patches ./patches` from:
+  - `web/ssr.Dockerfile`
+  - `Dockerfile`
+- Added comments explaining that `web/patches` is optional and should not be copied when no pnpm patched dependencies are in use.
+
+### Why
+- Docker `COPY` fails if the source path does not exist in the build context.
+- Empty directories are not tracked by Git, so the clean CI checkout did not contain `web/patches` even though the local working tree did.
+- The main app Dockerfile had the same latent issue, so it was fixed alongside the failed SSR Dockerfile.
+
+### What worked
+- Local SSR sidecar image build passed:
+  - `docker build -f web/ssr.Dockerfile -t retro-ssr-ci-fix:local .`
+- Local main app image build passed:
+  - `docker build -f Dockerfile -t retro-app-ci-fix:local .`
+
+### What didn't work
+- `gh run view --job ... --log` did not return useful output in this environment.
+- The raw Actions log API worked and showed the exact BuildKit error.
+
+### What I learned
+- Removing the Wouter patch file also removed the last tracked content under `web/patches`; Dockerfiles must not assume optional patch directories exist.
+- If pnpm patches are reintroduced later, we should either track the directory with a real patch file or add a `.gitkeep` intentionally and keep the Dockerfile copy aligned with `patchedDependencies`.
+
+### What was tricky to build
+- The bug was hidden locally because the directory existed as an untracked empty directory. The clean CI checkout is the authoritative reproduction for missing optional paths.
+- Fixing only `web/ssr.Dockerfile` would unblock the reported job but leave the main app image with the same failure mode. Both image Dockerfiles now follow the same rule.
+
+### What warrants a second pair of eyes
+- If future pnpm patches are expected, reviewer should decide whether to reintroduce a tracked `web/patches/.gitkeep` plus Docker copy, or let `COPY web ./` bring patches in after install and adjust install ordering.
+
+### What should be done in the future
+- Rerun the failed GitHub Actions workflow after pushing this commit.
+
+### Code review instructions
+- Review `Dockerfile` and `web/ssr.Dockerfile` around the dependency-install layers.
+- Validate with:
+  - `docker build -f web/ssr.Dockerfile -t retro-ssr-ci-fix:local .`
+  - `docker build -f Dockerfile -t retro-app-ci-fix:local .`
+
+### Technical details
+- Failed job: `release-ssr / publish`, job id `79962807976`.
+- Failed step: `Build and optionally push image`.
+- Root error: `"/web/patches": not found`.
