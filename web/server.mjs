@@ -40,7 +40,7 @@ async function fetchAPI(path) {
   }
 }
 
-// Parse URL path into route type + optional slug
+// Parse URL path into route type + optional slug.
 function parseRoute(pathname) {
   if (pathname === "/search") return { type: "search" };
   if (pathname.startsWith("/note/")) {
@@ -48,6 +48,47 @@ function parseRoute(pathname) {
     return { type: "note", slug };
   }
   return { type: "home" };
+}
+
+// Keep this in sync with web/src/App.tsx chooseHomeSlug(). The SSR sidecar
+// needs to prefetch the same home note that the hydrated app will render.
+function chooseHomeSlug(notes) {
+  if (!Array.isArray(notes) || notes.length === 0) return null;
+
+  const normalized = notes.map((note) => ({
+    note,
+    slug: String(note.slug || "").toLowerCase(),
+    title: String(note.title || "").toLowerCase(),
+    path: String(note.path || "").toLowerCase(),
+  }));
+
+  const preferredHomeSlugs = [
+    "index",
+    "home",
+    "readme",
+    "projects/00-project-index-repos-and-concepts",
+    "research/institute/guidelines/guidelines-index",
+  ];
+
+  const indexScore = (item) => {
+    const depth = item.slug.split("/").length;
+    const sourcePenalty = item.slug.includes("/sources/") || item.path.includes("/sources/") ? 1000 : 0;
+    const titlePenalty = item.title === "index" ? 0 : 10;
+    return sourcePenalty + depth + titlePenalty;
+  };
+
+  const eligibleIndexes = normalized
+    .filter(({ slug, path }) => (slug === "index" || slug.endsWith("/index")) && !slug.includes("/sources/") && !path.includes("/sources/"))
+    .sort((a, b) => indexScore(a) - indexScore(b));
+
+  return (
+    preferredHomeSlugs.map((candidate) => normalized.find(({ slug }) => slug === candidate)?.note.slug).find(Boolean) ??
+    normalized.find(({ title }) => ["index", "home", "readme"].includes(title))?.note.slug ??
+    normalized.find(({ path }) => path === "index.md" || path === "home.md" || path === "readme.md")?.note.slug ??
+    eligibleIndexes[0]?.note.slug ??
+    normalized.find(({ slug }) => slug.includes("project-index"))?.note.slug ??
+    notes[0].slug
+  );
 }
 
 // Read the SPA index.html shell (built by Vite)
@@ -109,6 +150,11 @@ app.get("*", async (req, res) => {
     let note = null;
     if (route.type === "note" && route.slug) {
       note = await fetchAPI(`/api/notes/${encodeURIComponent(route.slug)}`);
+    } else if (route.type === "home" && notes?.length) {
+      const homeSlug = chooseHomeSlug(notes);
+      if (homeSlug) {
+        note = await fetchAPI(`/api/notes/${encodeURIComponent(homeSlug)}`);
+      }
     }
 
     // Missing note routes should be real 404s. Otherwise crawlers treat

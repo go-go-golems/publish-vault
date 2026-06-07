@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderApp, parseRoute } from "./entry-server";
+import { extractNoteSlug, renderApp } from "./entry-server";
 import type { Note, NoteListItem, SiteConfig, FileNode } from "./types/index";
 
 const config: SiteConfig = {
@@ -70,38 +70,29 @@ const note: Note = {
   modTime: "2026-01-01",
 };
 
-describe("parseRoute", () => {
-  it("parses home route", () => {
-    expect(parseRoute("/")).toEqual({ type: "home" });
+describe("extractNoteSlug", () => {
+  it("returns undefined for home route", () => {
+    expect(extractNoteSlug("/")).toBeUndefined();
   });
 
-  it("parses note route with slug", () => {
-    expect(parseRoute("/note/index")).toEqual({
-      type: "note",
-      slug: "index",
-    });
+  it("extracts note route slug", () => {
+    expect(extractNoteSlug("/note/index")).toBe("index");
   });
 
-  it("parses note route with nested slug", () => {
-    expect(parseRoute("/note/research/notes")).toEqual({
-      type: "note",
-      slug: "research/notes",
-    });
+  it("extracts nested note route slug", () => {
+    expect(extractNoteSlug("/note/research/notes")).toBe("research/notes");
   });
 
-  it("parses search route", () => {
-    expect(parseRoute("/search")).toEqual({ type: "search" });
+  it("returns undefined for search route", () => {
+    expect(extractNoteSlug("/search")).toBeUndefined();
   });
 
-  it("strips hash and query before parsing", () => {
-    expect(parseRoute("/note/index?x=1#heading")).toEqual({
-      type: "note",
-      slug: "index",
-    });
+  it("strips hash and query before extracting", () => {
+    expect(extractNoteSlug("/note/index?x=1#heading")).toBe("index");
   });
 
-  it("returns unknown for unrecognized paths", () => {
-    expect(parseRoute("/something/else")).toEqual({ type: "unknown" });
+  it("returns undefined for unrecognized paths", () => {
+    expect(extractNoteSlug("/something/else")).toBeUndefined();
   });
 });
 
@@ -111,11 +102,12 @@ describe("renderApp", () => {
       config,
       notes,
       tree,
+      note,
     });
 
-    expect(html).toContain("Test Vault");
+    expect(html).toContain("TestVault");
     expect(html).toContain("Index");
-    expect(html).toContain("Research Notes");
+    expect(html).toContain("Welcome");
     expect(JSON.stringify(preloadedState)).toContain("listNotes");
   });
 
@@ -130,11 +122,11 @@ describe("renderApp", () => {
     expect(html).toContain("Index");
     expect(html).toContain("Welcome");
     expect(html).toContain("This is the vault index");
-    expect(html).toContain("research/notes");
+    expect(html).toContain("Research Notes");
     expect(JSON.stringify(preloadedState)).toContain("getNote");
   });
 
-  it("renders note not found when note is null", async () => {
+  it("renders loading state if a note route is rendered without a preloaded note", async () => {
     const { html } = await renderApp("/note/nonexistent", {
       config,
       notes,
@@ -142,7 +134,7 @@ describe("renderApp", () => {
       note: null,
     });
 
-    expect(html).toContain("Note not found");
+    expect(html).toContain("Loading note");
   });
 
   it("renders search page placeholder", async () => {
