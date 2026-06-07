@@ -409,7 +409,7 @@ This guardrail is the prerequisite for safely changing the SSR dependency model.
 
 **Inferred user intent:** Replace the blunt `ssr.noExternal: true` fix with a cleaner SSR dependency model, but only after adding enough automated live coverage to catch hydration and duplicate-React regressions.
 
-**Commit (code):** 3584864071bbbebaf2443dd8217530f684c3a586 — "test: add live SSR hydration smoke test"
+**Commit (code):** cbd3f5635549a0880d5164f21fb7b8fd404e727d — "test: add live SSR hydration smoke test"
 
 ### What I did
 - Added ticket tasks 25–29 for the follow-up phases:
