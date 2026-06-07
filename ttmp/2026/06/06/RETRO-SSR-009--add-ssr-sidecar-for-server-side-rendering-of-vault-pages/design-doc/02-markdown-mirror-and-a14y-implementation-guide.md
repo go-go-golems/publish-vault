@@ -1,12 +1,29 @@
 ---
-ticket: RETRO-SSR-009
-doc_type: design-doc
-title: "Markdown Mirror and a14y Implementation Guide"
-status: active
-intent: long-term
-topics: [ssr, seo, a14y, markdown, agents]
-created: 2026-06-07
+Title: ""
+Ticket: ""
+Status: ""
+Topics: []
+DocType: ""
+Intent: ""
+Owners: []
+RelatedFiles:
+    - Path: backend/internal/parser/parser.go
+      Note: Wiki-link rewrite behavior that prevents unresolved targets from becoming crawlable pages
+    - Path: backend/internal/server/agent_markdown.go
+      Note: Markdown mirror/discovery endpoint implementation
+    - Path: backend/internal/vault/vault.go
+      Note: Vault-level wiki-link resolver used to distinguish published and unresolved note targets
+    - Path: ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/scripts/01-a14y-config.md
+      Note: a14y baseline/final score history and local command configuration
+    - Path: web/server.mjs
+      Note: SSR HTML metadata and markdown alternate-link implementation
+ExternalSources: []
+Summary: ""
+LastUpdated: 0001-01-01T00:00:00Z
+WhatFor: ""
+WhenToUse: ""
 ---
+
 
 # Markdown Mirror and a14y Implementation Guide
 

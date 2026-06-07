@@ -53,12 +53,12 @@
 
 - [x] 7.1 Write implementation guide before code changes
 - [x] 7.2 Save a14y configuration/history in `scripts/01-a14y-config.md`
-- [ ] 7.3 Add Go handlers for `/AGENTS.md`, `/llms.txt`, `/sitemap.md`, and `/sitemap.xml`
-- [ ] 7.4 Add Go markdown mirror handlers for `/index.md` and `/note/{slug}.md`
-- [ ] 7.5 Add `Accept: text/markdown` content negotiation for `/` and `/note/{slug}`
-- [ ] 7.6 Add canonical `Link` headers and required mirror frontmatter (`title`, `description`, `doc_version`, `last_updated`)
-- [ ] 7.7 Add `## Sitemap` sections to markdown mirrors
-- [ ] 7.8 Add SSR `<link rel="alternate" type="text/markdown">` and response `Link` headers in `web/server.mjs`
-- [ ] 7.9 Add/extend tests for discovery and markdown mirror endpoints
-- [ ] 7.10 Run Go tests, web build, devctl SSR stack, and re-run a14y
-- [ ] 7.11 Update diary/changelog with score delta and commit final docs
+- [x] 7.3 Add Go handlers for `/AGENTS.md`, `/llms.txt`, `/sitemap.md`, and `/sitemap.xml`
+- [x] 7.4 Add Go markdown mirror handlers for `/index.md` and `/note/{slug}.md`
+- [x] 7.5 Add `Accept: text/markdown` content negotiation for `/` and `/note/{slug}`
+- [x] 7.6 Add canonical `Link` headers and required mirror frontmatter (`title`, `description`, `doc_version`, `last_updated`)
+- [x] 7.7 Add `## Sitemap` sections to markdown mirrors
+- [x] 7.8 Add SSR `<link rel="alternate" type="text/markdown">` and response `Link` headers in `web/server.mjs`
+- [x] 7.9 Add/extend tests for discovery and markdown mirror endpoints
+- [x] 7.10 Run Go tests, web build, devctl SSR stack, and re-run a14y
+- [x] 7.11 Update diary/changelog with score delta and commit final docs

@@ -76,3 +76,15 @@ Phase 7 planning: added Markdown Mirror and a14y Implementation Guide, detailed 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/design-doc/02-markdown-mirror-and-a14y-implementation-guide.md — Implementation guide for markdown mirrors
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/scripts/01-a14y-config.md — a14y configuration and baseline score
 
+
+## 2026-06-06
+
+Phase 7: added agent discovery and markdown mirrors; a14y score improved from 62/100 to 99/100 (commits 695aec5, 92af9f7, fddbc10, b2e2c92, b0606d3)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/backend/internal/parser/parser.go — Unresolved wiki links no longer create crawlable missing note pages
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/backend/internal/server/agent_markdown.go — Go-owned agent discovery
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/scripts/01-a14y-config.md — a14y baseline/final score history and local audit command
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — SSR markdown alternate links
+

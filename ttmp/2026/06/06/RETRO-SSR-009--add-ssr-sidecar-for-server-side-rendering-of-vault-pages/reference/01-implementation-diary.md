@@ -1,12 +1,27 @@
 ---
-ticket: RETRO-SSR-009
-doc_type: reference
-title: "Implementation Diary"
-status: active
-intent: long-term
-topics: [ssr, react, node-js, seo, a14y, hydration, sidecar]
-created: 2026-06-06
+Title: ""
+Ticket: ""
+Status: ""
+Topics: []
+DocType: ""
+Intent: ""
+Owners: []
+RelatedFiles:
+    - Path: backend/internal/parser/parser.go
+      Note: Final unresolved-link crawl fix described in diary
+    - Path: backend/internal/server/agent_markdown.go
+      Note: Phase 7 markdown endpoint implementation described in diary
+    - Path: backend/internal/vault/vault.go
+      Note: Final unresolved-link resolver change described in diary
+    - Path: web/server.mjs
+      Note: Phase 7 SSR metadata changes described in diary
+ExternalSources: []
+Summary: ""
+LastUpdated: 0001-01-01T00:00:00Z
+WhatFor: ""
+WhenToUse: ""
 ---
+
 
 # Diary
 
@@ -321,3 +336,74 @@ Phase 6 is the manual verification that everything works end-to-end.
 ### Technical details
 Commit: `b30da32`
 Files: `web/src/entry-client.tsx`, `web/server.mjs`, `backend/internal/server/server.go`, `plugins/retro-obsidian-publish.py`
+
+## Step 8: Phase 7 — a14y Markdown Mirrors and Agent Discovery (695aec5, 92af9f7, fddbc10, b2e2c92, b0606d3)
+
+This step applied the a14y workflow after SSR was working. The baseline audit against `http://localhost:8081/` scored 62/100 and showed that SSR solved rendered HTML visibility but the site still lacked the machine-facing discovery and Markdown mirror layer agents expect.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Now apply a14y to the site, now that we have SSR."
+
+**Assistant interpretation:** Run the a14y audit against the SSR-enabled local site, present the gated fix plan, implement approved fixes, keep ticket documentation current, and rerun the audit for score delta.
+
+**Inferred user intent:** Improve agent readability and discoverability now that the site returns useful SSR HTML.
+
+### What I did
+- Started the SSR-enabled devctl stack and audited `http://localhost:8081/`.
+- Baseline command: `npx -y a14y check http://localhost:8081/ --mode site --output agent-prompt --max-pages 200`.
+- Baseline score: `62/100` on scorecard `0.2.0`.
+- Wrote `design-doc/02-markdown-mirror-and-a14y-implementation-guide.md` before runtime changes.
+- Added Phase 7 tasks to `tasks.md`.
+- Saved a14y config/history in `scripts/01-a14y-config.md` per user request instead of `AGENTS.md` or `a14y.md`.
+- Implemented Go endpoints for `/AGENTS.md`, `/llms.txt`, `/sitemap.md`, `/sitemap.xml`, `/index.md`, `/note/{slug}.md`, and `Accept: text/markdown` for `/` and `/note/{slug}`.
+- Added canonical `Link` headers, required Markdown frontmatter, and `## Sitemap` sections.
+- Updated SSR HTML to advertise Markdown mirrors with `<link rel="alternate" type="text/markdown">` and response `Link` headers.
+- Added `dateModified` JSON-LD and a hidden glossary/agent guide link.
+- Added Go tests for discovery endpoints, sitemap XML, Markdown mirrors, and content negotiation.
+- Fixed unresolved wiki links so missing notes do not become crawlable `/note/...` URLs.
+
+### Why
+SSR made the HTML useful, but a14y expects agents to discover and consume the site without executing JavaScript. Markdown mirrors and sitemap resources provide that stable text-first surface.
+
+### What worked
+- Adding Go-owned Markdown endpoints resolved nearly all Markdown mirror failures.
+- The score improved from `62/100` to `99/100`.
+- The final audit crawled 16 pages and passed 187 checks.
+
+### What didn't work
+- First re-audit scored `97/100`: unresolved wiki link `[[Gettier Problem]]` created crawlable `/note/gettier-problem` with no Markdown mirror.
+- Second re-audit scored `98/100`: returning a 404 for the missing note removed Markdown mirror failures but still left the broken page as a crawled URL with HTTP status/content-type failures.
+- Final fix: unresolved wiki links are converted to same-page `#unresolved-...` anchors, so a14y no longer crawls them as note pages.
+
+### What I learned
+- a14y treats linked missing pages as audit surface if they return HTML, even if the app visually says “not found”. Broken wiki links therefore matter for agent readability.
+- `llms.txt` links are expected to point mostly to `.md`/`.mdx` resources; HTML note links in `llms.txt` lower the score.
+- Content negotiation and `.md` mirror URLs should share the same rendering code to avoid metadata drift.
+
+### What was tricky to build
+- The hard part was distinguishing real published note pages from unresolved Obsidian wiki-link targets. The parser originally generated `/note/{slug}` for every wiki link before the vault knew whether the target existed. The fix was to let the vault resolver return an empty string for unresolved targets and have `ReplaceWikiLinksString` convert those anchors to same-page unresolved fragments.
+
+### What warrants a second pair of eyes
+- The Markdown mirror currently derives content from rendered HTML because `vault.Note` does not preserve raw Markdown. This is good enough for a14y and agent reading, but a future raw Markdown field would be cleaner.
+- The remaining score issue is `html.headings` on `/`, intentionally skipped in the approved a14y plan.
+
+### What should be done in the future
+- Preserve raw Markdown in `vault.Note` so `.md` mirrors can expose the original note body instead of HTML in fenced code.
+- Optionally add visually-hidden home-page headings if a perfect 100/100 score is desired.
+
+### Code review instructions
+- Start with `backend/internal/server/agent_markdown.go` for endpoint contracts and Markdown rendering.
+- Then review `web/server.mjs` for SSR alternate-link/header injection and missing-note 404 behavior.
+- Review `backend/internal/parser/parser.go` and `backend/internal/vault/vault.go` for unresolved wiki-link handling.
+- Validate with:
+  - `cd backend && GOWORK=off go test ./... -count=1`
+  - `cd web && pnpm build:all`
+  - `devctl down && devctl up --profile example`
+  - `npx -y a14y check http://localhost:8081/ --mode site --output agent-prompt --max-pages 200`
+
+### Technical details
+- Code commits: `695aec5`, `92af9f7`, `fddbc10`, `b2e2c92`, `b0606d3`.
+- Final a14y command: `npx -y a14y check http://localhost:8081/ --mode site --output agent-prompt --max-pages 200`.
+- Final a14y result: `99/100`, one remaining failure: `html.headings` on `/`.
+- Final JSON audit saved outside the repo at `/tmp/retro-a14y-final2.json`.
