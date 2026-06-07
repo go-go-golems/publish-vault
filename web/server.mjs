@@ -86,8 +86,8 @@ function serializeForInlineScript(value) {
 // Cache the index.html template
 let indexHtmlTemplate = null;
 
-// Catch-all page handler
-app.get("{*path}", async (req, res) => {
+// Catch-all page handler (Express 4 wildcard syntax)
+app.get("*", async (req, res) => {
   try {
     const url = req.originalUrl;
     const pathname = req.path;

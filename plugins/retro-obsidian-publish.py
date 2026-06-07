@@ -70,6 +70,10 @@ def handle_config(rid, ctx):
     # Cache for handle_launch
     _resolved_ports["backend"] = backend_port
     _resolved_ports["web"] = web_port
+    ssr_port = find_free_port(
+        int(os.environ.get("SSR_PORT", "8089"))
+    )
+    _resolved_ports["ssr"] = ssr_port
 
     config_set = {
         "env.vault_dir": vault,
@@ -80,6 +84,8 @@ def handle_config(rid, ctx):
         "services.web.port": web_port,
         "services.web.url": f"http://127.0.0.1:{web_port}",
         "services.web.api_url": f"http://127.0.0.1:{backend_port}",
+        "services.ssr.port": ssr_port,
+        "services.ssr.url": f"http://127.0.0.1:{ssr_port}",
     }
     if vault_name:
         config_set["env.vault_name"] = vault_name
@@ -154,11 +160,15 @@ def handle_launch(rid, ctx):
     # handle_config was never called — shouldn't happen in practice)
     backend_port = _resolved_ports.get("backend", 8080)
     web_port = _resolved_ports.get("web", 3000)
+    ssr_port = find_free_port(
+        int(os.environ.get("SSR_PORT", "8089"))
+    )
 
     backend_cmd = ["go", "run", "./cmd/retro-obsidian-publish", "serve",
                    "--vault", vault_arg,
                    "--port", str(backend_port),
-                   "--serve-web=false"]
+                   "--serve-web=true",
+                   "--ssr-url", f"http://127.0.0.1:{ssr_port}"]
     if vault_name:
         backend_cmd.extend(["--vault-name", vault_name])
 
@@ -183,6 +193,18 @@ def handle_launch(rid, ctx):
                 "command": ["pnpm", "dev", "--host", "127.0.0.1", "--port", str(web_port)],
                 "env": {"VITE_API_URL": f"http://127.0.0.1:{backend_port}"},
                 "health": {"type": "http", "url": f"http://127.0.0.1:{web_port}", "timeout_ms": 30000},
+            },
+            {
+                "name": "ssr",
+                "cwd": "web",
+                "command": ["node", "server.mjs"],
+                "env": {
+                    "SSR_PORT": str(ssr_port),
+                    "API_BASE": f"http://127.0.0.1:{backend_port}",
+                    "BASE_URL": f"http://127.0.0.1:{backend_port}",
+                },
+                "health": {"type": "http", "url": f"http://127.0.0.1:{ssr_port}/health", "timeout_ms": 30000},
+                "depends_on": ["backend"],
             },
         ]}},
     )
