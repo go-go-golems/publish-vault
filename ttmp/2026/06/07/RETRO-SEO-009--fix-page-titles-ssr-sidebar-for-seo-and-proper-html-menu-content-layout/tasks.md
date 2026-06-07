@@ -28,4 +28,4 @@
 - [x] 21. Run `pnpm --dir web check`, `pnpm --dir web build:all`, and relevant SSR tests after each major phase.
 - [x] 22. Run final full validation: `GOWORK=off go test ./...`, `pnpm --dir web check`, `pnpm --dir web build:all`, and manual hydration warning check.
 - [x] 23. Update diary after each implementation phase with commands, failures, commits, and review notes.
-- [ ] 24. Upload updated document bundle to reMarkable after the refactor guide and after final implementation notes.
+- [x] 24. Upload updated document bundle to reMarkable after the refactor guide and after final implementation notes.
