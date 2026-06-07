@@ -10,6 +10,7 @@ profiles:
     env:
       VAULT_DIR: vault-example
       VAULT_NAME: vault-example
+      PAGE_TITLE: Example Vault
 
   go-go-parc:
     display_name: go-go-parc Vault
@@ -19,6 +20,7 @@ profiles:
     env:
       VAULT_DIR: /home/manuel/code/wesen/go-go-golems/go-go-parc
       VAULT_NAME: go-go-parc
+      PAGE_TITLE: PARC
 
 plugins:
   - id: retro-obsidian-publish
