@@ -12,11 +12,14 @@
 
 import express from "express";
 import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 // --- Config ---
 const PORT = parseInt(process.env.SSR_PORT || "8089", 10);
 const API_BASE = process.env.API_BASE || "http://localhost:8080";
 const BASE_URL = process.env.BASE_URL || "http://localhost:8080";
+const WEB_DIR = dirname(fileURLToPath(import.meta.url));
 
 // --- Dynamic import of the SSR bundle ---
 const { renderApp } = await import("./dist/ssr/entry-server.js");
@@ -94,7 +97,7 @@ function chooseHomeSlug(notes) {
 // Read the SPA index.html shell (built by Vite)
 function getIndexHtml() {
   try {
-    return readFileSync("./dist/index.html", "utf-8");
+    return readFileSync(join(WEB_DIR, "dist", "index.html"), "utf-8");
   } catch {
     // Fallback: minimal shell
     return `<!doctype html>

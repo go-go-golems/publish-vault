@@ -91,23 +91,28 @@ export const FrontmatterPanel: React.FC<FrontmatterPanelProps> = ({
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (Array.isArray(v)) return v.join(", ");
-  // Handle Date objects (js-yaml parses YAML dates as JS Date)
+  // Handle Date objects (js-yaml parses YAML dates as JS Date). Format in UTC
+  // so SSR and browser hydration do not disagree across local time zones.
   if (v instanceof Date) {
-    return v.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    return formatDateUTC(v);
   }
   if (typeof v === "object") return JSON.stringify(v);
   const s = String(v);
-  // Format ISO date strings to a readable short form
+  // Format ISO date strings to a readable short form in UTC. Date-only strings
+  // are also interpreted as UTC to avoid off-by-one hydration mismatches.
   if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(s)) {
-    try {
-      return new Date(s).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return s.slice(0, 10);
-    }
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return formatDateUTC(d);
+    return s.slice(0, 10);
   }
   return s;
+}
+
+function formatDateUTC(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }

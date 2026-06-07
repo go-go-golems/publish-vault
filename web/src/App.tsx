@@ -13,7 +13,7 @@ export function AppRoutes() {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname.startsWith("/note/") || location.pathname === "/search") return;
+    if (location.pathname === "/" || location.pathname.startsWith("/note/") || location.pathname === "/search") return;
     document.title = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
   }, [config?.pageTitle, config?.vaultName, location.pathname]);
 
