@@ -8,7 +8,7 @@
  *   - Monochrome base with #0000cc link blue and #005500 tag green accents
  *   - Aged-paper (#faf8f4) background, ink (#1a1a1a) foreground
  */
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import { Sidebar } from "../../organisms/Sidebar/Sidebar";
@@ -30,6 +30,20 @@ import {
 export interface VaultLayoutProps {
   children: React.ReactNode;
   vaultName?: string;
+}
+
+function HydrationSafeClock() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
+      {mounted ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+    </span>
+  );
 }
 
 export const VaultLayout: React.FC<VaultLayoutProps> = ({
@@ -141,9 +155,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           <Icon name="panel-right" size={13} />
         </button>
 
-        <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
-          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
+        <HydrationSafeClock />
       </header>
 
       {/* ── Mobile sidebar backdrop ── */}
