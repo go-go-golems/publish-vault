@@ -276,3 +276,86 @@ The implementation deliberately kept the existing RTK Query cache preloading and
   - Server: `StaticRouter` from `react-router`.
 - The SSR sidecar still owns `<head>` metadata injection; this refactor only hydrates the root app tree.
 - The browser no longer clears SSR content before rendering.
+
+## Step 4: Hard Cutover Cleanup and Live Hydration Test
+
+This step performed the live local test that was still pending after the React Router migration. The initial browser run exposed a real production-class failure: the Go server was falling back to the SPA shell because the SSR sidecar was returning 500. After fixing SSR bundling and a local path issue, the live test passed with zero browser console warnings/errors.
+
+The cleanup also removed the final stale client entry (`web/src/main.tsx`) and made first-render state/date output deterministic so SSR and browser hydration agree.
+
+### Prompt Context
+
+**User prompt (verbatim):** "clean up any legacy / hard cut over. run live test"
+
+**Assistant interpretation:** Remove remaining legacy cutover artifacts, run local backend + SSR + browser validation, and fix anything that prevents real hydration.
+
+**Inferred user intent:** Ensure the refactor is not just type/build-clean, but actually works as a live SSR-hydrated site with no fallback and no hydration warnings.
+
+**Commit (code):** 685f0ba098bf069ac616aa6f62e94b52e851152f — "web: harden SSR hydration cutover"
+
+### What I did
+- Removed stale `web/src/main.tsx`, which still used `createRoot()` but was no longer referenced by `web/index.html`.
+- Made `uiSlice` initial state deterministic (`sidebarOpen/rightPanelOpen = true`) instead of reading `window.innerWidth` at module initialization.
+- Made `FrontmatterPanel` date formatting use UTC so Node SSR and browser hydration do not disagree by timezone.
+- Changed `web/vite.config.ts` SSR config to `noExternal: true` so React, React Router, and React component libraries share one bundled React instance in the SSR bundle.
+- Made `server.mjs` resolve `dist/index.html` relative to `import.meta.url` instead of process CWD.
+- Let `NotePage` own the `/` home-note title by preventing the app shell title effect from overwriting `/`.
+- Started local backend and SSR sidecar:
+  - backend: `GOWORK=off go run ./cmd/retro-obsidian-publish serve --vault ./vault-example --vault-name TestVault --page-title "Test Vault" --port 18080 --ssr-url http://127.0.0.1:18089 --watch=false`
+  - SSR: `SSR_PORT=18089 API_BASE=http://127.0.0.1:18080 BASE_URL=http://127.0.0.1:18080 node web/server.mjs`
+- Tested with Playwright:
+  - `/` title: `Index — Test Vault`
+  - `/note/index` title: `Index — Test Vault`
+  - sidebar navigation to `/note/philosophy/epistemology` title: `Epistemology — Test Vault`
+  - browser console: `0` errors, `0` warnings.
+
+### Why
+- Build/test success alone did not guarantee the SSR sidecar could actually render in a live Node process.
+- The Go proxy silently falls back to SPA on SSR 500s, so live testing was necessary to catch sidecar failures.
+
+### What worked
+- Raw SSR response now comes through the Go proxy with Express headers and a populated `<div id="root">...`.
+- Browser hydration no longer emits React #418.
+- Module script loading uses the hashed Vite asset (`/assets/main-...js`) rather than fallback `/assets/index.js`.
+- Direct note loads and client-side sidebar navigation both update URL/title correctly.
+
+### What didn't work
+- First live test showed React #418. Investigation revealed raw `/` response was the empty SPA shell because Go fell back from SSR.
+- SSR sidecar logs showed invalid hook calls due duplicate React instances:
+  - first from `react-router` externalization (`Cannot read properties of null (reading 'useContext')`)
+  - then from `react-resizable-panels` externalization (`Cannot read properties of null (reading 'useId')`)
+- Fix: use `ssr.noExternal: true` so all React-using frontend dependencies are bundled into one SSR module graph.
+- Another live test showed module MIME error for `/assets/index.js`; `server.mjs` had read `./dist/index.html` relative to repo root and used its fallback shell. Fix: resolve `dist/index.html` relative to `server.mjs`.
+
+### What I learned
+- The SSR proxy fallback can mask SSR-side errors by returning a working SPA shell; always inspect headers/logs/raw root HTML during live tests.
+- With Vite SSR, bundling React but externalizing React-using libraries creates duplicate React instances. For this application, full bundling is safer for correctness.
+- Head title behavior for `/` needs to account for the fact that `/` renders a selected home note, not a separate home page.
+
+### What was tricky to build
+- The first symptom looked like a hydration mismatch, but the root cause was that SSR was not actually being served. The key debugging step was comparing raw `curl http://127.0.0.1:18080/` output, which showed `<div id="root"></div>` instead of SSR content. That led to backend logs showing `SSR proxy unavailable, falling back to SPA`, then sidecar logs showing invalid hook calls.
+- The second symptom looked like a static asset issue, but it was caused by `server.mjs` using a CWD-relative `./dist/index.html` path and therefore falling back to a minimal shell. Resolving relative to `import.meta.url` fixed local and Docker behavior consistently.
+
+### What warrants a second pair of eyes
+- `ssr.noExternal: true` increases SSR bundle size substantially. It fixes correctness, but reviewer should confirm this is acceptable for the sidecar image/runtime.
+- `server.mjs` still duplicates `chooseHomeSlug()` from `App.tsx`; this is now live-tested but remains a maintainability follow-up.
+
+### What should be done in the future
+- Consider extracting shared home-route selection logic into a pure module used by both `App.tsx` and `server.mjs`.
+- Consider adding an automated smoke script that starts backend+SSR and asserts raw SSR root is populated and browser console is clean.
+
+### Code review instructions
+- Review `web/vite.config.ts` first for `ssr.noExternal: true` and the rationale.
+- Review `web/server.mjs` for `WEB_DIR` / `import.meta.url` path resolution.
+- Review `web/src/store/uiSlice.ts` and `FrontmatterPanel.tsx` for deterministic first-render behavior.
+- Review `web/src/App.tsx` title ownership for `/`.
+- Validate with:
+  - `pnpm --dir web check`
+  - `pnpm --dir web exec vitest run src/entry-server.test.tsx`
+  - `pnpm --dir web build:all`
+  - `GOWORK=off go test ./...`
+  - local backend+SSR Playwright test checking console messages.
+
+### Technical details
+- Raw SSR header after fix includes `X-Powered-By: Express` and non-empty root markup.
+- Browser console after `/`, `/note/index`, and sidebar navigation: `0` errors, `0` warnings.

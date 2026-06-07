@@ -26,6 +26,6 @@
 - [x] 19. Align SSR and client page-title behavior: note pages remain `Note Title — Site Title` after hydration.
 - [x] 20. Update SSR tests to validate real-app rendering, preloaded state, and route coverage.
 - [x] 21. Run `pnpm --dir web check`, `pnpm --dir web build:all`, and relevant SSR tests after each major phase.
-- [ ] 22. Run final full validation: `GOWORK=off go test ./...`, `pnpm --dir web check`, `pnpm --dir web build:all`, and manual hydration warning check.
-- [ ] 23. Update diary after each implementation phase with commands, failures, commits, and review notes.
+- [x] 22. Run final full validation: `GOWORK=off go test ./...`, `pnpm --dir web check`, `pnpm --dir web build:all`, and manual hydration warning check.
+- [x] 23. Update diary after each implementation phase with commands, failures, commits, and review notes.
 - [ ] 24. Upload updated document bundle to reMarkable after the refactor guide and after final implementation notes.

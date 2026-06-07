@@ -43,3 +43,15 @@ Implemented React Router hydration cleanup: migrated client routes/navigation, r
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-client.tsx — Browser now hydrates SSR markup with hydrateRoot
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.tsx — SSR now renders real AppRoutes under StaticRouter
 
+
+## 2026-06-07
+
+Hard-cut hydration cleanup and live test: removed stale main.tsx, fixed deterministic initial UI/date rendering, bundled all SSR dependencies to avoid duplicate React, fixed server.mjs dist path resolution, and verified local backend+SSR+browser with zero console warnings/errors (commit 685f0ba).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — dist/index.html resolved relative to server.mjs for local/Docker consistency
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/components/molecules/FrontmatterPanel/FrontmatterPanel.tsx — UTC date formatting prevents SSR/browser timezone mismatch
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/store/uiSlice.ts — deterministic initial sidebar/right-panel state for hydration
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vite.config.ts — ssr.noExternal=true prevents duplicate React in SSR sidecar
+
