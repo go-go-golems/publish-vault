@@ -150,10 +150,11 @@ func renderLLMSTxt(state *RuntimeState, cfg api.PublicConfig, baseURL string) st
 	b.WriteString("## Key resources\n\n")
 	fmt.Fprintf(&b, "- [Agent guide](%s/AGENTS.md)\n", baseURL)
 	fmt.Fprintf(&b, "- [Markdown sitemap](%s/sitemap.md)\n", baseURL)
-	fmt.Fprintf(&b, "- [XML sitemap](%s/sitemap.xml)\n", baseURL)
 	fmt.Fprintf(&b, "- [Home markdown mirror](%s/index.md)\n", baseURL)
+	b.WriteString("\nXML sitemap: ")
+	fmt.Fprintf(&b, "%s/sitemap.xml\n", baseURL)
 	b.WriteString("\n## Notes\n\n")
-	appendNoteLinks(&b, sortedNotes(v), baseURL, false)
+	appendNoteMirrorLinks(&b, sortedNotes(v), baseURL)
 	return b.String()
 }
 
@@ -285,6 +286,12 @@ func appendNoteLinks(b *strings.Builder, notes []*vault.Note, baseURL string, in
 			fmt.Fprintf(b, " ([markdown](%s/note/%s.md))", baseURL, note.Slug)
 		}
 		b.WriteString("\n")
+	}
+}
+
+func appendNoteMirrorLinks(b *strings.Builder, notes []*vault.Note, baseURL string) {
+	for _, note := range notes {
+		fmt.Fprintf(b, "- [%s](%s/note/%s.md)\n", note.Title, baseURL, note.Slug)
 	}
 }
 

@@ -111,6 +111,13 @@ app.get("*", async (req, res) => {
       note = await fetchAPI(`/api/notes/${encodeURIComponent(route.slug)}`);
     }
 
+    // Missing note routes should be real 404s. Otherwise crawlers treat
+    // unresolved wiki-link targets as valid pages and expect markdown mirrors.
+    if (route.type === "note" && route.slug && !note) {
+      res.status(404).type("text").send("Note not found");
+      return;
+    }
+
     // 3. Render React to HTML
     const { html, preloadedState } = await renderApp(url, {
       config,
