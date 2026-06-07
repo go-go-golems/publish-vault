@@ -175,9 +175,10 @@ app.get("*", async (req, res) => {
 
     // 4. Determine page title and description
     const vaultName = config?.vaultName || "Vault";
+    const siteTitle = config?.pageTitle || vaultName;
     const title = note?.title
-      ? `${note.title} — ${vaultName}`
-      : `${config?.pageTitle || vaultName}`;
+      ? `${note.title} — ${siteTitle}`
+      : siteTitle;
     const description =
       note?.excerpt ||
       (notes?.length

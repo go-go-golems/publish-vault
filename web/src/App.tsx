@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Provider } from "react-redux";
-import { BrowserRouter, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { store } from "./store/store";
 import { VaultLayout } from "./components/pages/VaultLayout/VaultLayout";
 import { NotePage } from "./components/pages/NotePage/NotePage";
@@ -10,10 +10,12 @@ import { useListNotesQuery, useGetConfigQuery, type NoteListItem } from "./store
 
 export function AppRoutes() {
   const { data: config } = useGetConfigQuery();
+  const location = useLocation();
 
   useEffect(() => {
+    if (location.pathname.startsWith("/note/") || location.pathname === "/search") return;
     document.title = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
-  }, [config?.pageTitle, config?.vaultName]);
+  }, [config?.pageTitle, config?.vaultName, location.pathname]);
 
   return (
     <VaultLayout vaultName={config?.vaultName}>

@@ -16,6 +16,7 @@ import {
   ResizableHandle,
 } from "../../ui/resizable";
 import {
+  useGetConfigQuery,
   useGetNoteQuery,
   useListNotesQuery,
 } from "../../../store/vaultApi";
@@ -57,6 +58,13 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     isLoading,
     isError,
   } = useGetNoteQuery(slug, { skip: !slug });
+  const { data: config } = useGetConfigQuery();
+
+  useEffect(() => {
+    if (!note) return;
+    const siteTitle = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
+    document.title = `${note.title} — ${siteTitle}`;
+  }, [config?.pageTitle, config?.vaultName, note]);
 
   const { data: allNotes } = useListNotesQuery();
 
