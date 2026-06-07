@@ -55,3 +55,13 @@ Hard-cut hydration cleanup and live test: removed stale main.tsx, fixed determin
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/store/uiSlice.ts — deterministic initial sidebar/right-panel state for hydration
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vite.config.ts — ssr.noExternal=true prevents duplicate React in SSR sidecar
 
+
+## 2026-06-07
+
+Phase A complete: added automated live SSR hydration smoke test covering web build, SSR sidecar startup, Go proxying, raw SSR HTML, browser hydration console cleanliness, and sidebar navigation.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/scripts/smoke-ssr-hydration.mjs — End-to-end live SSR hydration guardrail
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/package.json — Adds smoke:ssr script and Playwright dev dependency
+

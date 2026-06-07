@@ -11,9 +11,18 @@ Topics:
 DocType: reference
 Intent: long-term
 Owners: []
+RelatedFiles:
+    - Path: scripts/smoke-ssr-hydration.mjs
+      Note: Phase A live SSR hydration smoke test implementation
+    - Path: web/package.json
+      Note: smoke:ssr script and Playwright dependency
+ExternalSources: []
 Summary: Chronological investigation log for page title, SSR sidebar, and HTML layout issues.
 LastUpdated: 2026-06-07T12:00:00Z
+WhatFor: ""
+WhenToUse: ""
 ---
+
 
 # Diary
 
@@ -385,3 +394,104 @@ Wrote a comprehensive textbook-style project report for the Obsidian vault at `g
 9. Summary
 
 Commit and push successful.
+
+## Step 6: Add Live SSR Hydration Smoke Test Guardrail
+
+This step turned the manual backend + SSR sidecar + browser validation into a reusable smoke test. The test is intentionally end-to-end: it builds the web client and SSR bundles, starts the Node sidecar and Go server on random local ports, verifies the raw HTML is actually coming from SSR instead of SPA fallback, then opens Chromium and checks that hydration produces no console warnings or errors.
+
+This guardrail is the prerequisite for safely changing the SSR dependency model. Without it, reducing `ssr.noExternal` could silently reintroduce duplicate React or fallback-to-SPA behavior while ordinary type checks and unit tests still pass.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, create new tasks and phases (split into tasks) to the ticket. Then work on those one by one, keeping a detailed diary as you work, committing at appropriate intervals."
+
+**Assistant interpretation:** Add a phased follow-up plan to RETRO-SEO-009, then begin implementing the phases sequentially with diary entries, validation, and focused commits.
+
+**Inferred user intent:** Replace the blunt `ssr.noExternal: true` fix with a cleaner SSR dependency model, but only after adding enough automated live coverage to catch hydration and duplicate-React regressions.
+
+**Commit (code):** 3584864071bbbebaf2443dd8217530f684c3a586 — "test: add live SSR hydration smoke test"
+
+### What I did
+- Added ticket tasks 25–29 for the follow-up phases:
+  - Phase A: live SSR smoke test
+  - Phase B: SSR dependency-resolution diagnostics
+  - Phase C: principled SSR dependency model
+  - Phase D: Docker/runtime dependency packaging
+  - Phase E: bundle-size measurement and documentation
+- Added `playwright` as a web dev dependency so the smoke test is project-local rather than relying on the Pi/agent harness browser.
+- Added `scripts/smoke-ssr-hydration.mjs`.
+- Added `web/package.json` script: `pnpm --dir web smoke:ssr`.
+- The smoke script:
+  - allocates random backend and SSR ports,
+  - runs `pnpm --dir web build:all`,
+  - starts `node web/server.mjs`,
+  - starts `go run ./cmd/retro-obsidian-publish serve ... --ssr-url <sidecar>` with `GOWORK=off`,
+  - waits for `/api/config` and sidecar `/health`,
+  - asserts raw `/` HTML has `X-Powered-By: Express`, a populated root, no `/assets/index.js` fallback shell, and preloaded state,
+  - opens Chromium with Playwright,
+  - visits `/` and `/note/index`,
+  - clicks the sidebar `Epistemology` tree button,
+  - asserts zero browser console warnings/errors.
+
+### Why
+- The previous live test found failures that build/test did not catch: SSR 500 fallback, duplicate React hook errors, CWD-relative shell fallback, and hydration title timing.
+- A future dependency-model cleanup must be guarded by exactly the behavior that failed before: live sidecar import, real Go proxying, raw SSR HTML, browser hydration, and client-side navigation.
+
+### What worked
+- Final full run passed:
+  - command: `pnpm --dir web smoke:ssr`
+  - raw SSR HTML: `436397 bytes`, `X-Powered-By=Express`
+  - browser hydration: `0` console warnings/errors
+  - client-side sidebar navigation to `/note/philosophy/epistemology` succeeded after waiting for the destination heading/title.
+- The test also prints build output, including current SSR bundle size: `dist/ssr/entry-server.js 4,979.92 kB` with the current `ssr.noExternal: true` state.
+
+### What didn't work
+- First attempt failed because the root-level script could not statically resolve Playwright from `web/node_modules`:
+  - command: `pnpm --dir web smoke:ssr`
+  - error: `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from .../scripts/smoke-ssr-hydration.mjs`
+  - fix: use `createRequire(join(WEB_DIR, "package.json"))` and dynamically import `web`'s Playwright package.
+- Second attempt failed due a smoke-test assertion bug, not an app bug:
+  - error: `GET / did not contain substantial server-rendered root markup`
+  - cause: the regex stopped at the first nested `</div>` inside the React tree.
+  - fix: replace brittle nested-div extraction with simpler checks for populated root marker, expected note content, and `window.__PRELOADED_STATE__`.
+- Cleanup initially left risk of `go run` child processes lingering.
+  - fix: spawn long-running processes as detached process groups and kill by negative PID in cleanup.
+- Sidebar navigation assertion initially clicked an `<a href="/note/philosophy/epistemology">` link, but the real sidebar tree uses buttons.
+  - fix: click `page.getByRole("button", { name: /Epistemology/i })`.
+- The first button-click assertion read `document.title` too early:
+  - error: `Unexpected sidebar navigation title: Index — Test Vault`
+  - fix: wait for the `Epistemology` heading and for `document.title.includes("Epistemology")` before asserting.
+
+### What I learned
+- The smoke test needs to validate the exact production-like path: Go proxy → SSR sidecar → built Vite shell → browser hydration. Unit-level SSR rendering alone is insufficient.
+- Playwright resolution from a repository-level script is different from resolution inside `web`; scripts outside a package should explicitly resolve dependencies from the package that owns them.
+- DOM string assertions against nested React markup should avoid naive non-greedy `</div>` regexes.
+- Sidebar validation should interact with actual accessible controls, not assumptions about links.
+
+### What was tricky to build
+- Process cleanup was subtle because `go run` starts a compiled child process. Killing only the immediate child can leave the actual server running. Spawning detached process groups and killing the process group solves this for the smoke-test harness.
+- The raw SSR HTML assertion needed to distinguish three states: real sidecar SSR, SPA fallback, and fallback index shell. The final checks combine response headers, empty-root detection, fallback-asset detection, and preloaded-state detection rather than relying on one brittle marker.
+- The client navigation assertion needed to respect React's asynchronous data/title effect. Waiting for the destination heading and then waiting for `document.title` prevents a false negative race.
+
+### What warrants a second pair of eyes
+- The smoke test adds `playwright` as a dev dependency; reviewer should confirm this is acceptable for the web package and CI environment.
+- The raw SSR HTML checks are deliberately pragmatic rather than a full HTML parser. They should catch the known fallback modes, but future shell changes may require updating the markers.
+- The script uses `go run`, which is convenient but slower than testing a prebuilt binary. CI can later decide whether to build once and pass a binary path.
+
+### What should be done in the future
+- Add this smoke script to CI after deciding browser installation strategy.
+- Consider adding a `--skip-build` documented mode for iterative local runs; the script already supports it.
+- Use the smoke test as the acceptance gate before changing `vite.config.ts` SSR externalization.
+
+### Code review instructions
+- Start with `scripts/smoke-ssr-hydration.mjs` and review the process lifecycle, raw SSR assertions, and browser assertions.
+- Review `web/package.json` for the new `smoke:ssr` script and `playwright` dev dependency.
+- Validate with:
+  - `pnpm --dir web smoke:ssr`
+  - optional faster rerun after building: `pnpm --dir web smoke:ssr -- --skip-build`
+
+### Technical details
+- Final full command: `pnpm --dir web smoke:ssr`
+- Final raw SSR check: `raw SSR HTML ok (436397 bytes, X-Powered-By=Express)`
+- Final browser check: `browser hydration ok (0 console warnings/errors)`
+- Build output observed current SSR entry size: `dist/ssr/entry-server.js 4,979.92 kB`
