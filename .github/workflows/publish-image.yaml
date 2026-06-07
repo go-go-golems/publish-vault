@@ -9,9 +9,8 @@ on:
       - go.sum
       - cmd/**
       - internal/**
-      - web/src/**
-      - web/package.json
-      - web/pnpm-lock.yaml
+      - web/**
+      - deploy/gitops-targets.json
   push:
     branches:
       - main
@@ -22,9 +21,8 @@ on:
       - go.sum
       - cmd/**
       - internal/**
-      - web/src/**
-      - web/package.json
-      - web/pnpm-lock.yaml
+      - web/**
+      - deploy/gitops-targets.json
   workflow_dispatch:
 
 permissions:
@@ -38,7 +36,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-ssr:
+    uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
+    secrets: inherit
+    with:
+      image_name: ghcr.io/go-go-golems/publish-vault-ssr
+      dockerfile: ./web/ssr.Dockerfile
+      build_context: .
+      test_command: |
+        corepack enable
+        corepack prepare pnpm@10.4.1 --activate
+        pnpm --dir web install --frozen-lockfile
+        pnpm --dir web check
+        pnpm --dir web build:all
+      go_version_file: go.mod
+      push_image: ${{ github.event_name != 'pull_request' }}
+      open_gitops_pr: false
+      tooling_repository: go-go-golems/infra-tooling
+      tooling_ref: main
+
   release:
+    needs: release-ssr
     uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
     secrets: inherit
     with:
