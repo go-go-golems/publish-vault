@@ -12,6 +12,8 @@ DocType: design-doc
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: scripts/smoke-ssr-hydration.mjs
+      Note: Live smoke validation documented as acceptance gate
     - Path: web/server.mjs
       Note: |-
         Express sidecar data prefetch and HTML/meta assembly; should keep prefetching but stop relying on divergent SSR markup.
@@ -42,12 +44,17 @@ RelatedFiles:
       Note: Store factory is already SSR-compatible and should stay per-request on the server.
     - Path: web/src/store/vaultApi.ts
       Note: RTK Query cache already supports preloading; hydration must preserve query keys.
+    - Path: web/ssr.Dockerfile
+      Note: Runtime packaging documented for externalized SSR dependencies
+    - Path: web/vite.config.ts
+      Note: Final externalized SSR dependency model documented with size measurements
 ExternalSources: []
 Summary: Second implementation guide for replacing Wouter with React Router, consolidating SSR and client rendering onto one component tree, and moving from SSR-preview-plus-remount to real hydrateRoot hydration.
-LastUpdated: 2026-06-07T14:00:00Z
+LastUpdated: 2026-06-07T16:00:00Z
 WhatFor: Use when implementing the React Router SSR hydration cleanup in RETRO-SEO-009.
 WhenToUse: Before changing routing, SSR entry points, hydration, page title behavior, or SSR layout semantics.
 ---
+
 
 
 # React Router SSR hydration cleanup implementation guide
@@ -540,3 +547,117 @@ After implementation:
 - Verify clicking sidebar entries navigates correctly.
 - Verify document title remains note-specific after hydration.
 - Verify `/note/{slug}.md`, `/sitemap.xml`, `/llms.txt`, and `/AGENTS.md` still bypass SSR correctly.
+
+## Follow-up result: clean SSR dependency model and bundle-size measurement
+
+After the initial React Router hydration migration, live testing showed that `ssr.noExternal: true` was the safest immediate fix for duplicate React instances: it bundled the entire SSR dependency graph so React Router and `react-resizable-panels` could not import a second React singleton. That was correct as an emergency cutover, but it was not the clean runtime model.
+
+The cleaner model is now in place:
+
+```ts
+resolve: {
+  dedupe: ["react", "react-dom", "react-router", "react-router-dom"],
+},
+ssr: {
+  external: [
+    "react",
+    "react-dom",
+    "react-router",
+    "react-router-dom",
+    "react-resizable-panels",
+  ],
+},
+```
+
+This chooses the **Node SSR service** model rather than the **self-contained SSR bundle** model:
+
+```text
+Node SSR service model
+  server.mjs
+    imports dist/ssr/entry-server.js
+      imports react / react-dom / react-router / layout libraries
+        all resolved from web/node_modules
+```
+
+The invariant is not “small bundle at any cost.” The invariant is: **React and all hook-using React libraries must resolve through one coherent runtime dependency tree.** The sidecar now preserves that invariant by running from the `web` package and keeping production `node_modules` available in the SSR container.
+
+### Runtime packaging result
+
+`web/ssr.Dockerfile` now builds client + SSR output, then prunes dev dependencies:
+
+```dockerfile
+RUN pnpm build:all && pnpm prune --prod
+```
+
+This keeps production runtime libraries such as `react`, `react-dom`, `react-router`, `react-router-dom`, `react-resizable-panels`, and `express`, while removing build/test tools such as Vite, TypeScript, Vitest, Storybook, and Playwright.
+
+The built image was validated with:
+
+```bash
+docker build -f web/ssr.Dockerfile -t retro-ssr-smoke:local .
+docker run -d --rm \
+  -e SSR_DEBUG_RESOLUTION=1 \
+  -e SSR_PORT=8089 \
+  -p 127.0.0.1:18091:8089 \
+  retro-ssr-smoke:local
+curl -fsS http://127.0.0.1:18091/health
+```
+
+Container startup diagnostics confirmed React-family packages resolve under `/app/web/node_modules/.pnpm/...` after pruning.
+
+### Bundle-size measurement
+
+Measured during the live smoke-test work:
+
+| Model | `dist/ssr/entry-server.js` | SSR build time observed | Notes |
+|---|---:|---:|---|
+| Blunt correctness fix: `ssr.noExternal: true` | `4,979.92 kB` | `13.52s` | Bundled the full app dependency graph, including heavy Markdown/diagram libraries. |
+| Clean Node SSR externalization | `72.39 kB` (`72,390` bytes on disk) | `409ms`–`619ms` | Imports production dependencies from `web/node_modules` at runtime. |
+
+The current file-size check is:
+
+```bash
+wc -c web/dist/ssr/entry-server.js
+# 72390 web/dist/ssr/entry-server.js
+
+du -h web/dist/ssr/entry-server.js
+# 72K web/dist/ssr/entry-server.js
+```
+
+That is approximately a **98.5% reduction** in the main SSR entry file while preserving live hydration correctness.
+
+### Validation commands
+
+Use these commands after changing SSR routing, Vite SSR externalization, Docker packaging, or React-family dependencies:
+
+```bash
+pnpm --dir web check
+SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr
+
+docker build -f web/ssr.Dockerfile -t retro-ssr-smoke:local .
+docker run -d --rm \
+  -e SSR_DEBUG_RESOLUTION=1 \
+  -e SSR_PORT=8089 \
+  -p 127.0.0.1:18091:8089 \
+  retro-ssr-smoke:local
+curl -fsS http://127.0.0.1:18091/health
+```
+
+The live smoke test is the important acceptance gate. The TypeScript build can pass even when the sidecar fails at runtime with duplicate React or SSR import errors. The smoke test exercises the path that matters:
+
+```text
+pnpm build:all
+  -> node server.mjs
+  -> go run ... --ssr-url <sidecar>
+  -> GET / through Go proxy
+  -> verify real SSR HTML, not SPA fallback
+  -> hydrate in Chromium
+  -> verify zero console warnings/errors
+  -> click sidebar navigation
+```
+
+### Remaining tradeoffs
+
+The externalized model makes the SSR entry small and conceptually clean, but it shifts responsibility to runtime packaging. If a future deployment copies only `server.mjs` and `dist/ssr/entry-server.js` without production `node_modules`, the sidecar will fail at import time. That is why `web/ssr.Dockerfile` now documents and preserves production dependencies, and why `SSR_DEBUG_RESOLUTION=1` exists.
+
+A future optimization could convert the SSR Dockerfile to a multi-stage build that copies only `dist`, `server.mjs`, `package.json`, lockfile metadata, and production `node_modules` into a smaller runtime image. That would be an image-size cleanup, not a React correctness change.

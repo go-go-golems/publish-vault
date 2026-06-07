@@ -92,3 +92,12 @@ Phase D complete: updated SSR sidecar Dockerfile to keep production node_modules
 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — SSR runtime dependency packaging
 
+
+## 2026-06-07
+
+Phase E complete: documented final SSR dependency model, runtime packaging requirement, validation commands, and bundle-size reduction from ~4.98 MB to 72.39 KB.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/07/RETRO-SEO-009--fix-page-titles-ssr-sidebar-for-seo-and-proper-html-menu-content-layout/design-doc/02-react-router-ssr-hydration-cleanup-implementation-guide.md — Final measurement and tradeoff documentation
+

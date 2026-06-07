@@ -33,4 +33,4 @@
 - [x] Phase B: Add SSR dependency-resolution diagnostics so sidecar startup can report React/React DOM/router resolution paths and versions when troubleshooting duplicate React.
 - [x] Phase C: Replace blunt ssr.noExternal=true with a principled SSR dependency model (prefer consistent externalized React runtime) guarded by the live smoke test.
 - [x] Phase D: Update SSR Docker/runtime packaging if externalized dependencies require production node_modules in the sidecar image.
-- [ ] Phase E: Measure and document SSR bundle size before/after the dependency model change, including validation commands and tradeoffs.
+- [x] Phase E: Measure and document SSR bundle size before/after the dependency model change, including validation commands and tradeoffs.

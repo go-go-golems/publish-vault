@@ -728,3 +728,74 @@ The Dockerfile already installed dependencies in the final image, so the functio
   - `react@19.2.1 -> file:///app/web/node_modules/.pnpm/react@19.2.1/node_modules/react/index.js`
   - `react-dom/server@19.2.1 -> file:///app/web/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/server.node.js`
   - `react-router@7.17.0 -> file:///app/web/node_modules/.pnpm/react-router@7.17.0_react-dom@19.2.1_react@19.2.1__react@19.2.1/node_modules/react-router/dist/development/index.mjs`
+
+## Step 10: Document SSR Bundle-Size Results and Final Dependency Tradeoff
+
+This step documented the final SSR dependency model and bundle-size measurements in the React Router SSR cleanup implementation guide. It closes the follow-up loop: the ticket now explains why `ssr.noExternal: true` was needed as a correctness cutover, why it made the SSR bundle large, and how the final externalized Node SSR model keeps correctness while restoring a small SSR entry.
+
+The final measurement is the practical headline: the main SSR entry dropped from roughly 4.98 MB under `ssr.noExternal: true` to 72.39 KB under consistent externalization, while the live smoke test still verifies raw SSR HTML and clean browser hydration.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Complete the final documentation phase by recording measurements, commands, and the tradeoff between bundle size and runtime dependency packaging.
+
+**Inferred user intent:** Leave future maintainers with a clear explanation of the clean solution, not only a code diff.
+
+**Commit (code):** N/A — documentation-only phase.
+
+### What I did
+- Appended a `Follow-up result: clean SSR dependency model and bundle-size measurement` section to `design-doc/02-react-router-ssr-hydration-cleanup-implementation-guide.md`.
+- Recorded:
+  - final `resolve.dedupe` and `ssr.external` config,
+  - runtime packaging requirement for production `node_modules`,
+  - Docker validation commands,
+  - live smoke-test validation commands,
+  - before/after SSR bundle-size table,
+  - current on-disk size checks.
+- Measured current file size:
+  - `wc -c web/dist/ssr/entry-server.js` -> `72390`
+  - `du -h web/dist/ssr/entry-server.js` -> `72K`
+
+### Why
+- The original user concern was that `ssr.noExternal: true` felt like a workaround. The final docs now explain the fundamental issue and the clean model chosen.
+- The size numbers should be easy to find later when reviewing why this configuration exists.
+
+### What worked
+- The guide now captures the final architecture in one place:
+  - React-family packages externalized together,
+  - sidecar runtime keeps production dependencies,
+  - diagnostics prove runtime resolution,
+  - live smoke test guards hydration correctness.
+
+### What didn't work
+- N/A. This was a documentation/measurement phase.
+
+### What I learned
+- The measured entry-size reduction is large enough to justify the follow-up: ~98.5% smaller main SSR entry file.
+- Documentation should distinguish bundle-size cleanup from runtime-image-size cleanup. We fixed the SSR entry size and correctness model; a future multi-stage Dockerfile could further improve image size.
+
+### What was tricky to build
+- The docs needed to avoid implying that small bundle size is the primary invariant. The primary invariant is single React runtime resolution; bundle size is the beneficial result of choosing the Node SSR service model correctly.
+- The before size came from the previous smoke-test build output rather than the current filesystem, because the current build output now reflects the externalized model. The diary and guide note both sources.
+
+### What warrants a second pair of eyes
+- Review whether the guide should also include image-size measurements after `pnpm prune --prod`; this step focused on SSR bundle size, not Docker layer size.
+- Review whether the deployment docs should explicitly mention `SSR_DEBUG_RESOLUTION=1` as an operator troubleshooting flag.
+
+### What should be done in the future
+- Optional: convert `web/ssr.Dockerfile` to multi-stage and measure final image-size reduction.
+- Optional: add the live smoke test to CI.
+
+### Code review instructions
+- Review the appended follow-up section in `design-doc/02-react-router-ssr-hydration-cleanup-implementation-guide.md`.
+- Validate measurements with:
+  - `wc -c web/dist/ssr/entry-server.js`
+  - `du -h web/dist/ssr/entry-server.js`
+  - `SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr`
+
+### Technical details
+- Current SSR entry size: `72,390` bytes / `72K`.
+- Previous `ssr.noExternal: true` SSR entry size: `4,979.92 kB` from Step 6 build output.
+- Approximate reduction: 98.5%.
