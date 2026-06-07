@@ -107,9 +107,11 @@ func Run(ctx context.Context, cfg Config) error {
 			r.HandleFunc("/favicon.svg", func(w http.ResponseWriter, r *http.Request) { spaHandler.ServeHTTP(w, r) })
 
 			ssrProxy := newSSRProxy(cfg.SSRURL, spaHandler)
-			r.PathPrefix("/").Handler(ssrProxy)
+			pageHandler := newAgentPageHandler(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle}, ssrProxy)
+			r.PathPrefix("/").Handler(pageHandler)
 		} else {
-			r.PathPrefix("/").Handler(spaHandler)
+			pageHandler := newAgentPageHandler(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle}, spaHandler)
+			r.PathPrefix("/").Handler(pageHandler)
 		}
 	}
 
