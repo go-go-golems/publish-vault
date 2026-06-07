@@ -66,3 +66,13 @@ Phases 3.8 + 6 complete: devctl runs 3 services (backend + web + ssr), SSR verif
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Fixed Express 4 wildcard from {*path} to *
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-client.tsx — Switched from hydrateRoot to createRoot to avoid #418 hydration mismatch
 
+
+## 2026-06-06
+
+Phase 7 planning: added Markdown Mirror and a14y Implementation Guide, detailed tasks, and saved a14y configuration in ticket scripts folder.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/design-doc/02-markdown-mirror-and-a14y-implementation-guide.md — Implementation guide for markdown mirrors
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/scripts/01-a14y-config.md — a14y configuration and baseline score
+
