@@ -96,6 +96,16 @@ func Run(ctx context.Context, cfg Config) error {
 
 		if cfg.SSRURL != "" {
 			log.Printf("SSR sidecar proxy enabled: %s", cfg.SSRURL)
+
+			// Serve static assets directly from the Go server, not through
+			// the SSR proxy. The SSR sidecar only renders page HTML.
+			// These routes must be registered before the catch-all proxy.
+			r.PathPrefix("/assets/").Handler(spaHandler)
+			r.PathPrefix("/__manus__/").Handler(spaHandler)
+			r.PathPrefix("/fonts/").Handler(spaHandler)
+			r.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { spaHandler.ServeHTTP(w, r) })
+			r.HandleFunc("/favicon.svg", func(w http.ResponseWriter, r *http.Request) { spaHandler.ServeHTTP(w, r) })
+
 			ssrProxy := newSSRProxy(cfg.SSRURL, spaHandler)
 			r.PathPrefix("/").Handler(ssrProxy)
 		} else {
