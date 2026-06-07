@@ -273,3 +273,51 @@ The sidecar needs its own container image with Node.js to run the Express SSR se
 ### Technical details
 Commit: `17dbb02`
 Files: `web/ssr.Dockerfile` (new), `docker-compose.yml`
+
+## Step 7: Phase 6 — End-to-end verification with devctl (b30da32)
+
+Ran the full stack via `devctl up --profile example` with 3 services (backend, web, ssr). Discovered and fixed three bugs during manual testing.
+
+### What I did
+- Updated devctl plugin to add SSR sidecar as third service with `depends_on: ["backend"]`
+- Started devctl and verified all 3 services come up healthy
+- Tested SSR output directly (`curl :8089/`) — confirmed full HTML with preloaded state, meta tags, JSON-LD
+- Tested through Go proxy (`curl :8081/note/zettelkasten-method`) — confirmed correct title, meta tags, rendered content
+- Tested SPA fallback (stopped SSR service) — confirmed Go server falls back to `index.html`
+- Opened browser and verified rendering with zero console errors
+
+### Why
+Phase 6 is the manual verification that everything works end-to-end.
+
+### What worked
+- The SSR sidecar correctly fetches data from the Go API and renders React to HTML
+- JSON-LD structured data (WebPage + BreadcrumbList) is correctly generated
+- Open Graph meta tags are populated with note titles and excerpts
+- The `<noscript>` fallback provides text content for non-JS agents
+- SPA fallback works correctly when the sidecar is down
+
+### What didn't work
+1. **Express 4 wildcard syntax.** `server.mjs` used `{*path}` (Express 5 syntax) but the project uses Express 4. Fixed by changing to `"*"`.
+2. **Static assets served as text/html.** The Go SSR proxy caught `/assets/*` requests and forwarded them to the sidecar, which returned HTML instead of JS/CSS. Fixed by adding `r.PathPrefix("/assets/").Handler(spaHandler)` before the SSR proxy in `server.go`.
+3. **React hydration mismatch (#418).** The SSR renders simplified components (SSRNotePage) while the client hydrates with the full app (VaultLayout + Wouter routing). The DOM trees don't match, causing React error #418. Fixed by switching from `hydrateRoot` to `createRoot` in `entry-client.tsx`, clearing the SSR content before mounting. The SSR HTML still serves crawlers/agents; the client just replaces it with the full interactive app.
+
+### What was tricky to build
+- The hydration mismatch was subtle. The SSR components intentionally render simplified content (no Wouter, no sidebar, no resizable panels). Using `hydrateRoot` would require the SSR and client DOM to be byte-identical, which defeats the purpose of simplified SSR. The `createRoot` approach is the pragmatic choice — SSR HTML for bots, client app for users.
+- The devctl `restart` and `start` commands re-resolve ports, breaking the Go→SSR URL mapping. Must use `devctl down && devctl up` instead of `restart`.
+
+### What warrants a second pair of eyes
+- The `createRoot` approach means the user briefly sees the SSR content flash, then it's replaced. This is acceptable for SEO/agent use but worth noting.
+- The `root.textContent = ""` line clears the SSR content. Make sure this doesn't cause a flash of unstyled content.
+
+### What should be done in the future
+- Consider using React 19's streaming SSR with `renderToReadableStream` for progressive loading.
+- Consider matching SSR and client component trees more closely to enable true hydration.
+
+### Code review instructions
+- Run `devctl up --profile example` and verify all 3 services start
+- `curl http://localhost:8081/note/zettelkasten-method | grep "<title>"` should show the note title
+- Open in browser, check DevTools console for zero errors
+
+### Technical details
+Commit: `b30da32`
+Files: `web/src/entry-client.tsx`, `web/server.mjs`, `backend/internal/server/server.go`, `plugins/retro-obsidian-publish.py`

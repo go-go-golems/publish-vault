@@ -54,3 +54,15 @@ Task 2.6: Added entry-server unit tests (11 passing), exported parseRoute, fixed
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.test.tsx — 11 unit tests for renderApp and parseRoute
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vitest.config.ts — Vitest config for SSR tests
 
+
+## 2026-06-06
+
+Phases 3.8 + 6 complete: devctl runs 3 services (backend + web + ssr), SSR verified end-to-end. Fixed Express 4 wildcard syntax, added static asset routes to Go server, switched to createRoot to avoid hydration mismatch. Browser renders correctly with zero console errors (commit b30da32). All 31 tasks done.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/backend/internal/server/server.go — Added /assets/
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/plugins/retro-obsidian-publish.py — Added SSR sidecar service to devctl
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Fixed Express 4 wildcard from {*path} to *
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-client.tsx — Switched from hydrateRoot to createRoot to avoid #418 hydration mismatch
+

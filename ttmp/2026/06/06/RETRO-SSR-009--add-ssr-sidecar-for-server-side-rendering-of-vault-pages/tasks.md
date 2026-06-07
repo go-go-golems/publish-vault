@@ -27,7 +27,7 @@
 - [x] 3.5 Inject `window.__PRELOADED_STATE__` + `<meta>` tags + `<title>` + JSON-LD
 - [x] 3.6 Add `<noscript>` fallback content for non-JS agents
 - [x] 3.7 Add `ssr` script to `package.json`: `node server.mjs`
-- [ ] 3.8 Test manually: Go server + sidecar, verify page source has real content
+- [x] 3.8 Test manually: Go server + sidecar, verify page source has real content
 
 ## Phase 4: Go server SSR proxy
 
@@ -45,6 +45,6 @@
 
 ## Phase 6: SEO and a14y verification
 
-- [ ] 6.1 Verify `curl` against pages shows real HTML content
-- [ ] 6.2 Verify hydration correctness (no React warnings in console)
-- [ ] 6.3 Verify SPA fallback works when sidecar is down
+- [x] 6.1 Verify `curl` against pages shows real HTML content
+- [x] 6.2 Verify hydration correctness (no React warnings in console)
+- [x] 6.3 Verify SPA fallback works when sidecar is down
