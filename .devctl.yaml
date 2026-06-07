@@ -8,7 +8,7 @@ profiles:
     plugins:
       - retro-obsidian-publish
     env:
-      VAULT_DIR: backend/vault-example
+      VAULT_DIR: vault-example
       VAULT_NAME: vault-example
 
   go-go-parc:

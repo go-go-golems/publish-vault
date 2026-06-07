@@ -5,7 +5,16 @@
       "gitops_repo": "wesen/2026-03-27--hetzner-k3s",
       "gitops_branch": "main",
       "manifest_path": "gitops/kustomize/retro-obsidian-publish/deployment.yaml",
-      "container_name": "app"
+      "images": [
+        {
+          "container_name": "app",
+          "image_name": "ghcr.io/go-go-golems/publish-vault"
+        },
+        {
+          "container_name": "ssr",
+          "image_name": "ghcr.io/go-go-golems/publish-vault-ssr"
+        }
+      ]
     }
   ]
 }

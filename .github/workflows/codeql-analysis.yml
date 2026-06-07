@@ -28,9 +28,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: go.sum
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v4

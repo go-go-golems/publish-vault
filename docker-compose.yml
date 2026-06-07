@@ -4,14 +4,33 @@ services:
   app:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       args:
         - VITE_API_URL=
         - VITE_VAULT_NAME=${VAULT_NAME:-My Vault}
     ports:
       - "8080:8080"
     volumes:
-      - ${VAULT_PATH:-./backend/vault-example}:/vault:ro
+      - ${VAULT_PATH:-./vault-example}:/vault:ro
     environment:
       - VAULT_DIR=/vault
+    command:
+      - "serve"
+      - "--port"
+      - "8080"
+      - "--serve-web"
+      - "--ssr-url"
+      - "http://ssr:8089"
+    restart: unless-stopped
+    depends_on:
+      - ssr
+
+  ssr:
+    build:
+      context: .
+      dockerfile: web/ssr.Dockerfile
+    environment:
+      - SSR_PORT=8089
+      - API_BASE=http://app:8080
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
     restart: unless-stopped

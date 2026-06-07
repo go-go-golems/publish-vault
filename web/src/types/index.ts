@@ -1,6 +1,12 @@
 // Central type definitions for the vault system.
 // vaultApi.ts imports from here; components import from here too.
 
+export interface SiteConfig {
+  vaultName: string;
+  pageTitle: string;
+  notes: number;
+}
+
 export interface WikiLinkRef {
   target: string;
   alias?: string;

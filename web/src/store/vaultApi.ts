@@ -16,10 +16,11 @@ import type {
   SearchResult,
   TagCount,
   WikiLinkRef,
+  SiteConfig,
 } from "../types";
 
 // Re-export types so consumers can import from one place
-export type { Note, NoteListItem, FileNode, SearchResult, TagCount, WikiLinkRef };
+export type { Note, NoteListItem, FileNode, SearchResult, TagCount, WikiLinkRef, SiteConfig };
 
 // ── Mode detection ────────────────────────────────────────────────
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || "";
@@ -44,12 +45,6 @@ function notFound(): { error: FetchBaseQueryError } {
 }
 
 // ── API Slice ─────────────────────────────────────────────────────
-
-export interface SiteConfig {
-  vaultName: string;
-  pageTitle: string;
-  notes: number;
-}
 
 export const vaultApi = createApi({
   reducerPath: "vaultApi",

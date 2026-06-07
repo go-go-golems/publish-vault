@@ -1,0 +1,63 @@
+---
+Title: Add SSR sidecar for server-side rendering of vault pages
+Ticket: RETRO-SSR-009
+Status: complete
+Topics:
+    - ssr
+    - react
+    - node-js
+    - seo
+    - a14y
+    - hydration
+DocType: index
+Intent: long-term
+Owners: []
+RelatedFiles: []
+ExternalSources: []
+Summary: ""
+LastUpdated: 2026-06-06T21:58:06.403629928-04:00
+WhatFor: ""
+WhenToUse: ""
+---
+
+
+# Add SSR sidecar for server-side rendering of vault pages
+
+## Overview
+
+<!-- Provide a brief overview of the ticket, its goals, and current status -->
+
+## Key Links
+
+- **Related Files**: See frontmatter RelatedFiles field
+- **External Sources**: See frontmatter ExternalSources field
+
+## Status
+
+Current status: **active**
+
+## Topics
+
+- ssr
+- react
+- node-js
+- seo
+- a14y
+- hydration
+
+## Tasks
+
+See [tasks.md](./tasks.md) for the current task list.
+
+## Changelog
+
+See [changelog.md](./changelog.md) for recent changes and decisions.
+
+## Structure
+
+- design/ - Architecture and design documents
+- reference/ - Prompt packs, API contracts, context summaries
+- playbooks/ - Command sequences and test procedures
+- scripts/ - Temporary code and tooling
+- various/ - Working notes and research
+- archive/ - Deprecated or reference-only artifacts

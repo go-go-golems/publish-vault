@@ -4,27 +4,25 @@ on:
   pull_request:
     paths:
       - .github/workflows/publish-image.yaml
-      - backend/Dockerfile
-      - backend/go.mod
-      - backend/go.sum
-      - backend/cmd/**
-      - backend/internal/**
-      - web/src/**
-      - web/package.json
-      - web/pnpm-lock.yaml
+      - Dockerfile
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
+      - web/**
+      - deploy/gitops-targets.json
   push:
     branches:
       - main
     paths:
       - .github/workflows/publish-image.yaml
-      - backend/Dockerfile
-      - backend/go.mod
-      - backend/go.sum
-      - backend/cmd/**
-      - backend/internal/**
-      - web/src/**
-      - web/package.json
-      - web/pnpm-lock.yaml
+      - Dockerfile
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
+      - web/**
+      - deploy/gitops-targets.json
   workflow_dispatch:
 
 permissions:
@@ -38,15 +36,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
+  release-ssr:
     uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
     secrets: inherit
     with:
-      dockerfile: ./backend/Dockerfile
+      image_name: ghcr.io/go-go-golems/publish-vault-ssr
+      dockerfile: ./web/ssr.Dockerfile
       build_context: .
       test_command: |
-        cd backend && go test ./...
-      go_version_file: backend/go.mod
+        corepack enable
+        corepack prepare pnpm@10.4.1 --activate
+        pnpm --dir web install --frozen-lockfile
+        pnpm --dir web check
+        pnpm --dir web build:all
+      go_version_file: go.mod
+      push_image: ${{ github.event_name != 'pull_request' }}
+      open_gitops_pr: false
+      tooling_repository: go-go-golems/infra-tooling
+      tooling_ref: main
+
+  release:
+    needs: release-ssr
+    uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
+    secrets: inherit
+    with:
+      dockerfile: ./Dockerfile
+      build_context: .
+      test_command: |
+        go test ./...
+      go_version_file: go.mod
       gitops_target_config: deploy/gitops-targets.json
       push_image: ${{ github.event_name != 'pull_request' }}
       open_gitops_pr: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}

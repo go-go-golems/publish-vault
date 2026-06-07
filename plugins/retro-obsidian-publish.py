@@ -56,7 +56,7 @@ emit({
 
 
 def handle_config(rid, ctx):
-    vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault = os.environ.get("VAULT_DIR", "vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
 
     # Resolve ports — env overrides take precedence, then probe from defaults
@@ -70,16 +70,22 @@ def handle_config(rid, ctx):
     # Cache for handle_launch
     _resolved_ports["backend"] = backend_port
     _resolved_ports["web"] = web_port
+    ssr_port = find_free_port(
+        int(os.environ.get("SSR_PORT", "8089"))
+    )
+    _resolved_ports["ssr"] = ssr_port
 
     config_set = {
         "env.vault_dir": vault,
-        "paths.backend": "backend",
+        "paths.backend": ".",
         "paths.web": "web",
         "services.backend.port": backend_port,
         "services.backend.url": f"http://127.0.0.1:{backend_port}",
         "services.web.port": web_port,
         "services.web.url": f"http://127.0.0.1:{web_port}",
         "services.web.api_url": f"http://127.0.0.1:{backend_port}",
+        "services.ssr.port": ssr_port,
+        "services.ssr.url": f"http://127.0.0.1:{ssr_port}",
     }
     if vault_name:
         config_set["env.vault_name"] = vault_name
@@ -107,8 +113,8 @@ def handle_validate(rid, ctx):
             errors.append({"code": "E_MISSING_TOOL", "message": f"{exe} not found on PATH"})
 
     checks = [
-        (root / "backend" / "go.mod", "E_MISSING_BACKEND", "backend/go.mod not found"),
-        (root / "backend" / "cmd" / "retro-obsidian-publish" / "main.go", "E_MISSING_CLI", "single-binary CLI entrypoint not found"),
+        (root / "go.mod", "E_MISSING_BACKEND", "go.mod not found"),
+        (root / "cmd" / "retro-obsidian-publish" / "main.go", "E_MISSING_CLI", "single-binary CLI entrypoint not found"),
         (root / "web" / "package.json", "E_MISSING_WEB", "web/package.json not found"),
     ]
     for path, code, message in checks:
@@ -118,10 +124,10 @@ def handle_validate(rid, ctx):
     if not (root / "web" / "node_modules").exists():
         warnings.append({"code": "W_WEB_DEPS", "message": "web/node_modules missing; run pnpm --dir web install --frozen-lockfile"})
     if not (root / "web" / "dist" / "index.html").exists():
-        warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; run cd backend && go run ./cmd/retro-obsidian-publish build web"})
+        warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; devctl ssr launch will run pnpm build:all before node server.mjs"})
 
     # Validate vault directory exists
-    vault_dir = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault_dir = os.environ.get("VAULT_DIR", "vault-example")
     vault_path = Path(vault_dir)
     if not vault_path.is_absolute():
         vault_path = root / vault_path
@@ -139,7 +145,7 @@ def handle_validate(rid, ctx):
 
 
 def handle_launch(rid, ctx):
-    vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault = os.environ.get("VAULT_DIR", "vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
 
     # Resolve vault path relative to repo root for the backend command
@@ -154,11 +160,15 @@ def handle_launch(rid, ctx):
     # handle_config was never called — shouldn't happen in practice)
     backend_port = _resolved_ports.get("backend", 8080)
     web_port = _resolved_ports.get("web", 3000)
+    ssr_port = find_free_port(
+        int(os.environ.get("SSR_PORT", "8089"))
+    )
 
     backend_cmd = ["go", "run", "./cmd/retro-obsidian-publish", "serve",
                    "--vault", vault_arg,
                    "--port", str(backend_port),
-                   "--serve-web=false"]
+                   "--serve-web=true",
+                   "--ssr-url", f"http://127.0.0.1:{ssr_port}"]
     if vault_name:
         backend_cmd.extend(["--vault-name", vault_name])
 
@@ -172,9 +182,9 @@ def handle_launch(rid, ctx):
         "output": {"services": [
             {
                 "name": "backend",
-                "cwd": "backend",
+                "cwd": ".",
                 "command": backend_cmd,
-                "env": {},
+                "env": {"GOWORK": "off"},
                 "health": {"type": "http", "url": f"http://127.0.0.1:{backend_port}/api/notes", "timeout_ms": health_timeout},
             },
             {
@@ -183,6 +193,18 @@ def handle_launch(rid, ctx):
                 "command": ["pnpm", "dev", "--host", "127.0.0.1", "--port", str(web_port)],
                 "env": {"VITE_API_URL": f"http://127.0.0.1:{backend_port}"},
                 "health": {"type": "http", "url": f"http://127.0.0.1:{web_port}", "timeout_ms": 30000},
+            },
+            {
+                "name": "ssr",
+                "cwd": "web",
+                "command": ["sh", "-c", "pnpm build:all && exec node server.mjs"],
+                "env": {
+                    "SSR_PORT": str(ssr_port),
+                    "API_BASE": f"http://127.0.0.1:{backend_port}",
+                    "BASE_URL": f"http://127.0.0.1:{backend_port}",
+                },
+                "health": {"type": "http", "url": f"http://127.0.0.1:{ssr_port}/health", "timeout_ms": 30000},
+                "depends_on": ["backend"],
             },
         ]}},
     )

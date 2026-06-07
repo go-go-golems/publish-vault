@@ -19,9 +19,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: go.sum
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -48,14 +48,12 @@ jobs:
         run: make test
 
       - name: Build web assets for embedding using local fallback
-        working-directory: backend
         env:
           BUILD_WEB_LOCAL: '1'
         run: go run ./cmd/retro-obsidian-publish build web --local
 
       - name: Build embedded binary
-        working-directory: backend
         run: go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 
       - name: Build Docker image
-        run: docker build -f backend/Dockerfile -t retro-obsidian-publish .
+        run: docker build -f Dockerfile -t retro-obsidian-publish .
