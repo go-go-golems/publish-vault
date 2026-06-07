@@ -113,3 +113,8 @@ Closed remaining original tasks: validation is covered by smoke/full checks, and
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/docker-compose.yml — compose page-title args
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/plugins/retro-obsidian-publish.py — PAGE_TITLE launch plumbing
 
+
+## 2026-06-07
+
+Ticket closed
+
