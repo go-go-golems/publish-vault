@@ -218,7 +218,7 @@ func (v *Vault) rebuildHTML() {
 			if resolved, ok := v.wikiLinkIndex[target]; ok {
 				return resolved
 			}
-			return target
+			return ""
 		})
 		note.HTML = parser.ReplaceWikiLinkDisplay(note.HTML, func(slug string) string {
 			if n, ok := v.notes[slug]; ok {

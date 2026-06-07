@@ -197,6 +197,17 @@ func TestReplaceWikiLinksStringPreservesHeadingFragment(t *testing.T) {
 	}
 }
 
+func TestReplaceWikiLinksStringUnresolvedTargetsAreNotCrawlableNoteLinks(t *testing.T) {
+	html := `<p><a href="/note/gettier-problem" class="wiki-link" data-target="gettier-problem" data-raw="Gettier Problem" data-alias="">Gettier Problem</a></p>`
+	got := ReplaceWikiLinksString(html, func(target string) string { return "" })
+	if contains(got, `href="/note/gettier-problem"`) {
+		t.Fatalf("unresolved wiki link stayed crawlable: %s", got)
+	}
+	if !contains(got, `href="#unresolved-gettier-problem"`) {
+		t.Fatalf("unresolved wiki link did not become same-page anchor: %s", got)
+	}
+}
+
 func TestReplaceWikiLinkDisplayPreservesAlias(t *testing.T) {
 	html := `<p><a href="/note/research/kb/target" class="wiki-link" data-target="research/kb/target" data-raw="Target" data-alias="Custom Alias">Custom Alias</a></p>`
 	got := ReplaceWikiLinkDisplay(html, func(_ string) string { return "Resolved Title" })

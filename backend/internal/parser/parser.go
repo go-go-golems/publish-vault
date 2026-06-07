@@ -224,6 +224,9 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 			return match
 		}
 		resolved := resolver(sub[1])
+		if resolved == "" {
+			return match
+		}
 		return `data-target="` + resolved + `"`
 	})
 	html = hrefNoteRe.ReplaceAllStringFunc(html, func(match string) string {
@@ -232,6 +235,9 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 			return match
 		}
 		resolved := resolver(sub[1])
+		if resolved == "" {
+			return `href="#unresolved-` + sub[1] + `"`
+		}
 		fragment := ""
 		if len(sub) >= 3 {
 			fragment = sub[2]
