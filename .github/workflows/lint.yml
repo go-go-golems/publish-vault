@@ -29,9 +29,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-          cache-dependency-path: go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version-file: .golangci-lint-version
-          args: -c .golangci.yml --timeout=5m
+          args: --timeout=5m
