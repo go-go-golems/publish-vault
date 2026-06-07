@@ -13,17 +13,18 @@ RUN pnpm build
 
 FROM golang:1.25-alpine AS go-builder
 RUN apk add --no-cache build-base
-WORKDIR /src/backend
-COPY backend/go.mod backend/go.sum ./
+WORKDIR /src
+COPY go.mod go.sum ./
 RUN go mod download
-COPY backend ./
+COPY cmd ./cmd
+COPY internal ./internal
 COPY --from=web-builder /src/web/dist ./internal/web/embed/public
 RUN CGO_ENABLED=1 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=go-builder /src/backend/bin/retro-obsidian-publish ./retro-obsidian-publish
+COPY --from=go-builder /src/bin/retro-obsidian-publish ./retro-obsidian-publish
 EXPOSE 8080
 ENTRYPOINT ["./retro-obsidian-publish"]
 CMD ["serve", "--port", "8080", "--serve-web"]

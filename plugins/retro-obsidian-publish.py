@@ -56,7 +56,7 @@ emit({
 
 
 def handle_config(rid, ctx):
-    vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault = os.environ.get("VAULT_DIR", "vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
 
     # Resolve ports — env overrides take precedence, then probe from defaults
@@ -77,7 +77,7 @@ def handle_config(rid, ctx):
 
     config_set = {
         "env.vault_dir": vault,
-        "paths.backend": "backend",
+        "paths.backend": ".",
         "paths.web": "web",
         "services.backend.port": backend_port,
         "services.backend.url": f"http://127.0.0.1:{backend_port}",
@@ -113,8 +113,8 @@ def handle_validate(rid, ctx):
             errors.append({"code": "E_MISSING_TOOL", "message": f"{exe} not found on PATH"})
 
     checks = [
-        (root / "backend" / "go.mod", "E_MISSING_BACKEND", "backend/go.mod not found"),
-        (root / "backend" / "cmd" / "retro-obsidian-publish" / "main.go", "E_MISSING_CLI", "single-binary CLI entrypoint not found"),
+        (root / "go.mod", "E_MISSING_BACKEND", "go.mod not found"),
+        (root / "cmd" / "retro-obsidian-publish" / "main.go", "E_MISSING_CLI", "single-binary CLI entrypoint not found"),
         (root / "web" / "package.json", "E_MISSING_WEB", "web/package.json not found"),
     ]
     for path, code, message in checks:
@@ -127,7 +127,7 @@ def handle_validate(rid, ctx):
         warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; devctl ssr launch will run pnpm build:all before node server.mjs"})
 
     # Validate vault directory exists
-    vault_dir = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault_dir = os.environ.get("VAULT_DIR", "vault-example")
     vault_path = Path(vault_dir)
     if not vault_path.is_absolute():
         vault_path = root / vault_path
@@ -145,7 +145,7 @@ def handle_validate(rid, ctx):
 
 
 def handle_launch(rid, ctx):
-    vault = os.environ.get("VAULT_DIR", "backend/vault-example")
+    vault = os.environ.get("VAULT_DIR", "vault-example")
     vault_name = os.environ.get("VAULT_NAME", "")
 
     # Resolve vault path relative to repo root for the backend command
@@ -182,9 +182,9 @@ def handle_launch(rid, ctx):
         "output": {"services": [
             {
                 "name": "backend",
-                "cwd": "backend",
+                "cwd": ".",
                 "command": backend_cmd,
-                "env": {},
+                "env": {"GOWORK": "off"},
                 "health": {"type": "http", "url": f"http://127.0.0.1:{backend_port}/api/notes", "timeout_ms": health_timeout},
             },
             {

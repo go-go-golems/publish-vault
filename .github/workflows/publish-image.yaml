@@ -4,11 +4,11 @@ on:
   pull_request:
     paths:
       - .github/workflows/publish-image.yaml
-      - backend/Dockerfile
-      - backend/go.mod
-      - backend/go.sum
-      - backend/cmd/**
-      - backend/internal/**
+      - Dockerfile
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
       - web/src/**
       - web/package.json
       - web/pnpm-lock.yaml
@@ -17,11 +17,11 @@ on:
       - main
     paths:
       - .github/workflows/publish-image.yaml
-      - backend/Dockerfile
-      - backend/go.mod
-      - backend/go.sum
-      - backend/cmd/**
-      - backend/internal/**
+      - Dockerfile
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
       - web/src/**
       - web/package.json
       - web/pnpm-lock.yaml
@@ -42,11 +42,11 @@ jobs:
     uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
     secrets: inherit
     with:
-      dockerfile: ./backend/Dockerfile
+      dockerfile: ./Dockerfile
       build_context: .
       test_command: |
-        cd backend && go test ./...
-      go_version_file: backend/go.mod
+        go test ./...
+      go_version_file: go.mod
       gitops_target_config: deploy/gitops-targets.json
       push_image: ${{ github.event_name != 'pull_request' }}
       open_gitops_pr: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}

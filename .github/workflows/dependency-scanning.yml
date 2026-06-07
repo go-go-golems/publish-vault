@@ -32,9 +32,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -53,9 +53,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: backend/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest

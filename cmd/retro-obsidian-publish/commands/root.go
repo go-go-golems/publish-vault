@@ -6,8 +6,8 @@ import (
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/spf13/cobra"
 
-	buildcmd "retro-obsidian-publish/backend/cmd/retro-obsidian-publish/commands/build"
-	servecmd "retro-obsidian-publish/backend/cmd/retro-obsidian-publish/commands/serve"
+	buildcmd "retro-obsidian-publish/cmd/retro-obsidian-publish/commands/build"
+	servecmd "retro-obsidian-publish/cmd/retro-obsidian-publish/commands/serve"
 )
 
 // NewRootCommand builds the top-level command tree. Subdirectories mirror the

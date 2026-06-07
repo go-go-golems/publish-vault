@@ -24,7 +24,8 @@ It is designed for people who want to publish a personal knowledge base without 
 
 ```text
 retro-obsidian-publish/
-├── backend/                         # Go module and server binary
+├── cmd/                             # Go CLI entrypoint and commands
+├── internal/                        # Go server, API, parser, vault, search, and web packages
 │   ├── cmd/retro-obsidian-publish/   # CLI entrypoint and commands
 │   ├── internal/api/                 # JSON API handlers
 │   ├── internal/parser/              # Markdown, frontmatter, wiki-link parsing
@@ -48,11 +49,11 @@ retro-obsidian-publish/
 Useful starting points:
 
 - [`ideas.md`](./ideas.md) — background, design philosophy, and product ideas.
-- [`backend/vault-example/`](./backend/vault-example/) — a tiny vault you can serve immediately.
+- [`vault-example/`](./vault-example/) — a tiny vault you can serve immediately.
 - [`web/src/components/`](./web/src/components/) — React UI implementation.
-- [`backend/internal/parser/parser.go`](./backend/internal/parser/parser.go) — Markdown and Obsidian syntax handling.
-- [`backend/internal/vault/vault.go`](./backend/internal/vault/vault.go) — note loading, slugs, backlinks, and file tree construction.
-- [`backend/internal/server/server.go`](./backend/internal/server/server.go) — HTTP server, health endpoint, and reload endpoint.
+- [`internal/parser/parser.go`](./internal/parser/parser.go) — Markdown and Obsidian syntax handling.
+- [`internal/vault/vault.go`](./internal/vault/vault.go) — note loading, slugs, backlinks, and file tree construction.
+- [`internal/server/server.go`](./internal/server/server.go) — HTTP server, health endpoint, and reload endpoint.
 
 ---
 
@@ -71,7 +72,6 @@ From the repository root:
 corepack enable
 pnpm --dir web install --frozen-lockfile
 
-cd backend
 go run ./cmd/retro-obsidian-publish serve \
   --vault ./vault-example \
   --port 8080
@@ -86,7 +86,6 @@ http://127.0.0.1:8080
 The development build serves the frontend from `web/dist`. If you have not built the web app yet and the page reports that the web bundle is missing, run:
 
 ```bash
-cd backend
 go run ./cmd/retro-obsidian-publish build web --local
 ```
 
@@ -99,7 +98,6 @@ Then start the server again.
 Point `--vault` at any Obsidian vault directory:
 
 ```bash
-cd backend
 go run ./cmd/retro-obsidian-publish serve \
   --vault /path/to/your/obsidian-vault \
   --port 8080
@@ -108,7 +106,6 @@ go run ./cmd/retro-obsidian-publish serve \
 You can also use `VAULT_DIR`:
 
 ```bash
-cd backend
 VAULT_DIR=/path/to/your/obsidian-vault \
   go run ./cmd/retro-obsidian-publish serve --port 8080
 ```
@@ -123,7 +120,6 @@ The production path builds the React app, copies its static assets into the Go e
 
 ```bash
 # 1. Build the web app and stage it for Go embedding.
-cd backend
 go run ./cmd/retro-obsidian-publish build web --local
 
 # 2. Build the single binary.
@@ -147,11 +143,11 @@ The generated frontend assets are intentionally not meant to be edited by hand. 
 
 ## Build and run with Docker
 
-The repository includes a multi-stage Dockerfile at [`backend/Dockerfile`](./backend/Dockerfile). Build it from the repository root so Docker can see both `backend/` and `web/`:
+The repository includes a multi-stage Dockerfile at [`Dockerfile`](./Dockerfile). Build it from the repository root so Docker can see both the Go root module and `web/`:
 
 ```bash
 docker build \
-  -f backend/Dockerfile \
+  -f Dockerfile \
   -t retro-obsidian-publish:local \
   .
 ```
@@ -183,7 +179,6 @@ For frontend work, run the backend API and Vite separately.
 Terminal 1:
 
 ```bash
-cd backend
 go run ./cmd/retro-obsidian-publish serve \
   --vault ./vault-example \
   --port 8080 \
@@ -443,7 +438,6 @@ Run this before publishing a new build:
 pnpm --dir web check
 pnpm --dir web build
 
-cd backend
 go test ./...
 go run ./cmd/retro-obsidian-publish build web --local
 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
@@ -467,7 +461,6 @@ curl -fsS http://127.0.0.1:8080/ | head
 Build the frontend bundle:
 
 ```bash
-cd backend
 go run ./cmd/retro-obsidian-publish build web --local
 ```
 

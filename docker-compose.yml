@@ -4,14 +4,14 @@ services:
   app:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       args:
         - VITE_API_URL=
         - VITE_VAULT_NAME=${VAULT_NAME:-My Vault}
     ports:
       - "8080:8080"
     volumes:
-      - ${VAULT_PATH:-./backend/vault-example}:/vault:ro
+      - ${VAULT_PATH:-./vault-example}:/vault:ro
     environment:
       - VAULT_DIR=/vault
     command:

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"retro-obsidian-publish/backend/internal/search"
-	"retro-obsidian-publish/backend/internal/vault"
+	"retro-obsidian-publish/internal/search"
+	"retro-obsidian-publish/internal/vault"
 )
 
 // RuntimeState holds the currently active vault and search index. It supports

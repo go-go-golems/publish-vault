@@ -10,8 +10,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"retro-obsidian-publish/backend/internal/search"
-	"retro-obsidian-publish/backend/internal/vault"
+	"retro-obsidian-publish/internal/search"
+	"retro-obsidian-publish/internal/vault"
 )
 
 // VaultWatcher wraps fsnotify and debounces rapid file events.

@@ -52,7 +52,7 @@ func NewWebCommand() (*cobra.Command, error) {
 	cmd := &WebCommand{CommandDescription: cmds.NewCommandDescription(
 		"web",
 		cmds.WithShort("Build the web frontend for embedding in the Go binary"),
-		cmds.WithLong(`Build the React/Vite web app and copy web/dist into backend/internal/web/embed/public so the Go binary can be built with -tags embed.
+		cmds.WithLong(`Build the React/Vite web app and copy web/dist into internal/web/embed/public so the Go binary can be built with -tags embed.
 
 Examples:
   retro-obsidian-publish build web
@@ -161,7 +161,7 @@ func runLocal(repoRoot string) error {
 }
 
 func copyDistToEmbed(repoRoot, src, mode string) error {
-	dst := filepath.Join(repoRoot, "backend", "internal", "web", "embed", "public")
+	dst := filepath.Join(repoRoot, "internal", "web", "embed", "public")
 	if err := recreate(dst); err != nil {
 		return fmt.Errorf("recreate dst: %w", err)
 	}
@@ -196,7 +196,7 @@ func findRepoRoot() (string, error) {
 		return "", err
 	}
 	for i := 0; i < 12; i++ {
-		if exists(filepath.Join(dir, "backend", "go.mod")) && exists(filepath.Join(dir, "web", "package.json")) {
+		if exists(filepath.Join(dir, "go.mod")) && exists(filepath.Join(dir, "web", "package.json")) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

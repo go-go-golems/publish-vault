@@ -11,8 +11,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"retro-obsidian-publish/backend/internal/search"
-	"retro-obsidian-publish/backend/internal/vault"
+	"retro-obsidian-publish/internal/search"
+	"retro-obsidian-publish/internal/vault"
 )
 
 func TestRoutesSmoke(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"retro-obsidian-publish/backend/internal/api"
+	"retro-obsidian-publish/internal/api"
 )
 
 func newTestRuntimeState(t *testing.T) *RuntimeState {

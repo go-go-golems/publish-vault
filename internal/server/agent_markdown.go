@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"retro-obsidian-publish/backend/internal/api"
-	"retro-obsidian-publish/backend/internal/vault"
+	"retro-obsidian-publish/internal/api"
+	"retro-obsidian-publish/internal/vault"
 )
 
 const markdownDocVersion = "1"

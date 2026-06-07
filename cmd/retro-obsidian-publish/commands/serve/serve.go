@@ -14,7 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/spf13/cobra"
 
-	appserver "retro-obsidian-publish/backend/internal/server"
+	appserver "retro-obsidian-publish/internal/server"
 )
 
 // Command serves the API and optionally the bundled web app.

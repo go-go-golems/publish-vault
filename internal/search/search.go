@@ -11,7 +11,7 @@ import (
 	"github.com/blevesearch/bleve/v2/mapping"
 	bq "github.com/blevesearch/bleve/v2/search/query"
 
-	"retro-obsidian-publish/backend/internal/vault"
+	"retro-obsidian-publish/internal/vault"
 )
 
 // SearchResult represents a single search hit.

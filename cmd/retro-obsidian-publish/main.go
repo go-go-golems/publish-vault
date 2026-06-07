@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"retro-obsidian-publish/backend/cmd/retro-obsidian-publish/commands"
+	"retro-obsidian-publish/cmd/retro-obsidian-publish/commands"
 )
 
 func main() {

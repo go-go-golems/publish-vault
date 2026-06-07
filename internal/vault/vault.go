@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"retro-obsidian-publish/backend/internal/parser"
+	"retro-obsidian-publish/internal/parser"
 )
 
 // Note represents a single Obsidian note.

@@ -9,9 +9,9 @@ web/dist
 web/.manus-logs
 web/public/__manus__/version.json
 
-backend/bin
-backend/internal/web/embed/public/*
-!backend/internal/web/embed/public/.gitkeep
+bin
+internal/web/embed/public/*
+!internal/web/embed/public/.gitkeep
 
 **/*.log
 .DS_Store
