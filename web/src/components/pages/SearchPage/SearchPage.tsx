@@ -1,10 +1,10 @@
 /**
  * PAGE: SearchPage
  * Design: Retro System 1 — search results list with score, tags, excerpt.
- * Navigation is handled internally via Wouter's useLocation hook.
+ * Navigation is handled internally via React Router's useNavigate hook.
  */
 import React, { useCallback } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { NoteCard } from "../../molecules/NoteCard/NoteCard";
 import { SearchBar } from "../../molecules/SearchBar/SearchBar";
 import { Badge } from "../../atoms/Badge/Badge";
@@ -20,7 +20,7 @@ export interface SearchPageProps {
 
 export const SearchPage: React.FC<SearchPageProps> = () => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const query = useAppSelector((s) => s.ui.searchQuery);
 
   const { data: results, isFetching } = useSearchQuery(query, {

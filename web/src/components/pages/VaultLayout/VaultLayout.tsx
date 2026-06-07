@@ -9,7 +9,7 @@
  *   - Aged-paper (#faf8f4) background, ink (#1a1a1a) foreground
  */
 import React, { useCallback } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 import { Sidebar } from "../../organisms/Sidebar/Sidebar";
 import { Icon } from "../../atoms/Icon/Icon";
@@ -37,7 +37,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
   vaultName = "Vault",
 }) => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const sidebarOpen = useAppSelector((s) => s.ui.sidebarOpen);
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
   const activeSlug = useAppSelector((s) => s.ui.activeNoteSlug);

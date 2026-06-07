@@ -5,7 +5,7 @@
  * Fetches note by slug via RTK Query.
  */
 import React, { useMemo, useCallback, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { NoteRenderer } from "../../organisms/NoteRenderer/NoteRenderer";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
@@ -28,7 +28,7 @@ export interface NotePageProps {
 
 export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const dispatch = useAppDispatch();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const rightPanelOpen = useAppSelector((s) => s.ui.rightPanelOpen);
 
   useEffect(() => {
