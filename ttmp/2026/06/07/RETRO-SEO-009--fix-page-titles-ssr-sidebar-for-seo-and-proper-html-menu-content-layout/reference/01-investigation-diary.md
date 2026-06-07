@@ -12,6 +12,14 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: ../../../../../../../../../../code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml
+      Note: production deployment passes --page-title PARC
+    - Path: .devctl.yaml
+      Note: Local dev profiles now set PAGE_TITLE
+    - Path: docker-compose.yml
+      Note: compose launch passes --page-title
+    - Path: plugins/retro-obsidian-publish.py
+      Note: devctl launch maps PAGE_TITLE to --page-title
     - Path: scripts/smoke-ssr-hydration.mjs
       Note: Phase A live SSR hydration smoke test implementation
     - Path: web/package.json
@@ -28,6 +36,7 @@ LastUpdated: 2026-06-07T12:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -799,3 +808,99 @@ The final measurement is the practical headline: the main SSR entry dropped from
 - Current SSR entry size: `72,390` bytes / `72K`.
 - Previous `ssr.noExternal: true` SSR entry size: `4,979.92 kB` from Step 6 build output.
 - Approximate reduction: 98.5%.
+
+## Step 11: Close Validation Tasks and Wire Deployment Page Title
+
+This step closed the remaining original ticket tasks that were now satisfied. The broad validation task is covered by the new live SSR smoke test, TypeScript checks, Go test suite, Docker sidecar import check, and docmgr doctor. The deployment page-title task is now implemented in local devctl profiles, docker-compose, and the production GitOps deployment manifest.
+
+The important user-visible fix is that production no longer has to fall back to the git-sync symlink directory name (`current`) for page titles. The Kubernetes app container now passes `--vault-name go-go-parc --page-title PARC`, and the local dev profile for `go-go-parc` also sets `PAGE_TITLE=PARC`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "close whatever ticket can be closed and then work on the pageTitle"
+
+**Assistant interpretation:** Mark any already-satisfied ticket tasks complete, then finish the remaining page-title deployment configuration work.
+
+**Inferred user intent:** Bring RETRO-SEO-009 to closure by eliminating the lingering `current` page-title deployment fallback and recording validation.
+
+**Commit (code):** fadb71300d89d12c4e854c530eb9f6a90262dc05 — "config: wire deployment page title"
+
+**Commit (GitOps):** b4cb0a142f1d12471139c3950f68c97f3909a72f — "retro-obsidian-publish: set explicit page title"
+
+### What I did
+- Closed ticket task 6 because validation has been satisfied by the live smoke test and final validation commands.
+- Wired page title in `.devctl.yaml`:
+  - `example` profile: `PAGE_TITLE: Example Vault`
+  - `go-go-parc` profile: `PAGE_TITLE: PARC`
+- Updated `plugins/retro-obsidian-publish.py` so `PAGE_TITLE` is passed as `--page-title` in the backend launch command.
+- Updated `docker-compose.yml` so the app command passes:
+  - `--vault-name ${VAULT_NAME:-My Vault}`
+  - `--page-title ${PAGE_TITLE:-My Vault}`
+- Updated the production GitOps manifest in `/home/manuel/code/wesen/2026-03-27--hetzner-k3s`:
+  - `gitops/kustomize/retro-obsidian-publish/deployment.yaml`
+  - added `--vault-name go-go-parc`
+  - added `--page-title PARC`
+- Closed ticket task 1 after the local/dev/prod deployment wiring was committed.
+
+### Why
+- The original title bug was caused by the deployment using `/git/root/current` as the vault path without setting an explicit `pageTitle`. The server correctly fell back to the vault directory basename, but that basename was `current`.
+- The application code already supported `--page-title`; the missing part was deployment configuration and devctl propagation.
+
+### What worked
+- Plugin validation passed:
+  - `python3 plugins/test_retro_plugin.py`
+- Corrected launch-plan check passed after filtering the plugin's handshake frame:
+  - `PAGE_TITLE=PARC VAULT_NAME=go-go-parc VAULT_DIR=vault-example python3 ...`
+  - confirmed backend command contains `--vault-name go-go-parc --page-title PARC`.
+- Compose config validation passed:
+  - `docker compose config >/tmp/publish-vault-compose-config.yaml`
+  - confirmed `--vault-name` and `--page-title` appear in the rendered command.
+- GitOps manifest validation passed with a small YAML parse assertion confirming `--page-title PARC` and `--vault-name go-go-parc`.
+- Final project validation passed:
+  - `pnpm --dir web check`
+  - `GOWORK=off go test ./...`
+
+### What didn't work
+- The first ad-hoc plugin assertion tried to parse the plugin output as a single JSON object and failed:
+  - error: `json.decoder.JSONDecodeError: Extra data: line 2 column 1 (char 154)`
+  - cause: the devctl plugin correctly emits a handshake frame before the response frame.
+  - fix: parse line-delimited frames and select the frame with `type == "response"`.
+
+### What I learned
+- The page-title support was already fully implemented in the CLI/backend path; the remaining gap was entirely deployment plumbing.
+- Devctl plugin tests need to remember the NDJSON protocol shape: handshake plus response frames.
+- The production GitOps repo had unrelated dirty ticket-doc files, so the manifest commit staged only `gitops/kustomize/retro-obsidian-publish/deployment.yaml`.
+
+### What was tricky to build
+- The same page-title value needs to flow through several launch surfaces: devctl, docker-compose, and Kubernetes. Missing any one of them would make local or production behavior diverge.
+- Docker Compose variable defaults are simple, so `PAGE_TITLE` now has its own default rather than relying on nested interpolation against `VAULT_NAME`.
+- GitOps was in a separate repository with existing unrelated modifications; staging only the deployment manifest avoided mixing unrelated documentation changes into the production config commit.
+
+### What warrants a second pair of eyes
+- Confirm that `PARC` is the desired production site title rather than `go-go-parc` or `PARC Notes`.
+- Confirm whether `docker-compose.yml` should default `PAGE_TITLE` to `VAULT_NAME` via a shell wrapper instead of the current independent `My Vault` default.
+- Confirm whether the GitOps commit should be pushed immediately or left for normal review/deployment flow.
+
+### What should be done in the future
+- Optional: add a small plugin unit test that asserts `PAGE_TITLE` maps to `--page-title`.
+- Optional: push the GitOps commit once ready to deploy through ArgoCD.
+
+### Code review instructions
+- In publish-vault, review:
+  - `.devctl.yaml`
+  - `plugins/retro-obsidian-publish.py`
+  - `docker-compose.yml`
+- In GitOps, review:
+  - `/home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml`
+- Validate with:
+  - `python3 plugins/test_retro_plugin.py`
+  - `docker compose config`
+  - `pnpm --dir web check`
+  - `GOWORK=off go test ./...`
+
+### Technical details
+- Production app args now include:
+  - `--vault-name go-go-parc`
+  - `--page-title PARC`
+- Devctl `go-go-parc` profile now exports:
+  - `PAGE_TITLE: PARC`

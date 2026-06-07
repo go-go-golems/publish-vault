@@ -101,3 +101,15 @@ Phase E complete: documented final SSR dependency model, runtime packaging requi
 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/07/RETRO-SEO-009--fix-page-titles-ssr-sidebar-for-seo-and-proper-html-menu-content-layout/design-doc/02-react-router-ssr-hydration-cleanup-implementation-guide.md — Final measurement and tradeoff documentation
 
+
+## 2026-06-07
+
+Closed remaining original tasks: validation is covered by smoke/full checks, and pageTitle is wired through devctl, docker-compose, and the production GitOps deployment (publish-vault commit fadb713, GitOps commit b4cb0a1).
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml — production page title args
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/.devctl.yaml — PAGE_TITLE values for local profiles
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/docker-compose.yml — compose page-title args
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/plugins/retro-obsidian-publish.py — PAGE_TITLE launch plumbing
+

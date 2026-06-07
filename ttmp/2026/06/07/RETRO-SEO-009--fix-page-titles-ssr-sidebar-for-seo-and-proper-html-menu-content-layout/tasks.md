@@ -2,12 +2,12 @@
 
 ## Track A: Original SEO/title cleanup
 
-- [ ] 1. Fix deployment `pageTitle` — set meaningful page title in devctl profile and k8s deployment config.
+- [x] 1. Fix deployment `pageTitle` — set meaningful page title in devctl profile and k8s deployment config.
 - [x] 2. Fix React client `document.title` — make it include the current note's title, not just config.vaultName.
 - [x] 3. Add breadcrumb navigation to SSR output for SEO.
 - [x] 4. Add minimal sidebar/navigation links to SSR for crawlers that don't follow JavaScript.
 - [x] 5. Improve HTML semantic structure — add `<nav>`, `<article>`, `<main>` elements to the hydrated output.
-- [ ] 6. Test and validate: verify page titles, meta tags, hydration, and accessibility.
+- [x] 6. Test and validate: verify page titles, meta tags, hydration, and accessibility.
 
 ## Track B: React Router + full hydration refactor
 
