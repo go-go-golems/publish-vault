@@ -74,3 +74,12 @@ Phase B complete: added opt-in SSR dependency-resolution diagnostics for React/R
 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Logs SSR dependency resolution when SSR_DEBUG_RESOLUTION=1
 
+
+## 2026-06-07
+
+Phase C complete: replaced ssr.noExternal=true with a consistent externalized React SSR dependency graph, reducing entry-server.js from ~4.98 MB to ~72 KB while live smoke hydration stayed clean (commit fcadc3c).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vite.config.ts — SSR externalization and React dedupe configuration
+

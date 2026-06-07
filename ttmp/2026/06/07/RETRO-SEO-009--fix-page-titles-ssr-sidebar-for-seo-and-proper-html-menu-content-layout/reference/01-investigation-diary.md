@@ -18,12 +18,15 @@ RelatedFiles:
       Note: smoke:ssr script and Playwright dependency
     - Path: web/server.mjs
       Note: SSR_DEBUG_RESOLUTION dependency path/version diagnostics
+    - Path: web/vite.config.ts
+      Note: Externalized Node SSR dependency model and React dedupe settings
 ExternalSources: []
 Summary: Chronological investigation log for page title, SSR sidebar, and HTML layout issues.
 LastUpdated: 2026-06-07T12:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -569,3 +572,85 @@ The diagnostic is intentionally lightweight and disabled by default. It exists t
   - `react-dom/server@19.2.1 -> .../react-dom/server.node.js`
   - `react-router@7.17.0 -> .../react-router/dist/development/index.mjs`
   - `react-resizable-panels@3.0.6 -> .../react-resizable-panels.edge-light.js`
+
+## Step 8: Replace Blunt SSR Bundling with a Consistent Externalized React Runtime
+
+This step replaced the emergency `ssr.noExternal: true` setting with a principled Node SSR dependency model. Instead of bundling every frontend dependency into the SSR entry, Vite now externalizes React and React-hook-using router/layout packages together, while `server.mjs` runs from the `web` package where a single pnpm-managed dependency tree is available.
+
+The important invariant is consistency: React, React DOM, React Router, React Router DOM, and `react-resizable-panels` all resolve from the same `web/node_modules` tree at runtime. The live smoke test and dependency diagnostics confirmed that this smaller SSR bundle still renders and hydrates correctly.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue the phased follow-up work by replacing `ssr.noExternal: true` with the cleaner dependency model discussed earlier.
+
+**Inferred user intent:** Remove the workaround-like bundle-everything fix and adopt a maintainable SSR runtime model that keeps React singleton resolution explicit.
+
+**Commit (code):** fcadc3c444a3c3c948b56e6b77764df819250c49 — "web: externalize SSR React dependency graph"
+
+### What I did
+- Updated `web/vite.config.ts`:
+  - added `resolve.dedupe` for `react`, `react-dom`, `react-router`, and `react-router-dom`,
+  - removed `ssr.noExternal: true`,
+  - added explicit `ssr.external` for:
+    - `react`,
+    - `react-dom`,
+    - `react-router`,
+    - `react-router-dom`,
+    - `react-resizable-panels`.
+- Ran the full live smoke test with dependency diagnostics enabled:
+  - `SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr`
+- Ran TypeScript check:
+  - `pnpm --dir web check`
+
+### Why
+- `ssr.noExternal: true` fixed correctness by force-bundling everything, but it made the SSR bundle much larger and hid the real architectural choice.
+- The clean model for this project is a Node SSR sidecar with production dependencies available in `web/node_modules`; React-family packages should be externalized together so they all use the same React singleton.
+
+### What worked
+- Full smoke test passed after the change:
+  - build completed,
+  - SSR sidecar started,
+  - Go proxy returned populated SSR HTML,
+  - browser hydration produced `0` console warnings/errors,
+  - sidebar navigation remained clean.
+- SSR entry size dropped dramatically:
+  - before with `ssr.noExternal: true`: `dist/ssr/entry-server.js 4,979.92 kB`
+  - after externalization: `dist/ssr/entry-server.js 72.39 kB`
+- Build time for SSR dropped from roughly 13 seconds to under half a second in the observed run:
+  - before: `✓ built in 13.52s`
+  - after: `✓ built in 409ms`
+- Diagnostics showed one coherent pnpm dependency graph rooted under `web/node_modules/.pnpm`.
+
+### What didn't work
+- N/A. The first proposed clean model passed the live smoke test.
+
+### What I learned
+- Vite's default SSR externalization is effective once we stop mixing bundled React with externalized hook-using packages.
+- The massive SSR bundle size was mainly caused by `noExternal: true` pulling in the whole app dependency graph, including heavy Markdown/diagram libraries such as Mermaid/Cytoscape/Katex chunks.
+- The live smoke test made the change low-risk because it immediately exercised the failure modes that motivated `noExternal: true`.
+
+### What was tricky to build
+- The subtle part is choosing a consistent model, not just choosing smaller output. Externalizing only some React-family packages could recreate the duplicate React bug. The Vite config now documents the invariant directly in comments.
+- `resolve.dedupe` does not replace runtime packaging; it only nudges Vite resolution. The sidecar still needs a production dependency tree available at runtime, which is why Phase D remains necessary.
+
+### What warrants a second pair of eyes
+- Confirm the `ssr.external` list covers all packages that must remain in the shared React runtime graph for the current app.
+- Confirm deployment images actually include the production dependencies needed by the externalized SSR entry. Local smoke passes because `web/node_modules` exists.
+- Review whether additional React-heavy packages should be explicitly externalized or whether Vite's default externalization already covers them sufficiently.
+
+### What should be done in the future
+- Phase D: inspect/update `web/ssr.Dockerfile` so the sidecar image includes production node dependencies for the externalized SSR entry.
+- Phase E: document the before/after bundle-size numbers and final tradeoff.
+
+### Code review instructions
+- Review `web/vite.config.ts` around `resolve.dedupe` and `ssr.external`.
+- Validate with:
+  - `SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr`
+  - `pnpm --dir web check`
+
+### Technical details
+- Final SSR build output: `dist/ssr/entry-server.js 72.39 kB`
+- Previous SSR build output from Step 6: `dist/ssr/entry-server.js 4,979.92 kB`
+- Size reduction: approximately 98.5% for the main SSR entry file.
