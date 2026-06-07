@@ -1,7 +1,7 @@
 ---
 Title: Add SSR sidecar for server-side rendering of vault pages
 Ticket: RETRO-SSR-009
-Status: active
+Status: complete
 Topics:
     - ssr
     - react
@@ -15,10 +15,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-06-06T19:07:51.050339438-04:00
+LastUpdated: 2026-06-06T21:58:06.403629928-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Add SSR sidecar for server-side rendering of vault pages
 

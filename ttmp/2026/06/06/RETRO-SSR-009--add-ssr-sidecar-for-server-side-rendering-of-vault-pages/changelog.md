@@ -88,3 +88,8 @@ Phase 7: added agent discovery and markdown mirrors; a14y score improved from 62
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/06/RETRO-SSR-009--add-ssr-sidecar-for-server-side-rendering-of-vault-pages/scripts/01-a14y-config.md — a14y baseline/final score history and local audit command
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — SSR markdown alternate links
 
+
+## 2026-06-06
+
+Ticket closed: SSR sidecar, markdown mirror support, agent discovery, tests, diary, and a14y validation complete; final accepted a14y score 99/100 with only homepage html.headings remaining.
+
