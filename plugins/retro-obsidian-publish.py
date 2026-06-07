@@ -124,7 +124,7 @@ def handle_validate(rid, ctx):
     if not (root / "web" / "node_modules").exists():
         warnings.append({"code": "W_WEB_DEPS", "message": "web/node_modules missing; run pnpm --dir web install --frozen-lockfile"})
     if not (root / "web" / "dist" / "index.html").exists():
-        warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; run cd backend && go run ./cmd/retro-obsidian-publish build web"})
+        warnings.append({"code": "W_WEB_DIST", "message": "web/dist missing; devctl ssr launch will run pnpm build:all before node server.mjs"})
 
     # Validate vault directory exists
     vault_dir = os.environ.get("VAULT_DIR", "backend/vault-example")
@@ -197,7 +197,7 @@ def handle_launch(rid, ctx):
             {
                 "name": "ssr",
                 "cwd": "web",
-                "command": ["node", "server.mjs"],
+                "command": ["sh", "-c", "pnpm build:all && exec node server.mjs"],
                 "env": {
                     "SSR_PORT": str(ssr_port),
                     "API_BASE": f"http://127.0.0.1:{backend_port}",
