@@ -1,4 +1,4 @@
-# this is copied over from go-go-golems/go-template and adapted for the backend Go module.
+# this is copied over from go-go-golems/go-template and adapted for the root Go module.
 name: golangci-lint
 
 on:
@@ -33,6 +33,5 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version-file: ../.golangci-lint-version
-          working-directory: backend
-          args: -c ../.golangci.yml --timeout=5m
+          version-file: .golangci-lint-version
+          args: -c .golangci.yml --timeout=5m
