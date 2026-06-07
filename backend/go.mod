@@ -1,6 +1,8 @@
 module retro-obsidian-publish/backend
 
-go 1.25.10
+go 1.25
+
+toolchain go1.26.4
 
 require (
 	dagger.io/dagger v0.20.8
