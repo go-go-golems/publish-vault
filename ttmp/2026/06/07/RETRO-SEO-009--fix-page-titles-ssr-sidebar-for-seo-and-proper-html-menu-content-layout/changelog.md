@@ -65,3 +65,12 @@ Phase A complete: added automated live SSR hydration smoke test covering web bui
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/scripts/smoke-ssr-hydration.mjs — End-to-end live SSR hydration guardrail
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/package.json — Adds smoke:ssr script and Playwright dev dependency
 
+
+## 2026-06-07
+
+Phase B complete: added opt-in SSR dependency-resolution diagnostics for React/React DOM/router packages and validated them with the live smoke test (commit c376068).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Logs SSR dependency resolution when SSR_DEBUG_RESOLUTION=1
+

@@ -16,12 +16,15 @@ RelatedFiles:
       Note: Phase A live SSR hydration smoke test implementation
     - Path: web/package.json
       Note: smoke:ssr script and Playwright dependency
+    - Path: web/server.mjs
+      Note: SSR_DEBUG_RESOLUTION dependency path/version diagnostics
 ExternalSources: []
 Summary: Chronological investigation log for page title, SSR sidebar, and HTML layout issues.
 LastUpdated: 2026-06-07T12:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Diary
@@ -495,3 +498,74 @@ This guardrail is the prerequisite for safely changing the SSR dependency model.
 - Final raw SSR check: `raw SSR HTML ok (436397 bytes, X-Powered-By=Express)`
 - Final browser check: `browser hydration ok (0 console warnings/errors)`
 - Build output observed current SSR entry size: `dist/ssr/entry-server.js 4,979.92 kB`
+
+## Step 7: Add SSR Dependency Resolution Diagnostics
+
+This step added an opt-in diagnostic mode to the SSR sidecar. When `SSR_DEBUG_RESOLUTION=1` is set, `server.mjs` prints the resolved module path and package version for React, React DOM, React Router, React Router DOM, and `react-resizable-panels` before importing the SSR bundle.
+
+The diagnostic is intentionally lightweight and disabled by default. It exists to make future duplicate-React investigations concrete: instead of guessing whether the sidecar is resolving one React graph or several, the operator can run the sidecar or smoke test with a single environment variable and inspect the exact paths.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue the phased follow-up work after adding the smoke-test guardrail, now adding observability for the SSR dependency-resolution problem.
+
+**Inferred user intent:** Make the root cause of duplicate React failures inspectable before attempting to shrink the SSR bundle or change Vite externalization.
+
+**Commit (code):** c37606817508702e382034438e20328cf890c935 — "web: add SSR dependency diagnostics"
+
+### What I did
+- Added `SSR_DEBUG_RESOLUTION=1` support to `web/server.mjs`.
+- Added `createRequire(import.meta.url)` so package versions can be read relative to the web package.
+- Added diagnostics for:
+  - `react`
+  - `react-dom`
+  - `react-dom/server`
+  - `react-router`
+  - `react-router-dom`
+  - `react-resizable-panels`
+- Ran the smoke test with diagnostics enabled:
+  - `SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr -- --skip-build`
+
+### Why
+- The previous live failure was caused by mixed bundled/external React graphs. Future cleanup needs a fast way to verify where the SSR sidecar resolves React-family dependencies.
+- Logging these paths is especially useful with pnpm because package paths encode peer dependency pairings, e.g. `react-router@7.17.0_react-dom@19.2.1_react@19.2.1__react@19.2.1`.
+
+### What worked
+- Diagnostic output showed all inspected packages resolving from the same `web/node_modules/.pnpm` tree.
+- The smoke test still passed with diagnostics enabled:
+  - raw SSR HTML ok
+  - browser hydration ok
+  - `0` console warnings/errors
+
+### What didn't work
+- N/A. This phase was straightforward after the smoke-test harness was in place.
+
+### What I learned
+- `import.meta.resolve()` gives the exact runtime module path that Node will use for each specifier.
+- Reading package versions through a `createRequire()` rooted at `server.mjs` keeps diagnostics aligned with the sidecar runtime rather than the caller's current working directory.
+
+### What was tricky to build
+- The diagnostic needs to run before importing `./dist/ssr/entry-server.js`; otherwise a duplicate-React import failure could occur before diagnostics print. The sidecar now calls `await logSSRDependencyResolution()` before the SSR bundle dynamic import.
+- Package versions are not available from `import.meta.resolve()` alone, so the helper maps subpath imports like `react-dom/server` back to their package name (`react-dom`) before reading `package.json`.
+
+### What warrants a second pair of eyes
+- The diagnostic currently logs paths only when `SSR_DEBUG_RESOLUTION=1`; reviewer should confirm this is the desired production behavior rather than adding a debug HTTP endpoint.
+- The package-name parser is intentionally simple but sufficient for the current inspected specifiers.
+
+### What should be done in the future
+- Use this diagnostic output before and after changing `vite.config.ts` so the diary can compare runtime dependency resolution.
+- If CI adopts the smoke test, consider one diagnostic run in a separate troubleshooting job rather than every normal test run.
+
+### Code review instructions
+- Review `web/server.mjs`, especially `logSSRDependencyResolution()` and the ordering before `await import("./dist/ssr/entry-server.js")`.
+- Validate with:
+  - `SSR_DEBUG_RESOLUTION=1 pnpm --dir web smoke:ssr -- --skip-build`
+
+### Technical details
+- Observed output included:
+  - `react@19.2.1 -> .../web/node_modules/.pnpm/react@19.2.1/node_modules/react/index.js`
+  - `react-dom/server@19.2.1 -> .../react-dom/server.node.js`
+  - `react-router@7.17.0 -> .../react-router/dist/development/index.mjs`
+  - `react-resizable-panels@3.0.6 -> .../react-resizable-panels.edge-light.js`

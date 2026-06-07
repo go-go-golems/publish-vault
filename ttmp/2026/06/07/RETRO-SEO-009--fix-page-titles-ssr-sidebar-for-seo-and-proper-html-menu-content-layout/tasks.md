@@ -30,7 +30,7 @@
 - [x] 23. Update diary after each implementation phase with commands, failures, commits, and review notes.
 - [x] 24. Upload updated document bundle to reMarkable after the refactor guide and after final implementation notes.
 - [x] Phase A: Add automated live SSR smoke test that builds web assets, starts SSR sidecar and Go backend on throwaway ports, verifies raw SSR HTML is populated, and checks browser hydration console is clean.
-- [ ] Phase B: Add SSR dependency-resolution diagnostics so sidecar startup can report React/React DOM/router resolution paths and versions when troubleshooting duplicate React.
+- [x] Phase B: Add SSR dependency-resolution diagnostics so sidecar startup can report React/React DOM/router resolution paths and versions when troubleshooting duplicate React.
 - [ ] Phase C: Replace blunt ssr.noExternal=true with a principled SSR dependency model (prefer consistent externalized React runtime) guarded by the live smoke test.
 - [ ] Phase D: Update SSR Docker/runtime packaging if externalized dependencies require production node_modules in the sidecar image.
 - [ ] Phase E: Measure and document SSR bundle size before/after the dependency model change, including validation commands and tradeoffs.
