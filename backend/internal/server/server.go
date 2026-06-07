@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -259,62 +259,31 @@ func validBearerToken(header, token string) bool {
 // even when the sidecar is unavailable.
 func newSSRProxy(ssrURL string, spaHandler http.Handler) http.Handler {
 	ssrEndpoint, err := url.Parse(ssrURL)
-	if err != nil {
-		log.Printf("Invalid SSR URL %q, falling back to SPA: %v", ssrURL, err)
+	if err != nil || ssrEndpoint.Scheme == "" || ssrEndpoint.Host == "" {
+		log.Printf("Invalid SSR URL configuration, falling back to SPA")
+		return spaHandler
+	}
+	if ssrEndpoint.Scheme != "http" && ssrEndpoint.Scheme != "https" {
+		log.Printf("Unsupported SSR URL scheme, falling back to SPA")
 		return spaHandler
 	}
 
-	proxy := &http.Client{Timeout: 10 * time.Second}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Build the proxy request to the SSR sidecar.
-		proxyURL := ssrEndpoint.ResolveReference(&url.URL{
-			Path:     r.URL.Path,
-			RawQuery: r.URL.RawQuery,
-		})
-
-		proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL.String(), nil)
-		if err != nil {
-			log.Printf("SSR proxy: failed to create request, falling back to SPA: %v", err)
-			spaHandler.ServeHTTP(w, r)
-			return
-		}
-
-		// Forward useful headers.
-		for _, h := range []string{"Accept", "Accept-Language", "User-Agent", "Cookie"} {
-			if v := r.Header.Get(h); v != "" {
-				proxyReq.Header.Set(h, v)
-			}
-		}
-
-		// Send the request to the SSR sidecar.
-		resp, err := proxy.Do(proxyReq)
-		if err != nil {
-			log.Printf("SSR proxy: sidecar unavailable, falling back to SPA: %v", err)
-			spaHandler.ServeHTTP(w, r)
-			return
-		}
-		defer resp.Body.Close()
-
-		// If the SSR server returns a server error, fall back to SPA.
+	proxy := httputil.NewSingleHostReverseProxy(ssrEndpoint)
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Host = ssrEndpoint.Host
+	}
+	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp.StatusCode >= 500 {
-			log.Printf("SSR proxy: server error %d, falling back to SPA", resp.StatusCode)
-			spaHandler.ServeHTTP(w, r)
-			return
+			return errors.New("ssr sidecar returned server error")
 		}
+		return nil
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("SSR proxy unavailable, falling back to SPA")
+		spaHandler.ServeHTTP(w, r)
+	}
 
-		// Copy response headers from the SSR server.
-		for k, vs := range resp.Header {
-			for _, v := range vs {
-				w.Header().Add(k, v)
-			}
-		}
-
-		w.WriteHeader(resp.StatusCode)
-
-		// Stream the response body.
-		if _, err := io.Copy(w, resp.Body); err != nil {
-			log.Printf("SSR proxy: error streaming response: %v", err)
-		}
-	})
+	return proxy
 }
