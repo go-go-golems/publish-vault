@@ -83,3 +83,12 @@ Phase C complete: replaced ssr.noExternal=true with a consistent externalized Re
 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/vite.config.ts — SSR externalization and React dedupe configuration
 
+
+## 2026-06-07
+
+Phase D complete: updated SSR sidecar Dockerfile to keep production node_modules for the externalized SSR runtime while pruning dev dependencies after build, and validated the built container starts with dependency diagnostics (commit 5ae2a34).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/ssr.Dockerfile — SSR runtime dependency packaging
+

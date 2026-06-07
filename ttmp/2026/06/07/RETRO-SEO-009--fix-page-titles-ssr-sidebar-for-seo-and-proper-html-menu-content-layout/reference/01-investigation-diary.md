@@ -18,6 +18,8 @@ RelatedFiles:
       Note: smoke:ssr script and Playwright dependency
     - Path: web/server.mjs
       Note: SSR_DEBUG_RESOLUTION dependency path/version diagnostics
+    - Path: web/ssr.Dockerfile
+      Note: Pruned production dependency runtime for externalized SSR bundle
     - Path: web/vite.config.ts
       Note: Externalized Node SSR dependency model and React dedupe settings
 ExternalSources: []
@@ -26,6 +28,7 @@ LastUpdated: 2026-06-07T12:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -654,3 +657,74 @@ The important invariant is consistency: React, React DOM, React Router, React Ro
 - Final SSR build output: `dist/ssr/entry-server.js 72.39 kB`
 - Previous SSR build output from Step 6: `dist/ssr/entry-server.js 4,979.92 kB`
 - Size reduction: approximately 98.5% for the main SSR entry file.
+
+## Step 9: Align SSR Sidecar Docker Runtime with Externalized Dependencies
+
+This step updated the SSR sidecar Dockerfile for the new externalized dependency model. The image must keep production `node_modules` at runtime because the SSR bundle now imports React and React-family packages from the Node dependency tree instead of embedding them all in `entry-server.js`.
+
+The Dockerfile already installed dependencies in the final image, so the functional change was to make that runtime requirement explicit and prune dev dependencies after the build. A container-level validation confirmed that the pruned image can still import the SSR bundle and resolve React, React DOM, React Router, and `react-resizable-panels` from `/app/web/node_modules`.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue the phased follow-up by ensuring deployment packaging matches the new externalized SSR runtime model.
+
+**Inferred user intent:** Avoid a local-only success where `web/node_modules` exists during development but the production sidecar image lacks the dependencies required by the smaller SSR bundle.
+
+**Commit (code):** 5ae2a34e72e281b1b41afcb50e51c50dec841708 — "build: keep production deps for SSR sidecar"
+
+### What I did
+- Updated `web/ssr.Dockerfile` comments to document the runtime invariant:
+  - externalized SSR dependencies require production `node_modules` in the sidecar image.
+- Changed the build command to:
+  - `RUN pnpm build:all && pnpm prune --prod`
+- Built the SSR image:
+  - `docker build -f web/ssr.Dockerfile -t retro-ssr-smoke:local .`
+- Started the built image with diagnostics enabled:
+  - `docker run -d --rm -e SSR_DEBUG_RESOLUTION=1 -e SSR_PORT=8089 -p 127.0.0.1:18091:8089 retro-ssr-smoke:local`
+- Verified health and logs:
+  - `curl -fsS http://127.0.0.1:18091/health`
+  - `docker logs <container>`
+
+### Why
+- After Phase C, the SSR entry is only ~72 KB because it externalizes React-family dependencies. That is clean only if the sidecar image ships those dependencies at runtime.
+- Keeping all dev dependencies would work, but pruning after build reduces runtime surface while preserving production packages such as `react`, `react-dom`, `react-router`, `react-router-dom`, `react-resizable-panels`, and `express`.
+
+### What worked
+- Docker image build passed.
+- `pnpm prune --prod` removed dev dependencies, including `vite`, `typescript`, `vitest`, and `playwright`, after `dist/` and `dist/ssr/` were produced.
+- The pruned image started successfully and `/health` returned `{"ok":true}`.
+- Diagnostics inside the container showed all inspected React-family packages resolving under `/app/web/node_modules/.pnpm/...`.
+
+### What didn't work
+- N/A. The existing Dockerfile structure was already close to the clean model; it needed pruning/documentation rather than a full rewrite.
+
+### What I learned
+- The runtime image had previously kept dev dependencies because build and runtime occurred in the same Docker stage. That accidentally satisfied externalization, but it was not explicit.
+- `pnpm prune --prod` is a small change that preserves the single-stage Dockerfile while making runtime dependency intent clearer.
+
+### What was tricky to build
+- The key distinction is between build-time tools and runtime libraries. Vite, TypeScript, and Playwright are needed to build/test, but the externalized SSR bundle needs production libraries at runtime. Pruning after build preserves the latter and removes the former.
+- A plain Docker build is not enough to prove correctness. The validation also needed to start the container, import the SSR bundle, and hit `/health`, because import-time failures would occur before the sidecar listens.
+
+### What warrants a second pair of eyes
+- Consider whether a multi-stage SSR Dockerfile would be cleaner long term: build in one stage, copy `dist`, `server.mjs`, `package.json`, lockfile, and pruned production `node_modules` into a smaller runtime stage.
+- Confirm the deployment pipeline does not expect dev dependencies to remain in the SSR sidecar image for debugging.
+
+### What should be done in the future
+- Optionally convert `web/ssr.Dockerfile` to a multi-stage build for smaller images and clearer separation of build/runtime concerns.
+- If CI builds this image, include the container `/health` import smoke check.
+
+### Code review instructions
+- Review `web/ssr.Dockerfile` around `pnpm build:all && pnpm prune --prod`.
+- Validate with:
+  - `docker build -f web/ssr.Dockerfile -t retro-ssr-smoke:local .`
+  - `docker run -d --rm -e SSR_DEBUG_RESOLUTION=1 -e SSR_PORT=8089 -p 127.0.0.1:18091:8089 retro-ssr-smoke:local`
+  - `curl -fsS http://127.0.0.1:18091/health`
+
+### Technical details
+- Container diagnostic examples:
+  - `react@19.2.1 -> file:///app/web/node_modules/.pnpm/react@19.2.1/node_modules/react/index.js`
+  - `react-dom/server@19.2.1 -> file:///app/web/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/server.node.js`
+  - `react-router@7.17.0 -> file:///app/web/node_modules/.pnpm/react-router@7.17.0_react-dom@19.2.1_react@19.2.1__react@19.2.1/node_modules/react-router/dist/development/index.mjs`
