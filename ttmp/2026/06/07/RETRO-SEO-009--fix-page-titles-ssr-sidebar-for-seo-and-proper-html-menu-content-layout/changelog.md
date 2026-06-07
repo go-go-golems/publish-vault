@@ -31,3 +31,15 @@ Added second design guide for React Router SSR hydration cleanup and expanded ta
 
 - /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/ttmp/2026/06/07/RETRO-SEO-009--fix-page-titles-ssr-sidebar-for-seo-and-proper-html-menu-content-layout/design-doc/02-react-router-ssr-hydration-cleanup-implementation-guide.md — Second guide for full hydration refactor
 
+
+## 2026-06-07
+
+Implemented React Router hydration cleanup: migrated client routes/navigation, removed Wouter, rendered real AppRoutes under StaticRouter for SSR, switched browser entry to hydrateRoot, added home-note prefetching, made layout clock hydration-safe, and aligned SSR/client titles (commits 55dbc34, 6f76a55, 5ee46f9, a4e89cb, 0060096).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/server.mjs — Home note prefetch and title alignment
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/App.tsx — React Router route table and AppRoutes export
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-client.tsx — Browser now hydrates SSR markup with hydrateRoot
+- /home/manuel/workspaces/2026-06-04/publish-vault-ssr/publish-vault/web/src/entry-server.tsx — SSR now renders real AppRoutes under StaticRouter
+

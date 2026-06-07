@@ -184,3 +184,95 @@ Analyze the situation once more, and write a second design/implementation guide 
 - Target server tree: `<Provider><StaticRouter location={url}><AppRoutes /></StaticRouter></Provider>`.
 - Target client tree: `<Provider><BrowserRouter><AppRoutes /></BrowserRouter></Provider>`.
 - Target hydration call: `hydrateRoot(root, <...same app shell... />)`.
+
+## Step 3: React Router Migration and Hydratable SSR Tree
+
+This step implemented the core cleanup planned in Step 2. The routing layer now uses React Router, the server renders the same `AppRoutes` component tree that the browser hydrates, and the client entry uses `hydrateRoot()` instead of clearing the server-rendered DOM.
+
+The implementation deliberately kept the existing RTK Query cache preloading and Express sidecar metadata pipeline. That kept the refactor focused on routing, render-tree convergence, hydration, deterministic output, and title alignment rather than changing data fetching or head management at the same time.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 2)
+
+**Assistant interpretation:** Build the React Router + full hydration refactor in focused commits after writing the second guide.
+
+**Inferred user intent:** Consolidate SSR and client rendering to reduce maintenance surface and make future SEO/layout work happen in one app tree.
+
+**Commit (code):** 55dbc348b770318be90048dde692b2581161eb55 — "web: add React Router dependency"
+
+**Commit (code):** 6f76a554710a5d3e93df28185831d8bea73c2587 — "web: migrate client routing to React Router"
+
+**Commit (code):** 5ee46f9c4dc17e1535af5438319bb904a5a8c2d4 — "web: render real app tree during SSR hydration"
+
+**Commit (code):** a4e89cb9db9a6834c02c26f9e755ec0f423da2c6 — "web: make layout clock hydration safe"
+
+**Commit (code):** 00600968d7a2a3e513d1f5146a5b0e0155f2b7bb — "web: align SSR and client page titles"
+
+### What I did
+- Added `react-router-dom` and direct `react-router` dependency.
+- Migrated Wouter route declarations in `App.tsx` to React Router `Routes`/`Route`.
+- Migrated Wouter navigation in `VaultLayout`, `NotePage`, `SearchPage`, and `NotFound` to React Router navigation.
+- Exported `AppRoutes` so the server and browser can wrap the same route tree in different routers.
+- Replaced the custom SSR-only `SSRNotePage`/`SSRHomePage`/`SSRSearchPage` tree with real `AppRoutes` rendered inside React Router `StaticRouter`.
+- Replaced `createRoot()` plus `root.textContent = ""` with `hydrateRoot()` in `entry-client.tsx`.
+- Removed Wouter and its stale patch file.
+- Added home-note prefetching in `server.mjs` so the real home route can SSR the same selected note that `HomeRedirect` renders.
+- Added hydration-safe clock rendering to avoid first-render time mismatches.
+- Aligned SSR and client titles to use `note.title — siteTitle` where `siteTitle = pageTitle || vaultName`.
+
+### Why
+- Full hydration requires the server and client to render identical component trees for the same URL and preloaded state.
+- The previous SSR-only page components produced useful crawler HTML but duplicated app structure and forced client remounting.
+- React Router provides a server-side router (`StaticRouter`) and browser router (`BrowserRouter`) for the same route declarations.
+
+### What worked
+- `pnpm --dir web check` passed after each implementation phase.
+- `pnpm --dir web exec vitest run src/entry-server.test.tsx` passed after updating tests for real-app SSR.
+- `pnpm --dir web build:all` passed after SSR consolidation, hydration, deterministic clock, and title updates.
+- `GOWORK=off go test ./...` passed after the frontend changes.
+
+### What didn't work
+- Initial SSR consolidation tried `import { StaticRouter } from "react-router-dom/server"`, but React Router 7.17.0 does not export that path.
+  Exact failure:
+  `src/entry-server.tsx(10,30): error TS2307: Cannot find module 'react-router-dom/server' or its corresponding type declarations.`
+- Fix: add direct `react-router` dependency and import `StaticRouter` from `react-router`.
+- After rendering the real app tree, old SSR tests failed because they expected the old simplified home and missing-note behavior. The real app route renders the selected home note only when the sidecar preloads it, and missing note routes are 404ed by `server.mjs` before rendering.
+
+### What I learned
+- RTK Query preloading was already robust; the biggest missing piece was routing/render-tree convergence.
+- The home route is not a standalone SSR home page anymore: it runs the actual `HomeRedirect` selection logic and then renders `NotePage`, so the sidecar must prefetch the chosen note.
+- React Router v7's server API differs from the older `react-router-dom/server` import path.
+
+### What was tricky to build
+- The subtle part was keeping home SSR useful after removing the special SSR-only home page. Without home-note prefetching, `/` would render a loading note state because `HomeRedirect` picks a slug from `listNotes`, then `NotePage` needs `getNote(slug)` data. I added a sidecar `chooseHomeSlug()` mirror and taught `renderApp()` to use the home note slug as the RTK Query cache key when the URL is `/`.
+- Hydration safety required identifying non-deterministic render output. The menu-bar clock used `new Date()` during render, which would differ between server and client. I replaced it with a component that renders `--:--` before mount and only reads the clock after hydration.
+
+### What warrants a second pair of eyes
+- `server.mjs` now duplicates `chooseHomeSlug()` from `App.tsx`; this is acceptable for this phase but should eventually be shared or moved into a tiny pure module consumed by both SSR sidecar and React app.
+- Manual browser hydration-console validation has not yet been performed in this step.
+- The real app SSR output is much larger than the previous simplified SSR output; review payload size and crawler tradeoffs.
+
+### What should be done in the future
+- Run a local SSR sidecar/browser test and confirm there are no hydration warnings.
+- Consider extracting shared route/home-selection helpers.
+- Consider later moving head metadata into a React-side head manager once hydration is stable.
+
+### Code review instructions
+- Start with `web/src/App.tsx` to see the new `AppRoutes` export and route table.
+- Review `web/src/entry-server.tsx` next to confirm real app SSR under `StaticRouter`.
+- Review `web/src/entry-client.tsx` to confirm `hydrateRoot()` and no DOM clearing.
+- Review `web/server.mjs` for home-note prefetch and title formatting.
+- Review `web/src/components/pages/VaultLayout/VaultLayout.tsx` for `HydrationSafeClock`.
+- Validate with:
+  - `pnpm --dir web check`
+  - `pnpm --dir web exec vitest run src/entry-server.test.tsx`
+  - `pnpm --dir web build:all`
+  - `GOWORK=off go test ./...`
+
+### Technical details
+- React Router import split:
+  - Browser: `BrowserRouter`, `Routes`, `Route`, `useNavigate`, `useParams`, `useLocation` from `react-router-dom`.
+  - Server: `StaticRouter` from `react-router`.
+- The SSR sidecar still owns `<head>` metadata injection; this refactor only hydrates the root app tree.
+- The browser no longer clears SSR content before rendering.
