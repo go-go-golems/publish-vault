@@ -18,9 +18,12 @@ COPY web/package.json web/pnpm-lock.yaml ./
 COPY web/patches ./patches
 RUN pnpm install --frozen-lockfile
 
-# Copy source and build both client + SSR bundles
+# Copy source and build both client + SSR bundles.
+# The SSR bundle externalizes React/runtime dependencies, so this image must
+# keep production node_modules available for server.mjs at runtime. Prune only
+# build/dev dependencies after dist/ has been produced.
 COPY web ./
-RUN pnpm build:all
+RUN pnpm build:all && pnpm prune --prod
 
 # Environment (overridable at runtime)
 ENV SSR_PORT=8089
