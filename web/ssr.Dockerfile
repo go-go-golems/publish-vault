@@ -13,9 +13,10 @@ WORKDIR /app/web
 # Enable pnpm
 RUN corepack enable
 
-# Install dependencies first (layer caching)
+# Install dependencies first (layer caching).
+# Do not copy web/patches here: the directory is optional and may be absent
+# when no pnpm patchedDependencies are in use.
 COPY web/package.json web/pnpm-lock.yaml ./
-COPY web/patches ./patches
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build both client + SSR bundles.
