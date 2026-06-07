@@ -128,8 +128,15 @@ app.get("*", async (req, res) => {
     const description =
       note?.excerpt ||
       (notes?.length
-        ? `${vaultName}: ${notes.length} notes`
-        : `${vaultName} documentation`);
+        ? `${vaultName} is a read-only published Obsidian vault with ${notes.length} notes, backlinks, search, and markdown mirrors for agents.`
+        : `${vaultName} is a read-only published Obsidian vault with markdown mirrors and agent-readable indexes.`);
+    const dateModified = note?.modTime || new Date().toISOString().split("T")[0];
+    const canonicalPath = url.split("#")[0].split("?")[0] || "/";
+    const markdownPath = route.type === "note" && route.slug
+      ? `/note/${route.slug}.md`
+      : canonicalPath === "/search"
+        ? "/sitemap.md"
+        : "/index.md";
 
     // 5. Assemble HTML
     let htmlPage = indexHtmlTemplate;
@@ -158,6 +165,7 @@ app.get("*", async (req, res) => {
       }
       noscriptContent += "</ul>";
     }
+    noscriptContent += '\n  <p><a href="/AGENTS.md">Terminology and agent guide</a> | <a href="/sitemap.md">Sitemap</a> | <a href="/llms.txt">LLMs.txt</a></p>';
     htmlPage = htmlPage.replace(
       "</body>",
       `<noscript>${noscriptContent}</noscript>\n</body>`
@@ -169,7 +177,8 @@ app.get("*", async (req, res) => {
       "@type": "WebPage",
       name: title,
       description: description,
-      url: `${BASE_URL}${url.split("#")[0]}`,
+      url: `${BASE_URL}${canonicalPath}`,
+      dateModified,
     };
 
     const breadcrumbItems = [
@@ -194,17 +203,26 @@ app.get("*", async (req, res) => {
       itemListElement: breadcrumbItems,
     };
 
+    const srOnly = 'style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"';
+    htmlPage = htmlPage.replace(
+      '<div id="root">',
+      `<a href="/AGENTS.md" ${srOnly}>Terminology and agent guide</a><div id="root">`
+    );
+
     htmlPage = htmlPage.replace(
       "</head>",
       `<script>window.__PRELOADED_STATE__=${serializedPreloadedState};</script>
   <meta name="description" content="${description.replace(/"/g, "&quot;")}" />
   <meta property="og:title" content="${title.replace(/"/g, "&quot;")}" />
   <meta property="og:description" content="${description.replace(/"/g, "&quot;")}" />
-  <link rel="canonical" href="${BASE_URL}${url.split("#")[0]}" />
+  <link rel="canonical" href="${BASE_URL}${canonicalPath}" />
+  <link rel="alternate" type="text/markdown" href="${BASE_URL}${markdownPath}" />
   <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}</script>
   </head>`
     );
+
+    res.set("Link", `<${BASE_URL}${canonicalPath}>; rel="canonical", <${BASE_URL}${markdownPath}>; rel="alternate"; type="text/markdown"`);
 
     // Update the page title
     htmlPage = htmlPage.replace(
