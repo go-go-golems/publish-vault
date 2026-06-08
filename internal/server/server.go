@@ -33,6 +33,7 @@ type Config struct {
 	ReloadToken         string
 	ReloadAllowLoopback bool
 	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
+	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -94,6 +95,12 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.ServeWeb {
 		spaHandler := web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"})
 
+		// Favicon handler: serves from CLI override, vault root, or returns 404.
+		// This must be registered before the catch-all to avoid serving index.html.
+		faviconH := newFaviconHandler(state, cfg.FaviconPath, spaHandler)
+		r.HandleFunc("/favicon.ico", faviconH).Methods("GET", "HEAD")
+		r.HandleFunc("/favicon.svg", faviconH).Methods("GET", "HEAD")
+
 		if cfg.SSRURL != "" {
 			log.Printf("SSR sidecar proxy enabled: %s", cfg.SSRURL)
 
@@ -103,8 +110,6 @@ func Run(ctx context.Context, cfg Config) error {
 			r.PathPrefix("/assets/").Handler(spaHandler)
 			r.PathPrefix("/__manus__/").Handler(spaHandler)
 			r.PathPrefix("/fonts/").Handler(spaHandler)
-			r.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { spaHandler.ServeHTTP(w, r) })
-			r.HandleFunc("/favicon.svg", func(w http.ResponseWriter, r *http.Request) { spaHandler.ServeHTTP(w, r) })
 
 			ssrProxy := newSSRProxy(cfg.SSRURL, spaHandler)
 			pageHandler := newAgentPageHandler(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle}, ssrProxy)

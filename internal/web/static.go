@@ -57,6 +57,13 @@ func serveIndex(fsys fs.FS, w http.ResponseWriter) {
 	_, _ = w.Write(data)
 }
 
+// PublicFileExists reports whether the bundled public web filesystem contains
+// a non-directory file at name. It is used by server routes that must avoid the
+// SPA fallback behavior for missing files.
+func PublicFileExists(name string) bool {
+	return fileExists(PublicFS, name)
+}
+
 func fileExists(fsys fs.FS, name string) bool {
 	info, err := fs.Stat(fsys, name)
 	return err == nil && !info.IsDir()
