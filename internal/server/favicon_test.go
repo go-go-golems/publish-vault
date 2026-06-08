@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
+
+	web "retro-obsidian-publish/internal/web"
 )
 
 func TestFaviconHandler_ServesFromVaultRoot(t *testing.T) {
@@ -160,6 +163,69 @@ func TestFaviconHandler_CLIOverrideMissingFallsThroughToVault(t *testing.T) {
 	}
 	if w.Body.String() != "VAULT_ICO" {
 		t.Fatalf("expected vault content, got %q", w.Body.String())
+	}
+}
+
+func TestFaviconHandler_CLIOverrideOnlyMatchesRequestedExtension(t *testing.T) {
+	vaultDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(vaultDir, "favicon.svg"), []byte("<svg>VAULT</svg>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	overrideDir := t.TempDir()
+	overridePath := filepath.Join(overrideDir, "custom-favicon.ico")
+	if err := os.WriteFile(overridePath, []byte("OVERRIDE_ICO"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := NewRuntimeState(vaultDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newFaviconHandler(state, overridePath, nil)
+
+	req := httptest.NewRequest("GET", "/favicon.svg", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if w.Body.String() != "<svg>VAULT</svg>" {
+		t.Fatalf("expected vault SVG content, got %q", w.Body.String())
+	}
+}
+
+func TestFaviconHandler_ServesBundledFallbackWhenPresent(t *testing.T) {
+	oldPublicFS := web.PublicFS
+	web.PublicFS = fstest.MapFS{
+		"favicon.ico": &fstest.MapFile{Data: []byte("BUNDLED_ICO")},
+	}
+	defer func() { web.PublicFS = oldPublicFS }()
+
+	vaultDir := t.TempDir()
+	state, err := NewRuntimeState(vaultDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fallback := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("BUNDLED_ICO"))
+	})
+	handler := newFaviconHandler(state, "", fallback)
+
+	req := httptest.NewRequest("GET", "/favicon.ico", nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if w.Body.String() != "BUNDLED_ICO" {
+		t.Fatalf("expected bundled fallback content, got %q", w.Body.String())
 	}
 }
 
