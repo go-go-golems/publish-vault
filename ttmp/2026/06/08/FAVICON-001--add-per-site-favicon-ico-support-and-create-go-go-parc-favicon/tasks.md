@@ -10,4 +10,4 @@
 - [x] Write unit tests for favicon handler in favicon_test.go
 - [x] Add link rel=icon tags to web/index.html
 - [x] Create go-go-parc favicon SVG and ICO in vault root
-- [ ] Update diary and ticket bookkeeping
+- [x] Update diary and ticket bookkeeping
