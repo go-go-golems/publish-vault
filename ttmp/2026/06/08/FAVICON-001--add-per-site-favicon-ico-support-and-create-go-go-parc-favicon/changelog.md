@@ -23,3 +23,14 @@ Step 2: Implemented favicon handler, CLI flag, router wiring, tests, HTML link t
 - /home/manuel/workspaces/2026-06-08/publish-vault-favicon/publish-vault/internal/server/favicon.go — New favicon handler
 - /home/manuel/workspaces/2026-06-08/publish-vault-favicon/publish-vault/internal/server/favicon_test.go — 7 unit tests
 
+
+## 2026-06-08
+
+Step 3: Addressed PR #5 review comments for favicon path safety, bundled fallback, and extension matching (commit eea8482)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-08/publish-vault-favicon/publish-vault/internal/server/favicon.go — Whitelisted favicon paths
+- /home/manuel/workspaces/2026-06-08/publish-vault-favicon/publish-vault/internal/server/favicon_test.go — Regression tests for review comments
+- /home/manuel/workspaces/2026-06-08/publish-vault-favicon/publish-vault/internal/web/static.go — PublicFileExists helper for safe bundled favicon fallback
+

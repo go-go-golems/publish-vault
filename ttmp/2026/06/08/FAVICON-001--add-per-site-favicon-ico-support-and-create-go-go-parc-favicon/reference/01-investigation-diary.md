@@ -163,3 +163,79 @@ The design doc laid out the implementation plan clearly; following it task-by-ta
 - New files: `internal/server/favicon.go`, `internal/server/favicon_test.go`
 - Modified files: `internal/server/server.go`, `cmd/retro-obsidian-publish/commands/serve/serve.go`, `web/index.html`
 - go-go-parc favicons: `~/code/wesen/go-go-golems/go-go-parc/favicon.svg`, `favicon.ico`
+
+## Step 3: Address PR review comments for favicon routing safety and fallback behavior
+
+Addressed the automated review comments on PR #5 for commit `c609a995`. The comments identified two correctness regressions and two CodeQL path-expression findings in `internal/server/favicon.go`. The fix keeps the feature behavior but tightens the request path handling: the URL path is now whitelisted to exactly `/favicon.ico` or `/favicon.svg`, vault lookup uses `os.OpenRoot` with one of those fixed names, and `--favicon` overrides only apply when their extension matches the requested favicon URL.
+
+The second part of the fix restores bundled static favicon fallback without reintroducing the original bug. The handler now checks whether the bundled public web filesystem actually contains the requested favicon before delegating to the SPA/static handler; if the bundled file is missing, the request still receives the clean text 404 instead of `index.html`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review comments from : https://github.com/go-go-golems/publish-vault/pull/5/changes/BASE..c609a995ca2f8913341ac677f489e03493571749"
+
+**Assistant interpretation:** Fetch and apply the review feedback from PR #5, especially inline comments against the favicon changes.
+
+**Inferred user intent:** Make the pull request review-clean while preserving the intended favicon behavior.
+
+**Commit (code):** eea8482 — "fix: address favicon review comments"
+
+### What I did
+
+- Pulled PR #5 review comments with `gh pr view` and `gh api repos/go-go-golems/publish-vault/pulls/5/comments`
+- Fixed CodeQL request-path concern by replacing `filepath.Base(r.URL.Path)` with an exact whitelist helper: `faviconNameFromRequest`
+- Replaced vault favicon `filepath.Join(..., filename)` with `os.OpenRoot(state.ResolvedRoot()).Open(filename)` using only whitelisted filenames
+- Fixed extension mismatch so `--favicon some.ico` does not serve ICO bytes from `/favicon.svg`
+- Restored bundled static favicon fallback via new `web.PublicFileExists(name)` helper before delegating to the fallback handler
+- Added regression tests for extension mismatch and bundled fallback
+- Ran `go test ./internal/server/ -run TestFavicon -count=1 -v`
+- Ran `go test ./... -count=1`
+
+### Why
+
+The review comments pointed out real edge cases: advertised SVG favicon URLs could receive ICO content, and explicit favicon routes blocked existing bundled favicons. The CodeQL finding also showed the route should avoid deriving filesystem paths directly from request data.
+
+### What worked
+
+- Exact path whitelisting simplified reasoning about request-controlled input
+- `os.OpenRoot` matched the existing `/vault-assets/` safety pattern and avoided constructing vault paths from request data
+- The bundled fallback can be restored safely by checking the bundled FS before delegating to the SPA handler
+- Full test suite passed after the changes
+
+### What didn't work
+
+- N/A; the first implementation compiled after correcting a temporary helper signature and the final test run passed.
+
+### What I learned
+
+- For favicon routes, extension matching matters because `web/index.html` advertises `/favicon.svg` as `type="image/svg+xml"`; serving an ICO override there is a browser-visible contract violation.
+- Calling the SPA handler directly is only safe after verifying the requested static asset exists, otherwise it will intentionally return `index.html` as a client-side-route fallback.
+
+### What was tricky to build
+
+- The bundled fallback needed a public existence check in `internal/web` because the existing SPA handler intentionally hides missing-file details behind the fallback. Adding `web.PublicFileExists` keeps the fallback logic explicit and avoids changing general SPA behavior.
+
+### What warrants a second pair of eyes
+
+- Whether `--favicon` should continue to support arbitrary operator-configured filesystem paths or be constrained to vault-root files only. The current implementation treats it as trusted process configuration and separately prevents HTTP request paths from selecting arbitrary files.
+
+### What should be done in the future
+
+- Consider adding an embedded default `favicon.ico`/`favicon.svg` so deployments without vault-root favicons still receive a branded default.
+
+### Code review instructions
+
+- Review `internal/server/favicon.go` first: `faviconNameFromRequest`, `faviconOverrideMatchesRequest`, `serveVaultFavicon`, and the `web.PublicFileExists` fallback branch
+- Review `internal/web/static.go` for the new `PublicFileExists` helper
+- Review `internal/server/favicon_test.go` for `TestFaviconHandler_CLIOverrideOnlyMatchesRequestedExtension` and `TestFaviconHandler_ServesBundledFallbackWhenPresent`
+- Validate with `go test ./internal/server/ -run TestFavicon -count=1 -v` and `go test ./... -count=1`
+
+### Technical details
+
+- Review source: `https://github.com/go-go-golems/publish-vault/pull/5/changes/BASE..c609a995ca2f8913341ac677f489e03493571749`
+- Review comments addressed:
+  - CodeQL path-expression findings on `internal/server/favicon.go`
+  - Restore bundled favicon fallback
+  - Avoid serving ICO bytes from `/favicon.svg`
+- Code commit: `eea8482`
+

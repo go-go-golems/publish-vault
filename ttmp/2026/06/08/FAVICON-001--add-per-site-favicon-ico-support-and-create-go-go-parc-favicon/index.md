@@ -25,7 +25,9 @@ RelatedFiles:
     - Path: internal/vault/vault.go
       Note: Vault loader that filters to .md files only
     - Path: internal/web/static.go
-      Note: SPA handler that serves index.html for missing files including favicon
+      Note: |-
+        SPA handler that serves index.html for missing files including favicon
+        PublicFileExists helper used by favicon bundled fallback (commit eea8482)
     - Path: web/index.html
       Note: SPA HTML shell that needs link rel=icon injection
 ExternalSources: []
@@ -34,6 +36,7 @@ LastUpdated: 2026-06-08T18:23:02.307576388-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
