@@ -13,8 +13,6 @@ RelatedFiles:
       Note: Baseline golangci-lint v2 configuration
     - Path: ../../../../../../../../../../code/wesen/go-go-golems/go-template/Makefile
       Note: Baseline Go repository quality and release targets
-    - Path: ../../../../../../../../../../code/wesen/go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml
-      Note: Reusable GHCR image publishing and GitOps PR workflow
     - Path: .github/workflows/ci.yml
       Note: publish-vault application CI for Go
     - Path: Makefile
@@ -31,40 +29,37 @@ WhenToUse: ""
 
 ## Executive summary
 
-This ticket aligns `publish-vault`, `go-template`, and the shared `infra-tooling` workflows with the current Go Go Golems repository style. The practical goal is consistency: new repositories generated from `go-template`, deployable applications such as `publish-vault`, and reusable workflows in `infra-tooling` should use the same tool versions, linting conventions, CI shape, release publishing conventions, and documentation publishing patterns.
+This ticket aligns only `publish-vault` and `go-template` with the current Go Go Golems repository style. The practical goal is consistency between the real application repository and the template used for future repositories, without changing shared `infra-tooling` or unrelated repositories.
 
 The most important observation is that the organization already has a modern style, but it is distributed across several places:
 
 - `go-template` contains the baseline Go CLI/library repository skeleton.
-- `infra-tooling` contains reusable GitHub Actions workflows and rollout playbooks.
 - `publish-vault` is a real application repository with Go, web, Docker, SSR, GitOps image publishing, and docmgr ticket history.
-- Many active repositories have already moved to Go `1.26.x` and `golangci-lint` `v2.12.2`, while older repositories still lag behind.
+- The current baseline for this ticket is Go `1.26.4` and `golangci-lint` `v2.12.2`.
 
-This guide explains the system for a new intern, then defines a phased implementation plan. The first implementation wave should update the source-of-truth repositories (`go-template` and `infra-tooling`) and `publish-vault`. A later rollout can apply the same changes to the rest of the organization in batches.
+This guide explains the two target repositories for a new intern, then defines a focused implementation plan for `go-template` and `publish-vault` only.
 
 ## Problem statement and scope
 
-The user asked for a new docmgr ticket that explains how to bring `publish-vault` and related Go Go Golems repositories up to the latest org style, then implements the work sequentially with commits and a detailed diary.
+The user clarified that this ticket should bring only `publish-vault` and `go-template` up to the latest org style, then implement the work sequentially with commits and a detailed diary.
 
 The specific consistency problems are:
 
 - Tool versions drift across repositories.
 - `go-template` does not fully encode the linting and publishing practices described by the rollout playbooks.
-- `infra-tooling` has reusable workflows that are mostly modern, but still use older `actions/checkout` pins in the GHCR image publisher.
 - `publish-vault` is modern in some areas, but should be checked against the current template and reusable workflow style.
-- The organization lacks a small, repeatable audit/update recipe for applying the same style to many repositories.
 
 ### In scope
 
 - Document the system components a new intern needs to understand.
-- Define a consistent target state for Go versions, linting, logcopter, docs publishing, GHCR publishing, and CI layout.
-- Update `publish-vault`, `go-template`, and `infra-tooling` where changes are safe and directly supported by evidence.
+- Define a consistent target state for Go versions, linting, optional Glazed linting, and local/CI quality gates.
+- Update `publish-vault` and `go-template` where changes are safe and directly supported by evidence.
 - Add tasks and diary entries to this ticket.
 - Upload the design package to reMarkable.
 
 ### Out of scope for the first wave
 
-- Blindly modifying every repository under `~/code/wesen/go-go-golems` without per-repo validation.
+- Modifying repositories other than `publish-vault` and `go-template`.
 - Enabling docs publishing for repositories that do not have Glazed help export commands.
 - Enabling logcopter in repositories that do not use zerolog or the logcopter package model.
 - Reworking repository architecture beyond build, CI, linting, release, and publishing style.
@@ -73,7 +68,7 @@ The specific consistency problems are:
 
 ### Repository roles
 
-The system has three categories of repositories.
+The focused system has two categories of repositories.
 
 ```text
 +----------------+        seeds new repos        +---------------------+
@@ -443,13 +438,7 @@ glazed-lint: glazed-lint-build
 - Relate key files from `publish-vault`, `go-template`, and `infra-tooling`.
 - Upload the initial design package to reMarkable.
 
-### Phase 2: Update infra-tooling reusable workflow pins
-
-- Change all `actions/checkout@v5` occurrences in `infra-tooling/.github/workflows/publish-ghcr-image.yml` to `actions/checkout@v6`.
-- Validate by checking workflow YAML syntax enough to catch obvious mistakes.
-- Commit in `infra-tooling`.
-
-### Phase 3: Update go-template baseline
+### Phase 2: Update go-template baseline
 
 - Change `go-template/go.mod` from `go 1.25.0` to `go 1.26.4`.
 - Preserve the pre-existing `.golangci-lint-version` update to `v2.12.2` if validation passes.
@@ -460,7 +449,7 @@ glazed-lint: glazed-lint-build
 - Run `GOWORK=off go mod tidy`, `make lint`, `make test`, and `make logcopter-check`.
 - Commit in `go-template`.
 
-### Phase 4: Update publish-vault application baseline
+### Phase 3: Update publish-vault application baseline
 
 - Change `publish-vault/go.mod` from `go 1.25.0` to `go 1.26.4` if validation passes.
 - Add a local formatter check if supported by installed golangci-lint.
@@ -468,20 +457,11 @@ glazed-lint: glazed-lint-build
 - Run `GOWORK=off go mod tidy`, `make lint`, `make test`, `make web-check`, and `make web`.
 - Commit in `publish-vault`.
 
-### Phase 5: Add org audit helper
+### Phase 4: Correct accidental out-of-scope work
 
-- Add a small script under this ticket workspace, not directly to product code, that scans repository versions and emits a Markdown report.
-- Use the script to classify repositories into current, safe bump candidate, and manual review.
-- Attach the report to the ticket.
-
-### Phase 6: Batch rollout to other repositories
-
-- Select a small batch of safe candidates.
-- Ensure each repository has a clean working tree before editing.
-- Apply version bumps and minimal style updates.
-- Run checks per repository.
-- Commit per repository, not as a cross-repo mixed commit.
-- Record failures in the diary.
+- Revert the accidental `infra-tooling` checkout action change.
+- Remove org-wide audit artifacts from this ticket.
+- Keep the ticket focused on `publish-vault` and `go-template`.
 
 ## Testing and validation strategy
 

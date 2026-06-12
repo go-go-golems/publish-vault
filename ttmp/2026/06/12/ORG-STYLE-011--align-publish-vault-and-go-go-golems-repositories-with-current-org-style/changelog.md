@@ -96,3 +96,13 @@ Uploaded the final ORG-STYLE-011 bundle including design guide, diary, tasks, au
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/sources/01-org-style-audit.md — Included in final reMarkable bundle
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/sources/02-org-style-batch-plan.md — Included in final reMarkable bundle
 
+
+## 2026-06-12
+
+Corrected scope to publish-vault and go-template only; reverted accidental infra-tooling change with commit 7e174d9 and removed org-wide audit artifacts.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/design-doc/01-org-style-alignment-analysis-and-implementation-guide.md — Updated design guide scope
+- /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/tasks.md — Updated task list to narrowed scope
+
