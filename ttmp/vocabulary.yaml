@@ -87,6 +87,8 @@ topics:
       description: Visual styling, theming, CSS changes
     - slug: ux
       description: User experience improvements and usability fixes
+    - slug: search
+      description: Search functionality, indexing, and query features
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
