@@ -273,11 +273,11 @@ func newSSRProxy(ssrURL string, spaHandler http.Handler) http.Handler {
 		return spaHandler
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(ssrEndpoint)
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.Host = ssrEndpoint.Host
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(req *httputil.ProxyRequest) {
+			req.SetURL(ssrEndpoint)
+			req.Out.Host = ssrEndpoint.Host
+		},
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp.StatusCode >= 500 {
