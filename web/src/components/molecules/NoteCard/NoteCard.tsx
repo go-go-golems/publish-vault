@@ -75,7 +75,14 @@ export const NoteCard: React.FC<NoteCardProps> = ({
                 <Tag
                   key={t}
                   label={t}
-                  onClick={onTagClick ? () => onTagClick(t) : undefined}
+                  onClick={
+                    onTagClick
+                      ? (event) => {
+                          event.stopPropagation();
+                          onTagClick(t);
+                        }
+                      : undefined
+                  }
                   className={active ? "border-[var(--color-paper)]/60 text-[var(--color-paper)]/80" : ""}
                 />
               ))}
