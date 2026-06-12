@@ -36,14 +36,22 @@ export interface VaultLayoutProps {
 
 function HydrationSafeClock() {
   const [mounted, setMounted] = useState(false);
+  const [time, setTime] = useState("");
 
   useEffect(() => {
     setMounted(true);
+    setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    }, 60_000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
-      {mounted ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+      {mounted ? time : "--:--"}
     </span>
   );
 }
@@ -86,7 +94,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
     (q: string) => {
       dispatch(setSearchQuery(q));
       if (q.trim()) {
-        navigate("/search");
+        navigate(`/search?q=${encodeURIComponent(q)}`);
         // Close sidebar on mobile after search
         if (window.innerWidth < 768 && sidebarOpen) {
           dispatch(toggleSidebar());
@@ -125,7 +133,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           onClick={() => navigate("/")}
           aria-label="Go to vault home"
         >
-          &#9670; {vaultName}
+          {vaultName}
         </button>
 
         {/* Mobile: truncated vault name (not clickable) */}
@@ -160,7 +168,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           className={clsx(
             "retro-menubar-item",
             "hidden md:flex",
-            rightPanelOpen && "bg-[var(--color-paper)] text-[var(--color-ink)]"
+            rightPanelOpen && "underline decoration-dotted decoration-1 underline-offset-4"
           )}
           onClick={() => dispatch(toggleRightPanel())}
           title="Toggle right panel"

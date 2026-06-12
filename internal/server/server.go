@@ -46,7 +46,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Port = "8080"
 	}
 	if cfg.ReloadToken == "" {
-		cfg.ReloadToken = os.Getenv("RETRO_RELOAD_TOKEN")
+		cfg.ReloadToken, _ = os.LookupEnv("RETRO_RELOAD_TOKEN")
 	}
 	if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
 		return fmt.Errorf("invalid port %q: %w", cfg.Port, err)
@@ -273,11 +273,11 @@ func newSSRProxy(ssrURL string, spaHandler http.Handler) http.Handler {
 		return spaHandler
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(ssrEndpoint)
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.Host = ssrEndpoint.Host
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(req *httputil.ProxyRequest) {
+			req.SetURL(ssrEndpoint)
+			req.Out.Host = ssrEndpoint.Host
+		},
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp.StatusCode >= 500 {

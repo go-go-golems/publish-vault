@@ -1,4 +1,10 @@
-.PHONY: all backend web frontend storybook dev clean build-web lint lintmax docker-lint gosec govulncheck test web-check build ci-check devctl-example devctl-parc
+.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck glazed-lint-build glazed-lint test web-check build ci-check devctl-example devctl-parc
+
+GLAZED_LINT_BIN ?= /tmp/glazed-lint
+GLAZED_LINT_PKG ?= github.com/go-go-golems/glazed/cmd/tools/glazed-lint
+GLAZED_VERSION ?= $(shell GOWORK=off go list -m -f '{{.Version}}' github.com/go-go-golems/glazed 2>/dev/null)
+GLAZED_LINT_VERSION ?= latest
+GLAZED_LINT_FLAGS ?=
 
 # Build everything
 all: backend web
@@ -34,6 +40,9 @@ lint:
 lintmax:
 	GOWORK=off golangci-lint run -c .golangci.yml -v --max-same-issues=100
 
+fmt-check:
+	GOWORK=off golangci-lint fmt --diff
+
 docker-lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:latest golangci-lint run -c .golangci.yml -v
 
@@ -45,9 +54,24 @@ govulncheck:
 	GOWORK=off go install golang.org/x/vuln/cmd/govulncheck@latest
 	GOWORK=off govulncheck ./...
 
+glazed-lint-build:
+	@if [ -n "$(GLAZED_VERSION)" ] && [ "$(GLAZED_VERSION)" != "(devel)" ]; then \
+		echo "Installing $(GLAZED_LINT_PKG)@$(GLAZED_VERSION)"; \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_VERSION) || { \
+			echo "Falling back to $(GLAZED_LINT_PKG)@$(GLAZED_LINT_VERSION)"; \
+			GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_LINT_VERSION); \
+		}; \
+	else \
+		echo "Installing $(GLAZED_LINT_PKG)@$(GLAZED_LINT_VERSION)"; \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_LINT_VERSION); \
+	fi
+
+glazed-lint: glazed-lint-build
+	GOWORK=off $(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./...
+
 build: backend web
 
-ci-check: lint test gosec govulncheck web-check web
+ci-check: fmt-check lint test gosec govulncheck web-check web
 
 # Start backend with example vault (dev)
 backend-dev:

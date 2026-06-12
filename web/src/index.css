@@ -1,10 +1,10 @@
 /*
  * DESIGN PHILOSOPHY: Retro System 1 (Macintosh 1984)
  * =====================================================
- * Movement: Early Macintosh / Chicago / Susan Kare pixel aesthetic
+ * Movement: Early Macintosh / Susan Kare pixel aesthetic
  * Core Principles:
  *   1. Monochrome foundation — near-black ink on warm paper-white
- *   2. Chicago-style bitmap-inspired typography (system-ui fallback)
+ *   2. System-ui bitmap-inspired typography
  *   3. Hard 1px borders, no border-radius (square windows)
  *   4. Subtle colour accents ONLY for interactive/functional UI elements
  *      (links = deep blue, active = deep blue, destructive = deep red)
@@ -20,7 +20,7 @@
  *   - Inset box shadows (sunken panels)
  *   - Dithered/hatched pattern backgrounds for inactive areas
  *   - Pixel-crisp 1px borders everywhere
- * Typography: Chicago (system-ui), Monaco (monospace), no web fonts
+ * Typography: system-ui, Monaco (monospace), no web fonts
  */
 
 @import "tailwindcss";
@@ -128,7 +128,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Chicago", "Charcoal", system-ui, -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
     line-height: 1.6;
     letter-spacing: 0.01em;
@@ -163,7 +163,7 @@
 
   /* Headings */
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Chicago", "Charcoal", system-ui, sans-serif;
+    font-family: system-ui, -apple-system, sans-serif;
     font-weight: 700;
     line-height: 1.2;
     letter-spacing: -0.01em;
@@ -280,6 +280,42 @@
     box-shadow: none;
     transform: translate(1px, 1px);
   }
+  /* Anchor tags styled as retro-btn should not use global link hover */
+  a.retro-btn,
+  a.retro-btn:hover {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn:hover {
+    background: var(--color-chrome);
+  }
+  .retro-btn-flat {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-ink);
+    color: var(--color-ink);
+    font-size: 11px;
+    padding: 0 5px;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    background: transparent;
+    transition: background 80ms, color 80ms;
+    user-select: none;
+    gap: 3px;
+  }
+  .retro-btn-flat:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  a.retro-btn-flat {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn-flat:hover {
+    color: var(--color-paper);
+  }
+
   .retro-btn-primary {
     background: var(--color-ink);
     color: var(--color-paper);
@@ -550,20 +586,20 @@
     right: 0;
     font-size: 14px;
     font-weight: normal;
-    color: var(--color-ink);
-    opacity: 0;
+    color: var(--color-muted-foreground);
     text-decoration: none;
-    transition: opacity 0.15s;
-    padding-left: 4px;
+    transition: color 0.15s, background 0.15s;
+    padding-left: 0;
   }
-  .note-prose h1:hover .heading-anchor,
-  .note-prose h2:hover .heading-anchor,
-  .note-prose h3:hover .heading-anchor,
-  .note-prose h4:hover .heading-anchor,
-  .note-prose h5:hover .heading-anchor,
-  .note-prose h6:hover .heading-anchor,
+  .heading-anchor:hover {
+    color: var(--color-link);
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
   .heading-anchor:focus {
-    opacity: 0.6;
+    outline: 2px solid var(--color-active);
+    outline-offset: -1px;
   }
 
   /* ── Callouts (admonitions) ── */

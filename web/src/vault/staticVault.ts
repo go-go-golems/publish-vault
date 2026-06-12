@@ -284,6 +284,7 @@ function buildVault(): {
       html,
       wikiLinks: (wikiLinkMap.get(rn.slug) ?? []).map((t) => ({ target: t })),
       backlinks: backlinkMap.get(rn.slug) ?? [],
+      rawMarkdown: rn.content,
       modTime: rn.modTime,
     });
   }
@@ -398,18 +399,35 @@ export function staticListTags(): TagCount[] {
   return getVault().tagCounts;
 }
 
+function extractStaticTagQuery(query: string): string | null {
+  const trimmed = query.trim();
+  if (trimmed.startsWith("#")) {
+    return trimmed.slice(1).trim().toLowerCase();
+  }
+  if (trimmed.toLowerCase().startsWith("tag:")) {
+    return trimmed.slice(4).trim().toLowerCase();
+  }
+  return null;
+}
+
 export function staticSearch(query: string): SearchResult[] {
   if (!query.trim()) return [];
   const q = query.toLowerCase();
+  const tagQuery = extractStaticTagQuery(query);
   const vault = getVault();
   const results: SearchResult[] = [];
 
   for (const note of Array.from(vault.notes.values())) {
-    const titleScore = note.title.toLowerCase().includes(q) ? 2 : 0;
-    const tagScore = note.tags.some((t: string) => t.toLowerCase().includes(q))
-      ? 1.5
-      : 0;
-    const contentScore = note.excerpt.toLowerCase().includes(q) ? 1 : 0;
+    const normalizedTags = note.tags.map((t: string) => t.toLowerCase());
+    const titleScore = tagQuery ? 0 : note.title.toLowerCase().includes(q) ? 2 : 0;
+    const tagScore = tagQuery
+      ? normalizedTags.includes(tagQuery)
+        ? 3
+        : 0
+      : normalizedTags.some((t: string) => t.includes(q))
+        ? 1.5
+        : 0;
+    const contentScore = tagQuery ? 0 : note.excerpt.toLowerCase().includes(q) ? 1 : 0;
     const score = titleScore + tagScore + contentScore;
     if (score > 0) {
       results.push({

@@ -59,6 +59,7 @@ func NewWithProvider(provider SnapshotProvider, config PublicConfig) *Handler {
 func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/api/config", h.getConfig).Methods("GET")
 	r.HandleFunc("/api/notes", h.listNotes).Methods("GET")
+	r.HandleFunc("/api/notes/{slug:.*}/raw", h.getNoteRaw).Methods("GET")
 	r.HandleFunc("/api/notes/{slug:.*}", h.getNote).Methods("GET")
 	r.HandleFunc("/api/tree", h.getTree).Methods("GET")
 	r.HandleFunc("/api/search", h.searchNotes).Methods("GET")
@@ -131,6 +132,22 @@ func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, note)
+}
+
+// getNoteRaw returns the raw markdown source for a note.
+func (h *Handler) getNoteRaw(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	slug := vars["slug"]
+	v, _ := h.provider.Snapshot()
+	note, ok := v.GetNote(slug)
+	if !ok {
+		http.Error(w, "note not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", "inline; filename=\""+note.Slug+".md\"")
+	// #nosec G705 -- the raw endpoint intentionally returns Markdown source as text/markdown, not rendered HTML.
+	_, _ = w.Write([]byte(note.RawMarkdown))
 }
 
 // getTree returns the vault file tree.

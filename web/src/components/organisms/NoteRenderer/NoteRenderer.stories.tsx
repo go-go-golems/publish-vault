@@ -18,7 +18,7 @@ const baseNote = {
   tags: ["philosophy", "stoicism"],
   excerpt: "Stoicism is a school of Hellenistic philosophy…",
   wikiLinks: [],
-  backlinks: ["zettelkasten-method"],
+  backlinks: ["zettelkasten-method"], rawMarkdown: "",
   modTime: "2024-01-15",
 };
 

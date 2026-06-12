@@ -17,7 +17,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/spf13/cobra"
 )
 
@@ -40,10 +39,6 @@ type WebSettings struct {
 }
 
 func NewWebCommand() (*cobra.Command, error) {
-	glazedSection, err := settings.NewGlazedSchema()
-	if err != nil {
-		return nil, err
-	}
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -73,7 +68,7 @@ Examples:
 				fields.WithHelp("pnpm version to activate with corepack. Defaults to web/package.json packageManager."),
 			),
 		),
-		cmds.WithSections(glazedSection, commandSettingsSection),
+		cmds.WithSections(commandSettingsSection),
 	)}
 
 	return cli.BuildCobraCommandFromCommand(cmd,
@@ -101,7 +96,8 @@ func (c *WebCommand) RunIntoGlazeProcessor(ctx context.Context, vals *values.Val
 	}
 	settings.PNPMVersion = strings.Split(settings.PNPMVersion, "+")[0]
 
-	if settings.Local || os.Getenv("BUILD_WEB_LOCAL") == "1" {
+	buildWebLocal, _ := os.LookupEnv("BUILD_WEB_LOCAL")
+	if settings.Local || buildWebLocal == "1" {
 		return runLocal(repoRoot)
 	}
 	if err := runDagger(ctx, repoRoot, settings.BuilderImage, settings.PNPMVersion); err != nil {

@@ -83,6 +83,22 @@ topics:
       description: HTML layout and semantic structure
     - slug: meta-tags
       description: HTML meta tags for SEO (og:title, description, JSON-LD)
+    - slug: styling
+      description: Visual styling, theming, CSS changes
+    - slug: ux
+      description: User experience improvements and usability fixes
+    - slug: search
+      description: Search functionality, indexing, and query features
+    - slug: ci
+      description: Continuous integration workflows and checks
+    - slug: documentation
+      description: Project documentation, guides, and publishing
+    - slug: linting
+      description: Static analysis, formatter checks, and lint policy
+    - slug: release
+      description: Release automation and artifact publishing
+    - slug: tooling
+      description: Developer tooling, templates, and automation
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes

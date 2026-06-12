@@ -41,6 +41,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
   className,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
 
   // Lightbox state for full-screen image/mermaid viewing
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
@@ -269,6 +270,14 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     });
   }, [resolvedHtml]);
 
+  // Copy raw markdown to clipboard
+  const handleCopyMarkdown = useCallback(() => {
+    navigator.clipboard.writeText(note.rawMarkdown).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [note.rawMarkdown]);
+
   // Scroll to heading on hash navigation
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -299,6 +308,33 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       <h1 className="note-column-width text-2xl font-bold text-[var(--color-ink)] leading-tight border-b border-[var(--color-ink)] pb-2">
         {note.title}
       </h1>
+
+      {/* Markdown actions */}
+      <div className="note-column-width flex items-center gap-3 text-[11px]">
+        <button
+          type="button"
+          className="retro-btn-flat"
+          onClick={handleCopyMarkdown}
+          title="Copy raw markdown to clipboard"
+        >
+          {copied ? "✓ Copied" : "⎘ Copy as Markdown"}
+        </button>
+        <a
+          href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
+          download={`${note.slug}.md`}
+          className="retro-btn-flat"
+          title="Download markdown file"
+        >
+          ↓ Download .md
+        </a>
+        <a
+          href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
+          className="retro-btn-flat"
+          title="View raw markdown"
+        >
+          .md
+        </a>
+      </div>
 
       {/* Frontmatter */}
       <FrontmatterPanel

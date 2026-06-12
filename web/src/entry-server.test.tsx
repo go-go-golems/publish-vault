@@ -66,7 +66,7 @@ const note: Note = {
   excerpt: "Welcome to the vault",
   html: "<h2>Welcome</h2><p>This is the vault index.</p>",
   wikiLinks: [{ target: "research/notes" }],
-  backlinks: ["research/notes"],
+  backlinks: ["research/notes"], rawMarkdown: "",
   modTime: "2026-01-01",
 };
 

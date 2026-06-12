@@ -4,13 +4,14 @@
  * Navigation is handled internally via React Router's useNavigate hook.
  */
 import React, { useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { NoteCard } from "../../molecules/NoteCard/NoteCard";
+import { TagCloud } from "../../molecules/TagCloud/TagCloud";
 import { SearchBar } from "../../molecules/SearchBar/SearchBar";
 import { Badge } from "../../atoms/Badge/Badge";
 import { Icon } from "../../atoms/Icon/Icon";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
-import { useGetConfigQuery, useSearchQuery } from "../../../store/vaultApi";
+import { useGetConfigQuery, useListTagsQuery, useSearchQuery } from "../../../store/vaultApi";
 import { useAppSelector, useAppDispatch } from "../../../hooks/redux";
 import { setSearchQuery, setActiveNote } from "../../../store/uiSlice";
 
@@ -21,21 +22,36 @@ export interface SearchPageProps {
 export const SearchPage: React.FC<SearchPageProps> = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
   const query = useAppSelector((s) => s.ui.searchQuery);
   const { data: config } = useGetConfigQuery();
 
+  // Sync URL → Redux on mount / URL change
+  useEffect(() => {
+    if (urlQuery !== query) {
+      dispatch(setSearchQuery(urlQuery));
+    }
+  }, [urlQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update page title
   useEffect(() => {
     const siteTitle = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
-    document.title = `Search — ${siteTitle}`;
-  }, [config?.pageTitle, config?.vaultName]);
+    document.title = `Search${query ? `: ${query}` : ""} — ${siteTitle}`;
+  }, [config?.pageTitle, config?.vaultName, query]);
+
+  const { data: tags, isLoading: tagsLoading } = useListTagsQuery();
 
   const { data: results, isFetching } = useSearchQuery(query, {
     skip: query.trim().length < 2,
   });
 
   const handleSearch = useCallback(
-    (q: string) => { dispatch(setSearchQuery(q)); },
-    [dispatch]
+    (q: string) => {
+      dispatch(setSearchQuery(q));
+      setSearchParams(q ? { q } : {}, { replace: true });
+    },
+    [dispatch, setSearchParams]
   );
 
   const handleSelectNote = useCallback(
@@ -44,6 +60,22 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
       navigate(`/note/${slug}`);
     },
     [dispatch, navigate]
+  );
+
+  const handleTagClick = useCallback(
+    (tag: string) => {
+      dispatch(setSearchQuery("#" + tag));
+      setSearchParams({ q: "#" + tag }, { replace: true });
+    },
+    [dispatch, setSearchParams]
+  );
+
+  const handleTagCloudClick = useCallback(
+    (tag: string) => {
+      dispatch(setSearchQuery("#" + tag));
+      setSearchParams({ q: "#" + tag }, { replace: true });
+    },
+    [dispatch, setSearchParams]
   );
 
   return (
@@ -61,7 +93,8 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
         </div>
         <SearchBar
           onSearch={handleSearch}
-          initialValue={query}
+          value={query}
+          onChange={(q) => dispatch(setSearchQuery(q))}
           autoFocus
           debounceMs={300}
         />
@@ -70,9 +103,12 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
       {/* Results */}
       <ScrollArea className="flex-1 p-2">
         {query.trim().length < 2 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2 text-[var(--color-muted-foreground)]">
-            <Icon name="search" size={32} strokeWidth={1} />
-            <p className="text-xs">Type at least 2 characters to search</p>
+          <div className="p-4">
+            <TagCloud
+              tags={tags ?? []}
+              onTagClick={handleTagCloudClick}
+              className={tagsLoading ? "opacity-50" : ""}
+            />
           </div>
         ) : isFetching ? (
           <div className="flex items-center justify-center py-8 gap-2 text-[var(--color-muted-foreground)] text-xs">
@@ -89,6 +125,7 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
                 excerpt={r.excerpt}
                 tags={r.tags}
                 onClick={handleSelectNote}
+                onTagClick={handleTagClick}
               />
             ))}
           </div>

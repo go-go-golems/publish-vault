@@ -107,12 +107,23 @@ func (si *Index) Delete(slug string) error {
 
 // Search performs a full-text query and returns ranked results.
 // Uses fuzzy matching for partial words and prefix matching for short queries.
+//
+// Tag-specific search:
+//   - Queries starting with "#" perform a field-scoped search on the tags field only.
+//     Example: "#philosophy" matches notes tagged with philosophy.
+//   - Queries starting with "tag:" are treated as an alias for "#".
+//     Example: "tag:philosophy" is equivalent to "#philosophy".
 func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	if limit <= 0 {
 		limit = 20
+	}
+
+	// Check for tag-specific search prefixes (# or tag:)
+	if tagQuery, ok := extractTagQuery(query); ok {
+		return si.searchByTag(tagQuery, limit)
 	}
 
 	// Tokenize the query into words
@@ -168,6 +179,75 @@ func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 			sr.Tags = splitTags(asString(tg))
 		}
 		hits = append(hits, sr)
+	}
+	return hits, nil
+}
+
+// extractTagQuery checks if the query starts with a tag prefix (# or tag:)
+// and returns the tag name without the prefix. Returns ("", false) if no prefix.
+func extractTagQuery(query string) (string, bool) {
+	q := strings.TrimSpace(query)
+	if strings.HasPrefix(q, "#") {
+		tag := strings.TrimSpace(strings.TrimPrefix(q, "#"))
+		if tag != "" {
+			return strings.ToLower(tag), true
+		}
+	}
+	if strings.HasPrefix(strings.ToLower(q), "tag:") {
+		tag := strings.TrimSpace(q[4:])
+		if tag != "" {
+			return strings.ToLower(tag), true
+		}
+	}
+	return "", false
+}
+
+// searchByTag performs a field-scoped search on the tags field only.
+func (si *Index) searchByTag(tagQuery string, limit int) ([]SearchResult, error) {
+	// Use prefix query for short tag names, match query for longer ones
+	var bleveQuery bq.Query
+
+	if len(tagQuery) <= 3 {
+		// Short tag: prefix match (e.g., "phi" matches "philosophy")
+		pq := bleve.NewPrefixQuery(tagQuery)
+		pq.SetField("tags")
+		bleveQuery = pq
+	} else {
+		// Longer tag: fuzzy match on tags field
+		mq := bleve.NewMatchQuery(tagQuery)
+		mq.SetField("tags")
+		mq.SetFuzziness(1)
+		bleveQuery = mq
+	}
+
+	req := bleve.NewSearchRequestOptions(bleveQuery, limit, 0, false)
+	req.Fields = []string{"title", "excerpt", "tags"}
+	req.Highlight = bleve.NewHighlight()
+
+	result, err := si.idx.Search(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var hits []SearchResult
+	for _, hit := range result.Hits {
+		sr := SearchResult{
+			Slug:  hit.ID,
+			Score: hit.Score,
+		}
+		if t, ok := hit.Fields["title"]; ok {
+			sr.Title = asString(t)
+		}
+		if e, ok := hit.Fields["excerpt"]; ok {
+			sr.Excerpt = asString(e)
+		}
+		if tg, ok := hit.Fields["tags"]; ok {
+			sr.Tags = splitTags(asString(tg))
+		}
+		hits = append(hits, sr)
+	}
+	if hits == nil {
+		hits = []SearchResult{}
 	}
 	return hits, nil
 }

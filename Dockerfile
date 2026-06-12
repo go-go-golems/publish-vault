@@ -12,7 +12,7 @@ ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_VAULT_NAME=$VITE_VAULT_NAME
 RUN pnpm build
 
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26.4-alpine AS go-builder
 RUN apk add --no-cache build-base
 WORKDIR /src
 COPY go.mod go.sum ./
