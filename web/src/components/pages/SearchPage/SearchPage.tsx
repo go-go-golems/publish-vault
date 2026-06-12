@@ -4,7 +4,7 @@
  * Navigation is handled internally via React Router's useNavigate hook.
  */
 import React, { useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { NoteCard } from "../../molecules/NoteCard/NoteCard";
 import { SearchBar } from "../../molecules/SearchBar/SearchBar";
 import { Badge } from "../../atoms/Badge/Badge";
@@ -21,21 +21,34 @@ export interface SearchPageProps {
 export const SearchPage: React.FC<SearchPageProps> = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") ?? "";
   const query = useAppSelector((s) => s.ui.searchQuery);
   const { data: config } = useGetConfigQuery();
 
+  // Sync URL → Redux on mount / URL change
+  useEffect(() => {
+    if (urlQuery !== query) {
+      dispatch(setSearchQuery(urlQuery));
+    }
+  }, [urlQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update page title
   useEffect(() => {
     const siteTitle = config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
-    document.title = `Search — ${siteTitle}`;
-  }, [config?.pageTitle, config?.vaultName]);
+    document.title = `Search${query ? `: ${query}` : ""} — ${siteTitle}`;
+  }, [config?.pageTitle, config?.vaultName, query]);
 
   const { data: results, isFetching } = useSearchQuery(query, {
     skip: query.trim().length < 2,
   });
 
   const handleSearch = useCallback(
-    (q: string) => { dispatch(setSearchQuery(q)); },
-    [dispatch]
+    (q: string) => {
+      dispatch(setSearchQuery(q));
+      setSearchParams(q ? { q } : {}, { replace: true });
+    },
+    [dispatch, setSearchParams]
   );
 
   const handleSelectNote = useCallback(
@@ -61,7 +74,7 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
         </div>
         <SearchBar
           onSearch={handleSearch}
-          initialValue={query}
+          value={query}
           autoFocus
           debounceMs={300}
         />

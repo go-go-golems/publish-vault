@@ -14,6 +14,9 @@ export interface SearchBarProps {
   className?: string;
   autoFocus?: boolean;
   initialValue?: string;
+  /** Controlled value — when provided, the component is fully controlled */
+  value?: string;
+  onChange?: (value: string) => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -23,24 +26,34 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   className,
   autoFocus,
   initialValue = "",
+  value: controlledValue,
+  onChange,
 }) => {
-  const [value, setValue] = useState(initialValue);
+  const isControlled = controlledValue !== undefined;
+  const [internalValue, setInternalValue] = useState(initialValue);
+  const value = isControlled ? controlledValue : internalValue;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const q = e.target.value;
-      setValue(q);
+      if (!isControlled) {
+        setInternalValue(q);
+      }
+      onChange?.(q);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => onSearch(q), debounceMs);
     },
-    [onSearch, debounceMs]
+    [onSearch, debounceMs, isControlled, onChange]
   );
 
   const handleClear = useCallback(() => {
-    setValue("");
+    if (!isControlled) {
+      setInternalValue("");
+    }
+    onChange?.("");
     onSearch("");
-  }, [onSearch]);
+  }, [onSearch, isControlled, onChange]);
 
   // Keyboard shortcut: / to focus
   useEffect(() => {

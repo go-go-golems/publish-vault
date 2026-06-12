@@ -94,7 +94,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
     (q: string) => {
       dispatch(setSearchQuery(q));
       if (q.trim()) {
-        navigate("/search");
+        navigate(`/search?q=${encodeURIComponent(q)}`);
         // Close sidebar on mobile after search
         if (window.innerWidth < 768 && sidebarOpen) {
           dispatch(toggleSidebar());
