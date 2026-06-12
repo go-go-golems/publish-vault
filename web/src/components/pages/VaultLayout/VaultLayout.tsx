@@ -160,7 +160,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           className={clsx(
             "retro-menubar-item",
             "hidden md:flex",
-            rightPanelOpen && "bg-[var(--color-paper)] text-[var(--color-ink)]"
+            rightPanelOpen && "underline decoration-dotted decoration-1 underline-offset-4"
           )}
           onClick={() => dispatch(toggleRightPanel())}
           title="Toggle right panel"
