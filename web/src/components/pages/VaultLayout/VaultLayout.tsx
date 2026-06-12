@@ -125,7 +125,7 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
           onClick={() => navigate("/")}
           aria-label="Go to vault home"
         >
-          &#9670; {vaultName}
+          {vaultName}
         </button>
 
         {/* Mobile: truncated vault name (not clickable) */}
