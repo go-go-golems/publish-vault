@@ -284,6 +284,7 @@ function buildVault(): {
       html,
       wikiLinks: (wikiLinkMap.get(rn.slug) ?? []).map((t) => ({ target: t })),
       backlinks: backlinkMap.get(rn.slug) ?? [],
+      rawMarkdown: rn.content,
       modTime: rn.modTime,
     });
   }

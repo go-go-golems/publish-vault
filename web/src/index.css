@@ -280,6 +280,15 @@
     box-shadow: none;
     transform: translate(1px, 1px);
   }
+  /* Anchor tags styled as retro-btn should not use global link hover */
+  a.retro-btn,
+  a.retro-btn:hover {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn:hover {
+    background: var(--color-chrome);
+  }
   .retro-btn-primary {
     background: var(--color-ink);
     color: var(--color-paper);
