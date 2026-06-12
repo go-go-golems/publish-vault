@@ -36,14 +36,22 @@ export interface VaultLayoutProps {
 
 function HydrationSafeClock() {
   const [mounted, setMounted] = useState(false);
+  const [time, setTime] = useState("");
 
   useEffect(() => {
     setMounted(true);
+    setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    }, 60_000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <span className="retro-menubar-item text-[10px] tabular-nums select-none hidden md:inline-flex">
-      {mounted ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--"}
+      {mounted ? time : "--:--"}
     </span>
   );
 }
