@@ -106,3 +106,12 @@ Corrected scope to publish-vault and go-template only; reverted accidental infra
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/design-doc/01-org-style-alignment-analysis-and-implementation-guide.md — Updated design guide scope
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/tasks.md — Updated task list to narrowed scope
 
+
+## 2026-06-12
+
+Re-uploaded the scope-corrected ORG-STYLE-011 bundle to reMarkable at /ai/2026/06/12/ORG-STYLE-011.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/ttmp/2026/06/12/ORG-STYLE-011--align-publish-vault-and-go-go-golems-repositories-with-current-org-style/design-doc/01-org-style-alignment-analysis-and-implementation-guide.md — Scope-corrected bundle source
+
