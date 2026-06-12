@@ -550,20 +550,20 @@
     right: 0;
     font-size: 14px;
     font-weight: normal;
-    color: var(--color-ink);
-    opacity: 0;
+    color: var(--color-muted-foreground);
     text-decoration: none;
-    transition: opacity 0.15s;
-    padding-left: 4px;
+    transition: color 0.15s, background 0.15s;
+    padding-left: 0;
   }
-  .note-prose h1:hover .heading-anchor,
-  .note-prose h2:hover .heading-anchor,
-  .note-prose h3:hover .heading-anchor,
-  .note-prose h4:hover .heading-anchor,
-  .note-prose h5:hover .heading-anchor,
-  .note-prose h6:hover .heading-anchor,
+  .heading-anchor:hover {
+    color: var(--color-link);
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
   .heading-anchor:focus {
-    opacity: 0.6;
+    outline: 2px solid var(--color-active);
+    outline-offset: -1px;
   }
 
   /* ── Callouts (admonitions) ── */
