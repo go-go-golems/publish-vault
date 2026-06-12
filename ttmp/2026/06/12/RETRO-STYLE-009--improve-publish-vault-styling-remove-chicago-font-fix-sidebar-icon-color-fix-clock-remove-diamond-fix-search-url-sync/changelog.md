@@ -51,3 +51,12 @@ Step 5: Fix search URL sync (commit c203b21)
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/web/src/components/pages/SearchPage/SearchPage.tsx — Added useSearchParams for URL sync
 - /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/web/src/components/pages/VaultLayout/VaultLayout.tsx — handleSearch navigates to /search?q=...
 
+
+## 2026-06-12
+
+Step 6: Heading anchors always visible, link-style hover, no padding (commit e7206e9)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-12/publish-vault-style/publish-vault/web/src/index.css — Updated .heading-anchor CSS
+

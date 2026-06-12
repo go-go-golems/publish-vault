@@ -241,3 +241,50 @@ Without URL sync, search state is invisible to the browser and can't be shared o
 - Check VaultLayout.tsx handleSearch for URL construction
 - Test: navigate to `/search?q=test`, verify the search input is populated and results show
 - Test: type in search, verify URL updates to `?q=...`
+
+## Step 6: Make heading anchors always visible with link-style hover
+
+Heading permalink anchors (the `#` symbol next to headings) were previously invisible until hovering over the heading, and had left padding. They now appear always-visible in a muted color, with no left padding, and behave like normal links on hover (blue background, white text).
+
+### Prompt Context
+
+**User prompt (verbatim):** "update the href link anchro next to headings in the article to have no left padding, and to always be visible, but change color on hover, similar to normal links. Update the diary of the styling ticket."
+
+**Assistant interpretation:** Change the heading anchor CSS to: remove padding-left, make anchors always visible, and apply the same link hover style (blue bg + white text) used elsewhere.
+
+**Inferred user intent:** Improve discoverability of heading permalinks — they should be visible at a glance and have consistent link behavior.
+
+**Commit (code):** e7206e9 — "style: heading anchors always visible, link-style hover, no left padding"
+
+### What I did
+- Removed `opacity: 0` and the `opacity` transition from `.heading-anchor`
+- Set default color to `var(--color-muted-foreground)` so anchors are always visible but subdued
+- Removed `padding-left: 4px`
+- Replaced the hover-by-parent pattern (`h1:hover .heading-anchor { opacity: 0.6 }`) with a direct `.heading-anchor:hover` that uses the standard link hover style (`background: link-color, color: #fff`)
+- Added focus outline for keyboard accessibility
+
+### Why
+The previous design hid anchors until hovering the heading, making them undiscoverable. Users couldn't tell headings were linkable. The new design shows them always (in muted color) and uses the familiar link hover pattern.
+
+### What worked
+- The `var(--color-muted-foreground)` default is subtle enough not to distract but clear enough to be discoverable
+- Reusing the link hover pattern (`background: var(--color-link); color: #fff`) is consistent with the rest of the app
+
+### What didn't work
+- N/A
+
+### What I learned
+- The previous hover-by-parent approach (`.note-prose h1:hover .heading-anchor`) was a common pattern from GitHub-style headings, but always-visible anchors are more accessible
+
+### What was tricky to build
+- N/A
+
+### What warrants a second pair of eyes
+- Visual check that the always-visible anchors don't clash with heading text
+
+### What should be done in the future
+- N/A
+
+### Code review instructions
+- Check `web/src/index.css` `.heading-anchor` rules
+- View any note page and verify `#` anchors appear next to headings without hover
