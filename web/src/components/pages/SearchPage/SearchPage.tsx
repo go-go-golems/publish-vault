@@ -75,6 +75,7 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
         <SearchBar
           onSearch={handleSearch}
           value={query}
+          onChange={(q) => dispatch(setSearchQuery(q))}
           autoFocus
           debounceMs={300}
         />
