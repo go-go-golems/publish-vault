@@ -23,6 +23,7 @@ type Note struct {
 	Tags        []string               `json:"tags"`
 	Excerpt     string                 `json:"excerpt"`
 	HTML        string                 `json:"html"`
+	RawMarkdown string                 `json:"rawMarkdown"`
 	WikiLinks   []WikiLinkRef          `json:"wikiLinks"`
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
@@ -152,6 +153,7 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
+		RawMarkdown: string(src),
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
 	}, nil
