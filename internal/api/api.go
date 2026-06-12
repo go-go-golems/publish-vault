@@ -59,8 +59,8 @@ func NewWithProvider(provider SnapshotProvider, config PublicConfig) *Handler {
 func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/api/config", h.getConfig).Methods("GET")
 	r.HandleFunc("/api/notes", h.listNotes).Methods("GET")
-	r.HandleFunc("/api/notes/{slug:.*}", h.getNote).Methods("GET")
 	r.HandleFunc("/api/notes/{slug:.*}/raw", h.getNoteRaw).Methods("GET")
+	r.HandleFunc("/api/notes/{slug:.*}", h.getNote).Methods("GET")
 	r.HandleFunc("/api/tree", h.getTree).Methods("GET")
 	r.HandleFunc("/api/search", h.searchNotes).Methods("GET")
 	r.HandleFunc("/api/tags", h.listTags).Methods("GET")
