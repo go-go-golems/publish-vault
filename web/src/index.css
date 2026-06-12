@@ -289,6 +289,33 @@
   a.retro-btn:hover {
     background: var(--color-chrome);
   }
+  .retro-btn-flat {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-ink);
+    color: var(--color-ink);
+    font-size: 11px;
+    padding: 0 5px;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    background: transparent;
+    transition: background 80ms, color 80ms;
+    user-select: none;
+    gap: 3px;
+  }
+  .retro-btn-flat:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  a.retro-btn-flat {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn-flat:hover {
+    color: var(--color-paper);
+  }
+
   .retro-btn-primary {
     background: var(--color-ink);
     color: var(--color-paper);

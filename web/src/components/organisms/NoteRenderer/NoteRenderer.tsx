@@ -313,7 +313,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       <div className="note-column-width flex items-center gap-3 text-[11px]">
         <button
           type="button"
-          className="retro-btn"
+          className="retro-btn-flat"
           onClick={handleCopyMarkdown}
           title="Copy raw markdown to clipboard"
         >
@@ -322,14 +322,14 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         <a
           href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
           download={`${note.slug}.md`}
-          className="retro-btn no-underline hover:no-underline"
+          className="retro-btn-flat"
           title="Download markdown file"
         >
           ↓ Download .md
         </a>
         <a
           href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
-          className="retro-btn no-underline hover:no-underline"
+          className="retro-btn-flat"
           title="View raw markdown"
         >
           .md
