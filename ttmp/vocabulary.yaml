@@ -83,6 +83,10 @@ topics:
       description: HTML layout and semantic structure
     - slug: meta-tags
       description: HTML meta tags for SEO (og:title, description, JSON-LD)
+    - slug: styling
+      description: Visual styling, theming, CSS changes
+    - slug: ux
+      description: User experience improvements and usability fixes
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
