@@ -46,7 +46,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Port = "8080"
 	}
 	if cfg.ReloadToken == "" {
-		cfg.ReloadToken = os.Getenv("RETRO_RELOAD_TOKEN")
+		cfg.ReloadToken, _ = os.LookupEnv("RETRO_RELOAD_TOKEN")
 	}
 	if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
 		return fmt.Errorf("invalid port %q: %w", cfg.Port, err)

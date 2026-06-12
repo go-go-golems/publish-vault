@@ -146,7 +146,8 @@ func (h *Handler) getNoteRaw(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", "inline; filename=\""+note.Slug+".md\"")
-	w.Write([]byte(note.RawMarkdown))
+	// #nosec G705 -- the raw endpoint intentionally returns Markdown source as text/markdown, not rendered HTML.
+	_, _ = w.Write([]byte(note.RawMarkdown))
 }
 
 // getTree returns the vault file tree.
