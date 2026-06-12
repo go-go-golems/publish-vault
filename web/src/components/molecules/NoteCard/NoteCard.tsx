@@ -15,6 +15,7 @@ export interface NoteCardProps {
   tags?: string[];
   modTime?: string;
   onClick?: (slug: string) => void;
+  onTagClick?: (tag: string) => void;
   active?: boolean;
   className?: string;
 }
@@ -26,6 +27,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   tags,
   modTime,
   onClick,
+  onTagClick,
   active,
   className,
 }) => {
@@ -73,6 +75,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
                 <Tag
                   key={t}
                   label={t}
+                  onClick={onTagClick ? () => onTagClick(t) : undefined}
                   className={active ? "border-[var(--color-paper)]/60 text-[var(--color-paper)]/80" : ""}
                 />
               ))}

@@ -59,6 +59,14 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
     [dispatch, navigate]
   );
 
+  const handleTagClick = useCallback(
+    (tag: string) => {
+      dispatch(setSearchQuery("#" + tag));
+      setSearchParams({ q: "#" + tag }, { replace: true });
+    },
+    [dispatch, setSearchParams]
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -103,6 +111,7 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
                 excerpt={r.excerpt}
                 tags={r.tags}
                 onClick={handleSelectNote}
+                onTagClick={handleTagClick}
               />
             ))}
           </div>

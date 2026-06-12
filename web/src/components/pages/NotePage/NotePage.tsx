@@ -49,7 +49,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   );
 
   const handleTagClick = useCallback(
-    (_tag: string) => { navigate("/search"); },
+    (tag: string) => { navigate(`/search?q=${encodeURIComponent("#" + tag)}`); },
     [navigate]
   );
 
