@@ -469,7 +469,7 @@ This phase does not yet move bleve out of memory. It prepares for persistent per
 
 **Inferred user intent:** Progress toward safe persistent search without the naive drop-in `NewPersistent` implementation.
 
-**Commit (code):** pending — "RETRO-MEMORY-012: decouple search from rendered HTML"
+**Commit (code):** 67f4856f08c75769273c5ced8f18dd3bfeed73ea — "RETRO-MEMORY-012: decouple search from rendered HTML"
 
 ### What I did
 - Added exported `parser.PlainText(src []byte)` that strips frontmatter and Markdown syntax for search/indexing.
@@ -485,9 +485,10 @@ This phase does not yet move bleve out of memory. It prepares for persistent per
 ### What worked
 - `gofmt` completed.
 - `go test ./...` passed.
+- Pre-commit hook passed `GOWORK=off go test ./...`, plugin unittest, and `golangci-lint`.
 
 ### What didn't work
-- N/A.
+- The pre-commit hook created `plugins/__pycache__/`; I removed it before continuing.
 
 ### What I learned
 - The parser already had private `stripMarkdown`/excerpt machinery, so exporting a small `PlainText` helper was enough for this phase.

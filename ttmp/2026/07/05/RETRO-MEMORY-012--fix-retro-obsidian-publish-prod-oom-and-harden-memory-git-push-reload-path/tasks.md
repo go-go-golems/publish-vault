@@ -45,7 +45,7 @@ Goal: make search consume a dedicated search document instead of `stripHTML(note
 - [x] D4. Update watcher reload path to re-index the changed note's search document.
 - [x] D5. Add search tests that prove queries still match body, title, tags, and excerpts.
 - [x] D6. Run full tests.
-- [ ] D7. Commit Phase D.
+- [x] D7. Commit Phase D (`67f4856`).
 
 ## Phase E — Persistent search index with explicit lifecycle and snapshot isolation
 
