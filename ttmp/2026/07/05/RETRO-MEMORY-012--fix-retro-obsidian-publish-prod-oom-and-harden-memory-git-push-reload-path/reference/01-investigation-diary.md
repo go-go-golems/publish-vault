@@ -590,3 +590,87 @@ The real-vault measurements show the change is meaningful. On `/home/manuel/code
 ### Technical details
 - Persistent index base path used for measurement: `/tmp/retro-persistent-search` and `/tmp/retro-persistent-reload`.
 - Real vault path used for measurement: `/home/manuel/code/wesen/go-go-golems/go-go-parc`.
+
+---
+
+## Step 12: Deploy optimized images and verify production memory
+
+Phase F moved the optimized code into production. I built and pushed both the Go app image and the SSR image with the same `sha-f434b60` tag, updated the hetzner-k3s deployment to use persistent search storage at `/data/search`, and verified the new pod in the cluster.
+
+A deployment wrinkle appeared: the GHCR packages are public, but the old deployment specified an explicit image pull secret. That stale/bad credential caused GHCR to return `403 Forbidden` instead of allowing anonymous pulls. Removing `imagePullSecrets` from the pod template fixed the rollout because kubelet could then pull the public images anonymously.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, go ahead"
+
+**Assistant interpretation:** Proceed with deploying the memory-optimized publish-vault build to production.
+
+**Inferred user intent:** Make the prod site healthy and verify the memory fix under real cluster conditions.
+
+**Commit (deployment):** 0ebec8b5f841fb3cdde21f1b414cce242f40bc65 — "Deploy publish-vault memory optimized image"
+
+**Commit (deployment fix):** a996fae588c32d45b4d3d1ef1a5f20e8410db1cc — "retro-obsidian-publish: pull public GHCR images anonymously"
+
+### What I did
+- Built and pushed `ghcr.io/go-go-golems/publish-vault:sha-f434b60`.
+- Built and pushed `ghcr.io/go-go-golems/publish-vault-ssr:sha-f434b60`.
+- Updated hetzner-k3s `gitops/kustomize/retro-obsidian-publish/deployment.yaml`:
+  - app image -> `sha-f434b60`
+  - ssr image -> `sha-f434b60`
+  - added `search-index` `emptyDir`
+  - mounted it at `/data/search`
+  - added `--search-index-path /data/search`
+- Pushed GitOps commit `0ebec8b`.
+- Argo applied the image/arg changes but new pods hit `ErrImagePull` / `ImagePullBackOff`.
+- Verified both GHCR packages are public and anonymous manifest checks work.
+- Removed the stale pod-level `imagePullSecrets` from the deployment and pushed GitOps commit `a996fae`.
+- Patched the live Deployment to remove `imagePullSecrets` immediately, matching desired GitOps state and unblocking the rollout.
+
+### Why
+- The code-side memory fix only helps production after the deployment uses the new image and enables persistent search index storage.
+
+### What worked
+- Argo eventually reported `sync=Synced health=Healthy op=Succeeded`.
+- Final prod pod:
+  - `retro-obsidian-publish-74968f989-vscxs`
+  - `READY 3/3`
+  - `RESTARTS 0`
+  - app image `ghcr.io/go-go-golems/publish-vault:sha-f434b60`
+  - ssr image `ghcr.io/go-go-golems/publish-vault-ssr:sha-f434b60`
+- `kubectl top pod` showed about `167Mi` for the whole pod after rollout.
+- Public health endpoint returned OK:
+  - `https://parc.yolo.scapegoat.dev/api/healthz`
+  - `notes=890`
+  - `heapAllocBytes` observed around `41–68Mi` after startup/reload/GC.
+
+### What didn't work
+- First rollout of `sha-f434b60` failed with GHCR `403 Forbidden` pulls:
+  - `failed to authorize: failed to fetch oauth token ... 403 Forbidden`
+- Cause: the image is public, but the pod still forced use of `retro-obsidian-publish-ghcr-pull`. A bad explicit pull credential can prevent anonymous fallback.
+- Fix: remove `imagePullSecrets` from the pod template because these GHCR packages are public.
+
+### What I learned
+- For public GHCR packages, an explicit stale image pull secret is worse than no secret. Kubelet authenticates and fails instead of pulling anonymously.
+- The optimized app is now comfortably below the old 1536Mi limit in production: observed whole-pod memory ~167Mi, with app heap allocation far below local reload measurements.
+
+### What was tricky to build
+- Argo was mid-operation after the failing image pull, so the desired GitOps follow-up commit did not immediately update the live pod template. A manual `kubectl patch deployment ... remove /spec/template/spec/imagePullSecrets` matched the desired state and unblocked the rollout.
+
+### What warrants a second pair of eyes
+- Whether to remove the now-unused `vault-static-secret-image-pull.yaml` resource from kustomization in a later cleanup. It is no longer referenced by the pod, but the VSO resource still exists in manifests.
+- Whether to reduce the `app` memory limit after a longer observation window. I left the limit at 1536Mi for safety.
+
+### What should be done in the future
+- Watch the pod over several git-sync cycles and after real user traffic.
+- Consider `GOMEMLIMIT` only if heapSys/RSS remains higher than desired; current live heapAlloc/RSS do not require it.
+
+### Code review instructions
+- Review the hetzner-k3s deployment diff in commits `0ebec8b` and `a996fae`.
+- Verify with:
+  - `kubectl -n retro-obsidian-publish get pods`
+  - `kubectl top pod -n retro-obsidian-publish`
+  - `curl -fsS https://parc.yolo.scapegoat.dev/api/healthz`
+
+### Technical details
+- Final pod memory sample: `167Mi` whole pod.
+- App health sample from public endpoint: `heapAllocBytes=41319664`, `heapSysBytes=505970688`, `heapInuseBytes=67567616`, `numGC=1655`.

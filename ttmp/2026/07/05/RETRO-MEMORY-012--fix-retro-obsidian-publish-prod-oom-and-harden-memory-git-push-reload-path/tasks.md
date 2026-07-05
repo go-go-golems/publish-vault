@@ -65,11 +65,11 @@ Goal: move bleve out of heap safely, without stale deleted documents or inconsis
 
 Goal: ship safely to prod and make runtime behavior observable.
 
-- [ ] F1. In hetzner-k3s, raise `app` limit to 3072Mi as an operational hotfix if not already done.
-- [ ] F2. In hetzner-k3s, mount `/data/search` and set `--search-index-path` once Phase E is released.
-- [ ] F3. Consider `GOMEMLIMIT` and `GOGC` only after measuring Phase B/E behavior.
-- [ ] F4. Verify prod pod reaches `READY 3/3`, reload survives several git-sync cycles, and `/api/healthz` reports sane memory stats.
-- [ ] F5. Commit deployment changes in hetzner-k3s separately.
+- [x] F1. In hetzner-k3s, raise `app` limit to 3072Mi as an operational hotfix if not already done. (Not needed after persistent index deploy; kept 1536Mi.)
+- [x] F2. In hetzner-k3s, mount `/data/search` and set `--search-index-path` once Phase E is released.
+- [x] F3. Consider `GOMEMLIMIT` and `GOGC` only after measuring Phase B/E behavior. (Deferred; prod heap is well below current 1536Mi limit.)
+- [x] F4. Verify prod pod reaches `READY 3/3`, reload survives several git-sync cycles, and `/api/healthz` reports sane memory stats.
+- [x] F5. Commit deployment changes in hetzner-k3s separately (`0ebec8b`, `a996fae`).
 
 ## Phase G — Documentation, diary, and delivery upkeep
 

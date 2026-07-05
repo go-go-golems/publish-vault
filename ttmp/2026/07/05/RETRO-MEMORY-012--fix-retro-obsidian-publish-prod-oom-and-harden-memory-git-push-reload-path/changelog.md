@@ -85,3 +85,13 @@ Implemented Phase E persistent per-snapshot search indexes: added search.Index.C
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime_test.go — Persistent reload consistency and cleanup tests
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — SearchIndexPath runtime config
 
+
+## 2026-07-05
+
+Completed Phase F deployment: built and pushed ghcr.io/go-go-golems/publish-vault:sha-f434b60 and publish-vault-ssr:sha-f434b60, updated hetzner-k3s deployment to mount /data/search and pass --search-index-path, then removed the stale imagePullSecrets so public GHCR images pull anonymously. Prod verified: Argo Synced/Healthy, pod 3/3 Running, 0 restarts, pod memory ~167Mi, public /api/healthz OK with heapAlloc ~41–68Mi after reload.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml — Prod deployment updated to sha-f434b60
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/ttmp/2026/07/05/RETRO-MEMORY-012--fix-retro-obsidian-publish-prod-oom-and-harden-memory-git-push-reload-path/tasks.md — Phase F marked complete
+
