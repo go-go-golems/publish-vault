@@ -794,7 +794,7 @@ The first issue was that the persistent index was opened under a `.building` sta
 
 **Inferred user intent:** Keep the PR mergeable and preserve the memory work while fixing newly identified correctness regressions.
 
-**Commit (code):** TBD — will be filled after commit.
+**Commit (code):** f3eaa1b87094dd139ded69f53b214bccde172a4a — "RETRO-MEMORY-012: address second PR review pass"
 
 ### What I did
 - Fetched the latest PR #8 reviews and comments with `gh pr view 8` and `gh api repos/go-go-golems/publish-vault/pulls/8/comments --paginate`.
