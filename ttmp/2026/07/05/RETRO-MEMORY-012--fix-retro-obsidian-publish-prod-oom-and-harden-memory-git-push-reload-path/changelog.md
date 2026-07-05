@@ -32,3 +32,16 @@ Replaced the initial coarse task list with a resumable phase-by-phase implementa
 
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/ttmp/2026/07/05/RETRO-MEMORY-012--fix-retro-obsidian-publish-prod-oom-and-harden-memory-git-push-reload-path/tasks.md — Resumable phase/task checklist
 
+
+## 2026-07-05
+
+Implemented Phase B memory/reload instrumentation: added phase-level memory logs around load/reload, extended /api/healthz with Go heap stats, added Vault.Count() to avoid AllNotes allocation for counts, and added focused tests. Validation: gofmt and go test ./... passed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime.go — Memory stat helpers and load/reload phase logging
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime_test.go — Health memory stats regression test
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — /api/healthz now returns heap stats and uses Vault.Count()
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Added Count() for non-allocating note counts
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault_test.go — Vault.Count() regression test
+

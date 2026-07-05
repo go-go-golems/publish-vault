@@ -326,3 +326,60 @@ Create a detailed list of phases + tasks per phase so we can nicely track our pr
 
 ### Technical details
 - Baseline command: `go test ./...`
+
+---
+
+## Step 8: Implement Phase B memory/reload instrumentation
+
+Phase B makes memory behavior visible before deeper storage refactors. The implementation keeps runtime semantics unchanged: vaults and search indexes are still built exactly as before, but startup/reload phases now log Go heap statistics, and `/api/healthz` exposes the same memory counters for operators.
+
+This phase also removes a small allocation from health/config paths by adding `Vault.Count()`. That is not the OOM fix, but it keeps the health endpoint cheap and gives later phases a cleaner count API.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Start implementing the resumable phase plan and commit each meaningful phase.
+
+**Inferred user intent:** Make progress in reviewable chunks while preserving a diary that allows handoff/resume.
+
+**Commit (code):** pending — "RETRO-MEMORY-012: add memory instrumentation"
+
+### What I did
+- Added `Vault.Count()` in `internal/vault/vault.go`.
+- Updated `internal/api/api.go` config response to use `v.Count()` rather than `len(v.AllNotes())`.
+- Added `currentMemoryStats()` and `logMemoryPhase()` in `internal/server/runtime.go`.
+- Logged memory around load start, symlink resolution, vault load completion, search build completion, load completion, reload start/failure/swap.
+- Extended `/api/healthz` in `internal/server/server.go` with heap fields: `heapAllocBytes`, `heapSysBytes`, `heapInuseBytes`, `nextGCBytes`, `numGC`.
+- Added tests for `Vault.Count()` and health memory JSON.
+
+### Why
+- The design review flagged that the reload-triggered OOM is plausible but not yet measured phase-by-phase. These logs make the next prod run useful: we can see whether peak growth happens in parsing, HTML rebuild, search indexing, or swap.
+
+### What worked
+- `gofmt` completed.
+- `go test ./...` passed.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- The health endpoint previously used `len(v.AllNotes())`, which allocated a full slice just to count notes. The new `Count()` API is a tiny cleanup but also a good example of separating API needs from vault iteration.
+
+### What was tricky to build
+- Avoiding a new dependency or complex metrics subsystem. The phase deliberately uses `runtime.ReadMemStats` and structured-ish log key/value text so it remains simple and safe.
+
+### What warrants a second pair of eyes
+- Whether the new `/api/healthz` JSON fields are acceptable for any external health consumers. The old fields remain present, but the response now uses `json.Encoder`, which adds a trailing newline.
+
+### What should be done in the future
+- Deploy this or a later phase and capture real prod logs across startup and reload.
+- Continue to Phase C: remove raw markdown from the hot storage model and update frontend copy behavior.
+
+### Code review instructions
+- Start with `internal/server/runtime.go` for instrumentation.
+- Then review `internal/server/server.go` `healthResponse` and `healthHandler`.
+- Validate with `go test ./...`.
+
+### Technical details
+- Validation command: `gofmt -w internal/vault/vault.go internal/vault/vault_test.go internal/api/api.go internal/server/runtime.go internal/server/server.go internal/server/runtime_test.go && go test ./...`

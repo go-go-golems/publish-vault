@@ -7,17 +7,17 @@ This checklist is the resumable execution plan after the takeover review. It int
 - [x] A1. Create ticket workspace, intern guide, and investigation diary.
 - [x] A2. Add second-pass project/design review correcting the naive persistent-index plan.
 - [x] A3. Run baseline `go test ./...` before code changes.
-- [ ] A4. Commit planning docs and baseline state.
+- [x] A4. Commit planning docs and baseline state (`596286c`).
 
 ## Phase B — Memory/reload instrumentation (first code checkpoint)
 
 Goal: make reload/startup memory measurable before changing storage semantics.
 
-- [ ] B1. Add phase-level memory logging around `loadVaultAndSearch`: before symlink resolution, after vault load, after search build, and after reload swap.
-- [ ] B2. Extend `/api/healthz` with Go memory stats (`heapAllocBytes`, `heapSysBytes`, `heapInuseBytes`, `numGC`, `nextGCBytes`) while keeping `ok`, `notes`, `vaultRoot`, and `configuredRoot`.
-- [ ] B3. Add `Vault.Count()` so health/config can count notes without allocating `AllNotes()` slices.
-- [ ] B4. Add/update tests for health JSON and `Vault.Count()`.
-- [ ] B5. Run `gofmt ./...` and `go test ./...`.
+- [x] B1. Add phase-level memory logging around `loadVaultAndSearch`: before symlink resolution, after vault load, after search build, and after reload swap.
+- [x] B2. Extend `/api/healthz` with Go memory stats (`heapAllocBytes`, `heapSysBytes`, `heapInuseBytes`, `numGC`, `nextGCBytes`) while keeping `ok`, `notes`, `vaultRoot`, and `configuredRoot`.
+- [x] B3. Add `Vault.Count()` so health/config can count notes without allocating `AllNotes()` slices.
+- [x] B4. Add/update tests for health JSON and `Vault.Count()`.
+- [x] B5. Run `gofmt ./...` and `go test ./...`.
 - [ ] B6. Commit Phase B.
 
 ## Phase C — Remove raw markdown from the hot storage model

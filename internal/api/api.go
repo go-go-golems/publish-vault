@@ -85,7 +85,7 @@ func (h *Handler) getConfig(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, SiteConfig{
 		VaultName: h.config.VaultName,
 		PageTitle: h.config.PageTitle,
-		Notes:     len(v.AllNotes()),
+		Notes:     v.Count(),
 	})
 }
 

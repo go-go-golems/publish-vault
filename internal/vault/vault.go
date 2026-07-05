@@ -370,6 +370,12 @@ func (v *Vault) GetNote(slug string) (*Note, bool) {
 }
 
 // AllNotes returns a snapshot of all notes.
+func (v *Vault) Count() int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return len(v.notes)
+}
+
 func (v *Vault) AllNotes() []*Note {
 	v.mu.RLock()
 	defer v.mu.RUnlock()

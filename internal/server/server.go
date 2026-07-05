@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -154,12 +155,25 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 }
 
+type healthResponse struct {
+	OK             bool   `json:"ok"`
+	Notes          int    `json:"notes"`
+	VaultRoot      string `json:"vaultRoot"`
+	ConfiguredRoot string `json:"configuredRoot"`
+	memoryStats
+}
+
 func healthHandler(state *RuntimeState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, _ := state.Snapshot()
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"ok":true,"notes":%d,"vaultRoot":%q,"configuredRoot":%q}`,
-			len(v.AllNotes()), state.ResolvedRoot(), state.ConfiguredRoot())
+		_ = json.NewEncoder(w).Encode(healthResponse{
+			OK:             true,
+			Notes:          v.Count(),
+			VaultRoot:      state.ResolvedRoot(),
+			ConfiguredRoot: state.ConfiguredRoot(),
+			memoryStats:    currentMemoryStats(),
+		})
 	}
 }
 

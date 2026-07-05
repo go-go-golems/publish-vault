@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,6 +49,38 @@ func TestRuntimeStateResolvesSymlinkRootAndReloads(t *testing.T) {
 	}
 	if state.ResolvedRoot() != worktree2 {
 		t.Fatalf("ResolvedRoot() = %q, want %q", state.ResolvedRoot(), worktree2)
+	}
+}
+
+func TestHealthHandlerIncludesMemoryStats(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	rr := httptest.NewRecorder()
+	healthHandler(state).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("health status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	var got healthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("health json: %v body=%s", err, rr.Body.String())
+	}
+	if !got.OK {
+		t.Fatal("health ok=false, want true")
+	}
+	if got.Notes != 1 {
+		t.Fatalf("health notes = %d, want 1", got.Notes)
+	}
+	if got.VaultRoot != root || got.ConfiguredRoot != root {
+		t.Fatalf("health roots = (%q, %q), want %q", got.VaultRoot, got.ConfiguredRoot, root)
+	}
+	if got.HeapSysBytes == 0 || got.NextGCBytes == 0 {
+		t.Fatalf("health memory stats missing: %#v", got.memoryStats)
 	}
 }
 
