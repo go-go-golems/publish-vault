@@ -51,14 +51,14 @@ Goal: make search consume a dedicated search document instead of `stripHTML(note
 
 Goal: move bleve out of heap safely, without stale deleted documents or inconsistent vault/search snapshots.
 
-- [ ] E1. Add `(*search.Index).Close()` and tests/idempotency expectations.
-- [ ] E2. Replace or wrap current `NewPersistent` so production code never reuses a stale active index in place.
-- [ ] E3. Introduce explicit `server.Snapshot` containing resolved root/revision, `*vault.Vault`, `*search.Index`, and optional index dir.
-- [ ] E4. Build persistent indexes in per-revision staging directories and swap snapshot only after successful build.
-- [ ] E5. Close old index handles after swap; clean old index directories safely.
-- [ ] E6. Add `--search-index-path` / `SearchIndexPath` plumbing from CLI config into runtime.
-- [ ] E7. Add tests: deleted note does not remain searchable after reload; repeated reload closes old indexes; search result slugs resolve in the same snapshot.
-- [ ] E8. Run full tests.
+- [x] E1. Add `(*search.Index).Close()` and tests/idempotency expectations.
+- [x] E2. Replace or wrap current `NewPersistent` so production code never reuses a stale active index in place.
+- [x] E3. Introduce explicit `server.Snapshot` containing resolved root/revision, `*vault.Vault`, `*search.Index`, and optional index dir.
+- [x] E4. Build persistent indexes in per-revision staging directories and swap snapshot only after successful build.
+- [x] E5. Close old index handles after swap; clean old index directories safely.
+- [x] E6. Add `--search-index-path` / `SearchIndexPath` plumbing from CLI config into runtime.
+- [x] E7. Add tests: deleted note does not remain searchable after reload; repeated reload closes old indexes; search result slugs resolve in the same snapshot.
+- [x] E8. Run full tests.
 - [ ] E9. Commit Phase E.
 
 ## Phase F — Deployment and operational hardening

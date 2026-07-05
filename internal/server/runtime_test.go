@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestRuntimeStateResolvesSymlinkRootAndReloads(t *testing.T) {
@@ -82,6 +83,104 @@ func TestHealthHandlerIncludesMemoryStats(t *testing.T) {
 	if got.HeapSysBytes == 0 || got.NextGCBytes == 0 {
 		t.Fatalf("health memory stats missing: %#v", got.memoryStats)
 	}
+}
+
+func TestRuntimeStatePersistentSearchReloadDropsDeletedNotes(t *testing.T) {
+	root := t.TempDir()
+	worktree1 := filepath.Join(root, "wt1")
+	worktree2 := filepath.Join(root, "wt2")
+	link := filepath.Join(root, "current")
+	writeVaultNote(t, worktree1, "Gone.md", "# Gone\n\nvanishingterm")
+	writeVaultNote(t, worktree2, "Kept.md", "# Kept\n\nordinary content")
+	if err := os.Symlink(worktree1, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	state, err := NewRuntimeStateWithOptions(link, RuntimeOptions{SearchIndexPath: filepath.Join(root, "search")})
+	if err != nil {
+		t.Fatalf("NewRuntimeStateWithOptions() error = %v", err)
+	}
+	_, si := state.Snapshot()
+	results, err := si.Search("vanishingterm", 10)
+	if err != nil {
+		t.Fatalf("initial search error = %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("initial search did not find vanishingterm")
+	}
+
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("remove link: %v", err)
+	}
+	if err := os.Symlink(worktree2, link); err != nil {
+		t.Fatalf("symlink new: %v", err)
+	}
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	v, si := state.Snapshot()
+	results, err = si.Search("vanishingterm", 10)
+	if err != nil {
+		t.Fatalf("reloaded search error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("stale deleted note remained searchable: %#v", results)
+	}
+	kept, ok := v.GetNote("kept")
+	if !ok || kept.Title != "Kept" {
+		t.Fatalf("active vault missing kept note after reload: %#v ok=%v", kept, ok)
+	}
+}
+
+func TestRuntimeStatePersistentSearchCleansOldSnapshotIndexDir(t *testing.T) {
+	oldDelay := oldSnapshotCloseDelay
+	oldSnapshotCloseDelay = 0
+	defer func() { oldSnapshotCloseDelay = oldDelay }()
+
+	root := t.TempDir()
+	worktree1 := filepath.Join(root, "wt1")
+	worktree2 := filepath.Join(root, "wt2")
+	link := filepath.Join(root, "current")
+	writeVaultNote(t, worktree1, "First.md", "# First\n")
+	writeVaultNote(t, worktree2, "Second.md", "# Second\n")
+	if err := os.Symlink(worktree1, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	state, err := NewRuntimeStateWithOptions(link, RuntimeOptions{SearchIndexPath: filepath.Join(root, "search")})
+	if err != nil {
+		t.Fatalf("NewRuntimeStateWithOptions() error = %v", err)
+	}
+	oldDir := state.currentSnapshot().IndexDir
+	if oldDir == "" {
+		t.Fatal("persistent runtime snapshot has empty IndexDir")
+	}
+	if _, err := os.Stat(oldDir); err != nil {
+		t.Fatalf("old index dir does not exist before reload: %v", err)
+	}
+
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("remove link: %v", err)
+	}
+	if err := os.Symlink(worktree2, link); err != nil {
+		t.Fatalf("symlink new: %v", err)
+	}
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	newDir := state.currentSnapshot().IndexDir
+	if newDir == "" || newDir == oldDir {
+		t.Fatalf("new IndexDir = %q, old = %q", newDir, oldDir)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("old index dir still exists after cleanup delay: %s", oldDir)
 }
 
 func TestAssetHandlerServesVaultFiles(t *testing.T) {

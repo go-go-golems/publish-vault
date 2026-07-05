@@ -509,3 +509,80 @@ This phase does not yet move bleve out of memory. It prepares for persistent per
 
 ### Technical details
 - Validation command: `gofmt -w internal/parser/parser.go internal/vault/vault.go internal/vault/vault_test.go internal/search/search.go internal/watcher/watcher.go && go test ./...`
+
+---
+
+## Step 11: Implement Phase E persistent per-snapshot search indexes
+
+Phase E moves bleve out of the Go heap when `--search-index-path` is configured. The implementation avoids the naive "open and mutate one persistent directory" design by building each search index as part of an immutable runtime snapshot. Each snapshot has its own revision id and index directory; reload builds the next snapshot in a staging directory, swaps it atomically, then closes and removes the old snapshot index after a grace period.
+
+The real-vault measurements show the change is meaningful. On `/home/manuel/code/wesen/go-go-golems/go-go-parc` (890 notes in this checkout), in-memory search startup ended at roughly 311 MB `heapAllocBytes` after search build. With persistent search enabled, startup ended at roughly 80 MB `heapAllocBytes`, using about 52 MB of disk for the index. A live reload with persistent search returned 204 and peaked around 144 MB `heapAllocBytes` while temporarily holding old and new snapshots.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead, and remember, no backwards compatibility. Use the instrumentation you added to measure memory usage as well. The repository btw is ../go-go-golems/go-go-parc/ if you want to try it out on the real scenario"
+
+**Assistant interpretation:** Continue with Phase E, do not preserve old compatibility constraints, and use the real go-go-parc vault plus the Phase B instrumentation to quantify memory behavior.
+
+**Inferred user intent:** Land the risky persistent-search architecture with evidence, not just code, and verify it against the production-like vault.
+
+**Commit (code):** pending — "RETRO-MEMORY-012: add persistent snapshot search indexes"
+
+### What I did
+- Added `(*search.Index).Close()` and made it idempotent.
+- Changed `search.NewPersistent` to remove any existing index directory and build a fresh index, preventing stale deleted documents.
+- Added `server.Snapshot` with revision, resolved root, vault, search index, index dir, and build time.
+- Refactored `RuntimeState` to swap whole snapshots instead of independent vault/search fields.
+- Added per-revision persistent index build directories under `<search-index-path>/snapshots/<revision>`.
+- Built persistent indexes in `.building` dirs, renamed after success, then swapped the snapshot.
+- Added delayed old snapshot close/cleanup (30s default, test-overridable).
+- Added `--search-index-path` CLI plumbing through `serve.Settings` → `server.Config` → `RuntimeOptions`.
+- Added tests for idempotent close, clean persistent rebuild with deleted docs, persistent reload removing stale search results, and old index dir cleanup.
+
+### Why
+- Persistent bleve reduces heap usage, but a shared mutable index directory would break snapshot consistency and retain stale docs. Per-snapshot indexes preserve the current atomic reload mental model.
+
+### What worked
+- `go test ./...` passed.
+- `pnpm --dir web check` passed.
+- Real-vault in-memory baseline command:
+  - `timeout 35s go run ./cmd/retro-obsidian-publish serve --vault /home/manuel/code/wesen/go-go-golems/go-go-parc --port 18180 --serve-web=false --watch=false`
+  - `load_search_done heapAllocBytes=311186216 heapSysBytes=389382144 notes=890 duration=7.753506218s`
+- Real-vault persistent startup command:
+  - `timeout 45s go run ./cmd/retro-obsidian-publish serve --vault /home/manuel/code/wesen/go-go-golems/go-go-parc --port 18181 --serve-web=false --watch=false --search-index-path /tmp/retro-persistent-search`
+  - `load_search_done heapAllocBytes=79680464 heapSysBytes=384827392 notes=890 duration=6.55784007s`
+  - disk index size: `52M /tmp/retro-persistent-search`
+- Real-vault persistent reload command:
+  - started server with `--reload-allow-loopback --search-index-path /tmp/retro-persistent-reload`
+  - `curl -X POST http://127.0.0.1:18182/api/admin/reload` returned `204`
+  - reload `load_search_done heapAllocBytes=143931976 heapSysBytes=598376448 notes=890 duration=10.274847824s`
+
+### What didn't work
+- N/A in code. One measurement nuance: `heapSysBytes` remains high or can grow after persistent indexing because the Go runtime reserves heap arenas and does not immediately return them to the OS. `heapAllocBytes` is the better before/after signal for live heap reduction.
+
+### What I learned
+- Persistent bleve materially reduces live heap for this vault: ~311MB after in-memory search build vs ~80MB after persistent startup.
+- Reload still has a visible transient because it builds a second vault and persistent index before swap, but the measured peak (~144MB heapAlloc) is far below the previous in-memory steady search heap.
+
+### What was tricky to build
+- Preserving snapshot consistency while using a persistent directory. The solution is not to reuse one path; every snapshot gets a unique revision directory and cleanup happens only after the old snapshot is no longer active.
+- Closing old search indexes cannot happen under the runtime lock and should not happen immediately in production because a request may have taken a snapshot just before the swap. The implementation uses a grace delay.
+
+### What warrants a second pair of eyes
+- The 30s old-snapshot cleanup delay is a pragmatic default. Review whether it should become configurable.
+- `os.Rename(buildDir, finalDir)` happens while the bleve index handle is open. This works on Linux, which is the deployment target, but it is worth reviewing if cross-platform local dev becomes important.
+- Search index dirs are unique per reload; if the process crashes mid-build, `.building` directories may remain. A startup cleanup for stale `.building` dirs could be added later.
+
+### What should be done in the future
+- Phase F should mount a writable `/data/search` in the Kubernetes deployment and pass `--search-index-path=/data/search`.
+- Consider setting `GOMEMLIMIT` after measuring the deployed heap with persistent search enabled.
+
+### Code review instructions
+- Start with `internal/server/runtime.go` to review the snapshot lifecycle and index directory handling.
+- Review `internal/search/search.go` for `Close()` and fresh persistent rebuild semantics.
+- Review CLI plumbing in `cmd/retro-obsidian-publish/commands/serve/serve.go`.
+- Validate with `go test ./...`, `pnpm --dir web check`, and the real-vault startup/reload commands above.
+
+### Technical details
+- Persistent index base path used for measurement: `/tmp/retro-persistent-search` and `/tmp/retro-persistent-reload`.
+- Real vault path used for measurement: `/home/manuel/code/wesen/go-go-golems/go-go-parc`.

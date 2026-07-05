@@ -33,6 +33,7 @@ type Settings struct {
 	ReloadAllowLoopback bool   `glazed:"reload-allow-loopback"`
 	SSRURL              string `glazed:"ssr-url"`
 	Favicon             string `glazed:"favicon"`
+	SearchIndexPath     string `glazed:"search-index-path"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -45,7 +46,7 @@ func NewCommand() (*cobra.Command, error) {
 	cmd := &Command{CommandDescription: cmds.NewCommandDescription(
 		"serve",
 		cmds.WithShort("Serve an Obsidian vault as a retro web app"),
-		cmds.WithLong(`Serve scans an Obsidian vault, builds an in-memory search index, watches Markdown files, exposes the /api JSON routes, and can serve the bundled React SPA from the same Go process.
+		cmds.WithLong(`Serve scans an Obsidian vault, builds a search index, watches Markdown files, exposes the /api JSON routes, and can serve the bundled React SPA from the same Go process.
 
 Examples:
   retro-obsidian-publish serve --vault ./vault-example --port 8080
@@ -94,6 +95,10 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Path to a favicon file (.ico or .svg). When set, overrides vault-root lookup. When empty, the server looks for favicon.ico and favicon.svg in the vault root directory."),
 			),
+			fields.New("search-index-path", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Optional base directory for per-snapshot persistent bleve indexes. When empty, search stays in memory."),
+			),
 		),
 		cmds.WithSections(commandSettingsSection),
 	)}
@@ -124,5 +129,5 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.ReloadTokenEnv != "" {
 		reloadToken, _ = os.LookupEnv(settings.ReloadTokenEnv)
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon})
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath})
 }

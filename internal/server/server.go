@@ -35,6 +35,7 @@ type Config struct {
 	ReloadAllowLoopback bool
 	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
 	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
+	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -54,7 +55,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
-	state, err := NewRuntimeState(cfg.VaultDir)
+	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath})
 	if err != nil {
 		return err
 	}

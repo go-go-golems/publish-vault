@@ -71,3 +71,17 @@ Implemented Phase D search-document split: added parser.PlainText, introduced va
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault_test.go — Search document plain-Markdown regression test
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/watcher/watcher.go — Watcher reload path builds a search document before re-indexing changed notes
 
+
+## 2026-07-05
+
+Implemented Phase E persistent per-snapshot search indexes: added search.Index.Close(), made NewPersistent rebuild clean indexes to avoid stale deleted documents, introduced server.Snapshot with per-revision index dirs, added delayed old snapshot close/cleanup, plumbed --search-index-path through serve config, and added tests for stale deletes and cleanup. Real vault measurement: in-memory search build heapAlloc ~311MB; persistent startup heapAlloc ~80MB with ~52MB disk index; persistent reload peak heapAlloc ~144MB and returned 204.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/cmd/retro-obsidian-publish/commands/serve/serve.go — --search-index-path CLI flag
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/search/search.go — Closeable clean persistent bleve indexes
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/search/search_test.go — Close/stale-delete persistent index tests
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime.go — Snapshot lifecycle
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime_test.go — Persistent reload consistency and cleanup tests
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — SearchIndexPath runtime config
+

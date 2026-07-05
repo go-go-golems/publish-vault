@@ -3,6 +3,7 @@ package search
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -56,28 +57,30 @@ func New(v *vault.Vault) (*Index, error) {
 	return si, nil
 }
 
-// NewPersistent creates a persistent bleve index at indexPath.
+// NewPersistent creates a fresh persistent bleve index at indexPath and indexes
+// all current vault notes. Any existing directory at indexPath is removed first
+// so full reloads cannot retain stale documents for deleted notes.
 func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
-	var idx bleve.Index
-	var err error
-
-	if _, statErr := os.Stat(indexPath); os.IsNotExist(statErr) {
-		idx, err = bleve.New(indexPath, buildMapping())
-	} else {
-		idx, err = bleve.Open(indexPath)
+	if err := os.RemoveAll(indexPath); err != nil {
+		return nil, err
 	}
+	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
+		return nil, err
+	}
+	idx, err := bleve.New(indexPath, buildMapping())
 	if err != nil {
 		return nil, err
 	}
 
 	si := &Index{idx: idx}
-	// Re-index all notes
 	docs, err := v.SearchDocuments()
 	if err != nil {
+		_ = si.Close()
 		return nil, err
 	}
 	for _, doc := range docs {
 		if err := si.Index(doc); err != nil {
+			_ = si.Close()
 			return nil, err
 		}
 	}
@@ -111,6 +114,20 @@ func (si *Index) Delete(slug string) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	return si.idx.Delete(slug)
+}
+
+// Close releases resources held by the underlying bleve index. Persistent
+// indexes must be closed so file descriptors and locks are not leaked across
+// reloads.
+func (si *Index) Close() error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	if si.idx == nil {
+		return nil
+	}
+	err := si.idx.Close()
+	si.idx = nil
+	return err
 }
 
 // Search performs a full-text query and returns ranked results.
