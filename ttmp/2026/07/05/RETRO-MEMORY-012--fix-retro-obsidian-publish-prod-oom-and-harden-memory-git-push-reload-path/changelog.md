@@ -95,3 +95,15 @@ Completed Phase F deployment: built and pushed ghcr.io/go-go-golems/publish-vaul
 - /home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml — Prod deployment updated to sha-f434b60
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/ttmp/2026/07/05/RETRO-MEMORY-012--fix-retro-obsidian-publish-prod-oom-and-harden-memory-git-push-reload-path/tasks.md — Phase F marked complete
 
+
+## 2026-07-05
+
+Addressed PR #8 Codex review: persistent/in-memory search indexing now streams SearchDocument values instead of materializing full-vault plaintext, admin reload disables the fs watcher before swapping/closing snapshots, closed search indexes return ErrClosed instead of panicking, and static vault notes retain bundled rawMarkdown for Copy/View/Download .md without a Go /raw endpoint. Validation: go test ./..., pnpm --dir web check, pnpm --dir web build.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/search/search.go — Index builders stream documents and closed operations return ErrClosed
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — Admin reload disables watcher before snapshot swap
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Added ForEachSearchDocument streaming API
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Static rawMarkdown fallback for copy/view/download actions
+

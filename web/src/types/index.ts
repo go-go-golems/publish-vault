@@ -34,6 +34,7 @@ export interface Note {
   wikiLinks: WikiLinkRef[];
   backlinks: string[];
   modTime: string;
+  rawMarkdown?: string;
 }
 
 export interface FileNode {

@@ -409,15 +409,30 @@ func (v *Vault) SearchDocument(note *Note) (SearchDocument, error) {
 	}, nil
 }
 
-func (v *Vault) SearchDocuments() ([]SearchDocument, error) {
-	notes := v.AllNotes()
-	docs := make([]SearchDocument, 0, len(notes))
-	for _, note := range notes {
+// ForEachSearchDocument streams Markdown-derived search documents to fn without
+// materializing a full-vault plaintext slice.
+func (v *Vault) ForEachSearchDocument(fn func(SearchDocument) error) error {
+	for _, note := range v.AllNotes() {
 		doc, err := v.SearchDocument(note)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		if err := fn(doc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SearchDocuments returns all Markdown-derived search documents. Prefer
+// ForEachSearchDocument for indexing large vaults.
+func (v *Vault) SearchDocuments() ([]SearchDocument, error) {
+	docs := make([]SearchDocument, 0, v.Count())
+	if err := v.ForEachSearchDocument(func(doc SearchDocument) error {
 		docs = append(docs, doc)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return docs, nil
 }

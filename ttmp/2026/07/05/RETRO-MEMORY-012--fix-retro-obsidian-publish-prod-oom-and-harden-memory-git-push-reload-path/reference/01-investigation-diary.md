@@ -1,5 +1,5 @@
 ---
-Title: "Investigation diary — retro-obsidian-publish prod OOM (RETRO-MEMORY-012)"
+Title: Investigation diary — retro-obsidian-publish prod OOM (RETRO-MEMORY-012)
 Ticket: RETRO-MEMORY-012
 Status: active
 Topics:
@@ -11,13 +11,24 @@ Topics:
 DocType: reference
 Intent: long-term
 Owners: []
-RelatedFiles: []
+RelatedFiles:
+    - Path: internal/search/search.go
+      Note: Streaming index builders and closed-index guard for review fix
+    - Path: internal/server/server.go
+      Note: Watcher shutdown before admin reload for review fix
+    - Path: internal/vault/vault.go
+      Note: Streaming search document iterator for review fix
+    - Path: web/src/components/organisms/NoteRenderer/NoteRenderer.tsx
+      Note: Static raw markdown fallback for copy/view/download actions
+    - Path: web/src/vault/staticVault.ts
+      Note: Static raw markdown retention for review fix
 ExternalSources: []
-Summary: "Chronological investigation diary for diagnosing the retro-obsidian-publish prod OOM and writing the intern deliverable."
+Summary: Chronological investigation diary for diagnosing the retro-obsidian-publish prod OOM and writing the intern deliverable.
 LastUpdated: 2026-07-05T00:00:00Z
-WhatFor: "Record what was tried, what worked, and what to validate"
-WhenToUse: "Read before resuming work on RETRO-MEMORY-012"
+WhatFor: Record what was tried, what worked, and what to validate
+WhenToUse: Read before resuming work on RETRO-MEMORY-012
 ---
+
 
 # Investigation Diary — RETRO-MEMORY-012
 
@@ -674,3 +685,82 @@ A deployment wrinkle appeared: the GHCR packages are public, but the old deploym
 ### Technical details
 - Final pod memory sample: `167Mi` whole pod.
 - App health sample from public endpoint: `heapAllocBytes=41319664`, `heapSysBytes=505970688`, `heapInuseBytes=67567616`, `numGC=1655`.
+
+---
+
+## Step 13: Address PR #8 automated code review issues
+
+This step tightened the implementation based on Codex review comments on PR #8. The changes remove an accidental full-vault plaintext allocation in the index builders, make admin reload safe when the file watcher is enabled, and restore static-vault Markdown copy/download behavior.
+
+The review found real edge cases: `SearchDocuments()` was convenient but reintroduced the memory shape the ticket was trying to avoid, `--watch=true` could leave a watcher holding an index that reload later closed, and static builds had no Go `/raw` endpoint after full-note JSON stopped carrying raw Markdown.
+
+### Prompt Context
+
+**User prompt (verbatim):** "lAddress code review issues for https://github.com/go-go-golems/publish-vault/pull/8"
+
+**Assistant interpretation:** Inspect the PR #8 review comments, patch the code, validate locally, and record the results.
+
+**Inferred user intent:** Make the pull request mergeable by addressing the automated code-review findings without regressing the memory/OOM work.
+
+**Commit (code):** 94a6f46c0b188f548a994e0d85b38589af699168 — "RETRO-MEMORY-012: address PR review feedback"
+
+### What I did
+- Fetched PR #8 review comments with `gh pr view 8` and `gh api repos/go-go-golems/publish-vault/pulls/8/comments --paginate`.
+- Added `Vault.ForEachSearchDocument(fn)` so search indexing streams one Markdown-derived document at a time.
+- Updated `search.New` and `search.NewPersistent` to use `ForEachSearchDocument` instead of `SearchDocuments()`.
+- Kept `SearchDocuments()` as a convenience/test API but implemented it on top of the streaming iterator and documented that indexers should prefer the iterator.
+- Added `search.ErrClosed` and nil guards to `Index`, `Delete`, and `Search` so accidental use after `Close()` returns a normal error instead of panicking.
+- Made `watcher.VaultWatcher.Close()` idempotent with `sync.Once`.
+- Changed admin reload wiring so `server.Run` disables the fs watcher once, before a reload swaps snapshots and schedules the old snapshot/index for close.
+- Added optional `rawMarkdown?: string` to the frontend `Note` type.
+- Restored bundled raw Markdown in static-vault notes and made `NoteRenderer` use it for Copy/View/Download .md actions when present.
+- Added regression tests for closed-index operations and the reload pre-hook.
+
+### Why
+- Streaming search documents preserves the memory-reduction goal for large vaults.
+- Disabling the watcher before admin reload prevents a watcher from mutating or calling into an index owned by an old snapshot that is about to be closed.
+- Static builds need a local raw Markdown source because they intentionally do not have the Go `/api/notes/{slug}/raw` endpoint.
+
+### What worked
+- `go test ./...` passed.
+- `pnpm --dir web check` passed.
+- `pnpm --dir web build` passed, with only the existing Vite large chunk warnings.
+
+### What didn't work
+- I first ran the wrong root-level build command:
+  - Command: `pnpm build`
+  - Error: `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "build" not found`
+- Correct command was:
+  - `pnpm --dir web build`
+
+### What I learned
+- The persistent search path still needs careful review for transient allocations; moving the index to disk is not enough if preprocessing gathers all plain text into a slice first.
+- The default `--watch=true` mode and explicit admin reload mode are different runtime models. If they are combined, reload must explicitly own watcher lifecycle.
+- Static-mode behavior is easy to miss because the live API deliberately omits `rawMarkdown`, while static mode cannot fetch raw source from Go.
+
+### What was tricky to build
+- The watcher issue had two parts: the direct panic risk from using a closed `*search.Index`, and the ownership mismatch where the watcher still points at the old vault/search snapshot. The solution disables the watcher before reload and also makes closed index operations return `ErrClosed` as a defensive guard.
+- The static-vault fix needed to restore raw content only for static notes, without reintroducing raw Markdown into live API responses. An optional TypeScript field keeps live notes lean while preserving standalone/static functionality.
+
+### What warrants a second pair of eyes
+- Whether disabling the watcher after the first admin reload is the right long-term UX for local `--watch=true` sessions. It is safe and explicit, but a future improvement could restart a watcher on the new snapshot instead.
+- Whether `SearchDocuments()` should eventually be removed to prevent future indexing code from choosing the allocating API by accident.
+
+### What should be done in the future
+- If users rely on both `--watch=true` and admin reload, implement watcher restart on successful reload rather than one-shot disable.
+- Add an end-to-end static build smoke test for Copy/View/Download .md actions if frontend test infrastructure grows.
+
+### Code review instructions
+- Start with `internal/search/search.go` and `internal/vault/vault.go` to verify search documents are streamed during indexing.
+- Review `internal/server/server.go` and `internal/watcher/watcher.go` for watcher lifecycle behavior across reload.
+- Review `web/src/vault/staticVault.ts`, `web/src/types/index.ts`, and `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` for static raw Markdown behavior.
+- Validate with:
+  - `go test ./...`
+  - `pnpm --dir web check`
+  - `pnpm --dir web build`
+
+### Technical details
+- PR comments addressed:
+  - `internal/search/search.go`: stream search documents during persistent indexing.
+  - `internal/server/runtime.go`: keep watched indexes alive or disable watcher across reload; implemented watcher disable before reload plus `ErrClosed` guards.
+  - `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx`: preserve Copy as Markdown for static vaults.

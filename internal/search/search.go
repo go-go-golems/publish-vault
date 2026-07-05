@@ -2,6 +2,7 @@
 package search
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,9 @@ import (
 
 	"retro-obsidian-publish/internal/vault"
 )
+
+// ErrClosed is returned when callers use an index after Close.
+var ErrClosed = errors.New("search index is closed")
 
 // SearchResult represents a single search hit.
 type SearchResult struct {
@@ -45,14 +49,11 @@ func New(v *vault.Vault) (*Index, error) {
 		return nil, err
 	}
 	si := &Index{idx: idx}
-	docs, err := v.SearchDocuments()
-	if err != nil {
+	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		return si.Index(doc)
+	}); err != nil {
+		_ = si.Close()
 		return nil, err
-	}
-	for _, doc := range docs {
-		if err := si.Index(doc); err != nil {
-			return nil, err
-		}
 	}
 	return si, nil
 }
@@ -73,16 +74,11 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 	}
 
 	si := &Index{idx: idx}
-	docs, err := v.SearchDocuments()
-	if err != nil {
+	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		return si.Index(doc)
+	}); err != nil {
 		_ = si.Close()
 		return nil, err
-	}
-	for _, doc := range docs {
-		if err := si.Index(doc); err != nil {
-			_ = si.Close()
-			return nil, err
-		}
 	}
 	return si, nil
 }
@@ -91,6 +87,10 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 func (si *Index) Index(doc vault.SearchDocument) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+
+	if si.idx == nil {
+		return ErrClosed
+	}
 
 	// Flatten tags to space-separated string for indexing
 	tags := ""
@@ -113,6 +113,9 @@ func (si *Index) Index(doc vault.SearchDocument) error {
 func (si *Index) Delete(slug string) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+	if si.idx == nil {
+		return ErrClosed
+	}
 	return si.idx.Delete(slug)
 }
 
@@ -141,6 +144,9 @@ func (si *Index) Close() error {
 func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+	if si.idx == nil {
+		return nil, ErrClosed
+	}
 
 	if limit <= 0 {
 		limit = 20

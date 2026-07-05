@@ -274,6 +274,28 @@ func TestValidBearerToken(t *testing.T) {
 	}
 }
 
+func TestReloadHandlerRunsBeforeReloadHook(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+
+	called := false
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/reload", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	rr := httptest.NewRecorder()
+	reloadHandler(state, "", true, func() { called = true }).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("reload status = %d body=%s, want 204", rr.Code, rr.Body.String())
+	}
+	if !called {
+		t.Fatal("beforeReload hook was not called")
+	}
+}
+
 func TestValidReloadRequestAllowsLoopback(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/admin/reload", nil)
 	req.RemoteAddr = "127.0.0.1:12345"

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -73,11 +74,22 @@ func Run(ctx context.Context, cfg Config) error {
 
 	log.Printf("Loaded %d notes from %s", len(v.AllNotes()), state.ResolvedRoot())
 
+	var activeWatcher *watcher.VaultWatcher
+	var stopWatcherOnce sync.Once
+	stopWatcherBeforeReload := func() {
+		stopWatcherOnce.Do(func() {
+			if activeWatcher != nil {
+				log.Printf("File watcher disabled before admin reload; reload swaps the active vault snapshot")
+				activeWatcher.Close()
+			}
+		})
+	}
 	if cfg.Watch {
 		fw, err := watcher.New(v, watcher.WithSearchIndex(si))
 		if err != nil {
 			log.Printf("warning: could not start file watcher: %v", err)
 		} else {
+			activeWatcher = fw
 			defer fw.Close()
 		}
 	} else {
@@ -90,7 +102,7 @@ func Run(ctx context.Context, cfg Config) error {
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
 	r.PathPrefix("/vault-assets/").Handler(assetHandler(state)).Methods("GET", "HEAD")
 	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
-		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback)).Methods("POST")
+		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback, stopWatcherBeforeReload)).Methods("POST")
 	} else {
 		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env, or enable --reload-allow-loopback")
 	}
@@ -178,11 +190,14 @@ func healthHandler(state *RuntimeState) http.HandlerFunc {
 	}
 }
 
-func reloadHandler(state *RuntimeState, token string, allowLoopback bool) http.HandlerFunc {
+func reloadHandler(state *RuntimeState, token string, allowLoopback bool, beforeReload func()) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validReloadRequest(r, token, allowLoopback) {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
+		}
+		if beforeReload != nil {
+			beforeReload()
 		}
 		if err := state.Reload(); err != nil {
 			log.Printf("reload failed: %v", err)

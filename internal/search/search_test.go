@@ -1,6 +1,7 @@
 package search
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -152,6 +153,31 @@ func TestCloseIsIdempotent(t *testing.T) {
 	}
 	if err := idx.Close(); err != nil {
 		t.Fatalf("Close() second error = %v", err)
+	}
+}
+
+func TestClosedIndexOperationsReturnErrClosed(t *testing.T) {
+	root := t.TempDir()
+	writeTestNote(t, root, "note.md", "# Note\n\nBody")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	idx, err := New(v)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := idx.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := idx.Index(vault.SearchDocument{Slug: "note", Title: "Note", Body: "Body"}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Index() error = %v, want ErrClosed", err)
+	}
+	if err := idx.Delete("note"); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Delete() error = %v, want ErrClosed", err)
+	}
+	if _, err := idx.Search("Body", 10); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Search() error = %v, want ErrClosed", err)
 	}
 }
 
