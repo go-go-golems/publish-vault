@@ -702,7 +702,7 @@ The review found real edge cases: `SearchDocuments()` was convenient but reintro
 
 **Inferred user intent:** Make the pull request mergeable by addressing the automated code-review findings without regressing the memory/OOM work.
 
-**Commit (code):** 94a6f46c0b188f548a994e0d85b38589af699168 — "RETRO-MEMORY-012: address PR review feedback"
+**Commit (code):** 44bd91a0f08f142b69eb6142ecec6b3295c16ceb — "RETRO-MEMORY-012: address PR review feedback"
 
 ### What I did
 - Fetched PR #8 review comments with `gh pr view 8` and `gh api repos/go-go-golems/publish-vault/pulls/8/comments --paginate`.
