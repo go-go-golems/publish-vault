@@ -270,13 +270,18 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     });
   }, [resolvedHtml]);
 
-  // Copy raw markdown to clipboard
-  const handleCopyMarkdown = useCallback(() => {
-    navigator.clipboard.writeText(note.rawMarkdown).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [note.rawMarkdown]);
+  // Copy raw markdown to clipboard. The full note payload intentionally does not
+  // carry rawMarkdown; fetch the source only when the user asks for it.
+  const handleCopyMarkdown = useCallback(async () => {
+    const response = await fetch(`/api/notes/${encodeURIComponent(note.slug)}/raw`);
+    if (!response.ok) {
+      throw new Error(`failed to fetch markdown source: ${response.status}`);
+    }
+    const rawMarkdown = await response.text();
+    await navigator.clipboard.writeText(rawMarkdown);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [note.slug]);
 
   // Scroll to heading on hash navigation
   useEffect(() => {

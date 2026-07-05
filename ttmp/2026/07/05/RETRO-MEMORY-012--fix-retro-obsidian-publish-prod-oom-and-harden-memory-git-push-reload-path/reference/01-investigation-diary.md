@@ -343,7 +343,7 @@ This phase also removes a small allocation from health/config paths by adding `V
 
 **Inferred user intent:** Make progress in reviewable chunks while preserving a diary that allows handoff/resume.
 
-**Commit (code):** pending — "RETRO-MEMORY-012: add memory instrumentation"
+**Commit (code):** de5db6641581e987fe69b4825a09bed0f526fbf3 — "RETRO-MEMORY-012: add memory instrumentation"
 
 ### What I did
 - Added `Vault.Count()` in `internal/vault/vault.go`.
@@ -359,6 +359,7 @@ This phase also removes a small allocation from health/config paths by adding `V
 ### What worked
 - `gofmt` completed.
 - `go test ./...` passed.
+- Pre-commit hook passed `GOWORK=off go test ./...`, `python3 -m unittest plugins/test_retro_plugin.py`, and `GOWORK=off golangci-lint run -c .golangci.yml -v`.
 
 ### What didn't work
 - N/A.
@@ -383,3 +384,70 @@ This phase also removes a small allocation from health/config paths by adding `V
 
 ### Technical details
 - Validation command: `gofmt -w internal/vault/vault.go internal/vault/vault_test.go internal/api/api.go internal/server/runtime.go internal/server/server.go internal/server/runtime_test.go && go test ./...`
+
+---
+
+## Step 9: Implement Phase C raw markdown removal
+
+Phase C removes raw markdown from the hot in-memory `vault.Note` model. This deliberately changes the full note JSON shape: `GET /api/notes/{slug}` no longer includes `rawMarkdown`. The app still works because the only interactive feature that needs raw markdown, "Copy as Markdown", now fetches `GET /api/notes/{slug}/raw` on demand.
+
+This phase is the first direct memory reduction. It does not change HTML caching or bleve indexing yet; it removes one full-vault text copy and makes raw source reads proportional to user demand.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Continue implementing the phase checklist, using the user's no-backwards-compatibility clarification to simplify the raw markdown API.
+
+**Inferred user intent:** Reduce memory without preserving legacy API fields that the current app can stop depending on.
+
+**Commit (code):** pending — "RETRO-MEMORY-012: lazy-load raw markdown"
+
+### What I did
+- Removed `RawMarkdown` from `vault.Note` in `internal/vault/vault.go`.
+- Added `Vault.ReadRaw(relPath)` using clean vault-relative path validation plus `os.OpenRoot`.
+- Updated `getNoteRaw` in `internal/api/api.go` to read raw source from disk.
+- Added backend tests for raw endpoint success, missing source 404, and full note JSON omitting `rawMarkdown`.
+- Removed `rawMarkdown` from the frontend `Note` type.
+- Updated `NoteRenderer` so Copy as Markdown fetches `/api/notes/{slug}/raw` before writing to the clipboard.
+- Removed stale `rawMarkdown` fixture fields from static vault/story/SSR test data.
+
+### Why
+- Keeping raw markdown in every loaded note creates a full-vault text copy in heap. The raw content is only needed for explicit user actions, so it should be loaded on demand.
+
+### What worked
+- `go test ./...` passed.
+- After installing web dependencies, `pnpm check` passed.
+- `pnpm build` passed; Vite emitted only chunk-size warnings.
+
+### What didn't work
+- First `pnpm check` failed because `web/node_modules` was absent:
+  - command: `cd web && pnpm check`
+  - error: `sh: 1: tsc: not found` and `Local package.json exists, but node_modules missing`
+- Fixed by running `cd web && pnpm install --frozen-lockfile`, then reran `pnpm check` successfully.
+
+### What I learned
+- The frontend had a real dependency on `note.rawMarkdown` for Copy as Markdown; removing the backend field required a coordinated frontend update.
+- Static vault fixtures and SSR tests also encoded the old Note shape.
+
+### What was tricky to build
+- The raw reader needed to be safe against traversal and non-Markdown reads while still accepting normal note paths. I reused the existing vault-relative cleaning approach and `os.OpenRoot` pattern used by asset serving.
+
+### What warrants a second pair of eyes
+- `ReadRaw` currently rejects anything whose cleaned path does not end in `.md`; review whether this is sufficient and whether hidden markdown files should remain unreachable via normal note lookup.
+- The Copy as Markdown button now has an async failure path; UI error handling is minimal.
+
+### What should be done in the future
+- Phase D should decouple search from HTML so search indexing no longer requires rendered HTML as the source body.
+
+### Code review instructions
+- Start with `internal/vault/vault.go` (`Note` and `ReadRaw`).
+- Review `internal/api/api.go` for response-shape change and raw endpoint behavior.
+- Review `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx` for copy-on-demand behavior.
+- Validate with `go test ./...`, `cd web && pnpm check`, and `cd web && pnpm build`.
+
+### Technical details
+- Validation commands:
+  - `gofmt -w internal/vault/vault.go internal/api/api.go internal/api/api_test.go && go test ./...`
+  - `cd web && pnpm install --frozen-lockfile && pnpm check`
+  - `cd web && pnpm build`

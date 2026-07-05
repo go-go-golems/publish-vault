@@ -63,6 +63,89 @@ Searchable unique phrase.
 	}
 }
 
+func TestNoteRawReadsMarkdownFromDisk(t *testing.T) {
+	root := t.TempDir()
+	writeNote(t, root, "Index.md", "# Index\n\nraw body")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	si, err := search.New(v)
+	if err != nil {
+		t.Fatalf("search.New() error = %v", err)
+	}
+	r := mux.NewRouter()
+	New(v, si, "TestVault").Register(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notes/index/raw", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET raw status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Body.String(); got != "# Index\n\nraw body" {
+		t.Fatalf("raw body = %q", got)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/markdown") {
+		t.Fatalf("raw Content-Type = %q, want text/markdown", ct)
+	}
+}
+
+func TestNoteRawReturnsNotFoundWhenSourceFileIsGone(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Index.md")
+	writeNote(t, root, "Index.md", "# Index\n")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	si, err := search.New(v)
+	if err != nil {
+		t.Fatalf("search.New() error = %v", err)
+	}
+	if err := os.Remove(notePath); err != nil {
+		t.Fatalf("remove note source: %v", err)
+	}
+	r := mux.NewRouter()
+	New(v, si, "TestVault").Register(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notes/index/raw", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("GET raw missing source status = %d body=%s, want 404", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetNoteOmitsRawMarkdown(t *testing.T) {
+	root := t.TempDir()
+	writeNote(t, root, "Index.md", "# Index\n\nraw body")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	si, err := search.New(v)
+	if err != nil {
+		t.Fatalf("search.New() error = %v", err)
+	}
+	r := mux.NewRouter()
+	New(v, si, "TestVault").Register(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notes/index", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET note status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode note: %v", err)
+	}
+	if _, ok := body["rawMarkdown"]; ok {
+		t.Fatalf("note response unexpectedly contains rawMarkdown: %s", rr.Body.String())
+	}
+}
+
 func TestConfigIncludesPageTitle(t *testing.T) {
 	root := t.TempDir()
 	writeNote(t, root, "Index.md", "# Index\n")

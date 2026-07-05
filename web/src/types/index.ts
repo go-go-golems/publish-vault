@@ -31,7 +31,6 @@ export interface Note {
   tags: string[];
   excerpt: string;
   html: string;
-  rawMarkdown: string;
   wikiLinks: WikiLinkRef[];
   backlinks: string[];
   modTime: string;

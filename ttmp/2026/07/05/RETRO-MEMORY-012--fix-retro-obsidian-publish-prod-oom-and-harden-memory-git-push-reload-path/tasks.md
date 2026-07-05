@@ -18,21 +18,21 @@ Goal: make reload/startup memory measurable before changing storage semantics.
 - [x] B3. Add `Vault.Count()` so health/config can count notes without allocating `AllNotes()` slices.
 - [x] B4. Add/update tests for health JSON and `Vault.Count()`.
 - [x] B5. Run `gofmt ./...` and `go test ./...`.
-- [ ] B6. Commit Phase B.
+- [x] B6. Commit Phase B (`de5db66`).
 
 ## Phase C — Remove raw markdown from the hot storage model
 
 Goal: stop retaining every note's source in memory and keep the app working by fetching raw content only when needed.
 
-- [ ] C1. Remove `RawMarkdown` from `vault.Note`.
-- [ ] C2. Add safe raw-file reading API on `Vault` (for example `ReadRaw(note.Path)`), reusing the same path-safety posture as asset serving.
-- [ ] C3. Change `GET /api/notes/{slug}/raw` to read raw markdown from disk.
-- [ ] C4. Change `GET /api/notes/{slug}` response shape to omit `rawMarkdown`.
-- [ ] C5. Update frontend `Note` type to remove `rawMarkdown`.
-- [ ] C6. Change the Copy as Markdown button to fetch `/api/notes/{slug}/raw` on demand instead of reading `note.rawMarkdown`.
-- [ ] C7. Update SSR/tests/stories/static fixtures that still include or expect `rawMarkdown`.
-- [ ] C8. Add backend tests for `/raw` success and deletion/missing-file handling.
-- [ ] C9. Run Go tests and frontend type/build checks available in the repo.
+- [x] C1. Remove `RawMarkdown` from `vault.Note`.
+- [x] C2. Add safe raw-file reading API on `Vault` (for example `ReadRaw(note.Path)`), reusing the same path-safety posture as asset serving.
+- [x] C3. Change `GET /api/notes/{slug}/raw` to read raw markdown from disk.
+- [x] C4. Change `GET /api/notes/{slug}` response shape to omit `rawMarkdown`.
+- [x] C5. Update frontend `Note` type to remove `rawMarkdown`.
+- [x] C6. Change the Copy as Markdown button to fetch `/api/notes/{slug}/raw` on demand instead of reading `note.rawMarkdown`.
+- [x] C7. Update SSR/tests/stories/static fixtures that still include or expect `rawMarkdown`.
+- [x] C8. Add backend tests for `/raw` success and deletion/missing-file handling.
+- [x] C9. Run Go tests and frontend type/build checks available in the repo.
 - [ ] C10. Commit Phase C.
 
 ## Phase D — Decouple search indexing from rendered HTML

@@ -2,6 +2,7 @@
 package vault
 
 import (
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -23,7 +24,6 @@ type Note struct {
 	Tags        []string               `json:"tags"`
 	Excerpt     string                 `json:"excerpt"`
 	HTML        string                 `json:"html"`
-	RawMarkdown string                 `json:"rawMarkdown"`
 	WikiLinks   []WikiLinkRef          `json:"wikiLinks"`
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
@@ -153,7 +153,6 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
-		RawMarkdown: string(src),
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
 	}, nil
@@ -448,6 +447,36 @@ func sortTree(node *FileNode) {
 // Root returns the vault root directory.
 func (v *Vault) Root() string {
 	return v.root
+}
+
+// ReadRaw reads a Markdown note source from disk on demand. The relPath must be
+// a clean vault-relative Markdown path, normally taken from a Note.Path field.
+func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
+	cleaned := cleanVaultRelativePath(relPath)
+	if cleaned == "" || !strings.EqualFold(filepath.Ext(cleaned), ".md") {
+		return nil, os.ErrNotExist
+	}
+
+	root, err := os.OpenRoot(v.root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	file, err := root.Open(filepath.FromSlash(cleaned))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() || !strings.EqualFold(filepath.Ext(info.Name()), ".md") {
+		return nil, os.ErrNotExist
+	}
+	return io.ReadAll(file)
 }
 
 // pathToSlug converts a relative file path to a URL slug.

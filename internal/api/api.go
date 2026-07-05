@@ -144,10 +144,15 @@ func (h *Handler) getNoteRaw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "note not found", http.StatusNotFound)
 		return
 	}
+	raw, err := v.ReadRaw(note.Path)
+	if err != nil {
+		http.Error(w, "note source not found", http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", "inline; filename=\""+note.Slug+".md\"")
 	// #nosec G705 -- the raw endpoint intentionally returns Markdown source as text/markdown, not rendered HTML.
-	_, _ = w.Write([]byte(note.RawMarkdown))
+	_, _ = w.Write(raw)
 }
 
 // getTree returns the vault file tree.

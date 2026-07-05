@@ -45,3 +45,16 @@ Implemented Phase B memory/reload instrumentation: added phase-level memory logs
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Added Count() for non-allocating note counts
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault_test.go — Vault.Count() regression test
 
+
+## 2026-07-05
+
+Implemented Phase C raw markdown removal: removed RawMarkdown from vault.Note, added Vault.ReadRaw() for safe on-demand source reads, changed /api/notes/{slug}/raw to read from disk, intentionally removed rawMarkdown from full note JSON, and updated frontend copy-as-markdown to fetch /raw on demand. Validation: go test ./..., pnpm check, and pnpm build passed after installing web deps.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/api/api.go — /raw endpoint now reads source from disk; full note JSON omits rawMarkdown
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/api/api_test.go — Raw endpoint and omitted rawMarkdown regression tests
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Removed RawMarkdown from hot Note model and added ReadRaw
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Copy as Markdown fetches raw source on demand
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/types/index.ts — Removed rawMarkdown from Note type
+
