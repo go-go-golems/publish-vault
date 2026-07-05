@@ -2,7 +2,9 @@
 package search
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -13,6 +15,9 @@ import (
 
 	"retro-obsidian-publish/internal/vault"
 )
+
+// ErrClosed is returned when callers use an index after Close.
+var ErrClosed = errors.New("search index is closed")
 
 // SearchResult represents a single search hit.
 type SearchResult struct {
@@ -44,65 +49,97 @@ func New(v *vault.Vault) (*Index, error) {
 		return nil, err
 	}
 	si := &Index{idx: idx}
-	for _, note := range v.AllNotes() {
-		if err := si.Index(note); err != nil {
-			return nil, err
-		}
+	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		return si.Index(doc)
+	}); err != nil {
+		_ = si.Close()
+		return nil, err
 	}
 	return si, nil
 }
 
-// NewPersistent creates a persistent bleve index at indexPath.
+// NewPersistent creates a fresh persistent bleve index at indexPath and indexes
+// all current vault notes. Any existing directory at indexPath is removed first
+// so full reloads cannot retain stale documents for deleted notes.
 func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
-	var idx bleve.Index
-	var err error
-
-	if _, statErr := os.Stat(indexPath); os.IsNotExist(statErr) {
-		idx, err = bleve.New(indexPath, buildMapping())
-	} else {
-		idx, err = bleve.Open(indexPath)
+	if err := os.RemoveAll(indexPath); err != nil {
+		return nil, err
 	}
+	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
+		return nil, err
+	}
+	idx, err := bleve.New(indexPath, buildMapping())
 	if err != nil {
 		return nil, err
 	}
 
 	si := &Index{idx: idx}
-	// Re-index all notes
-	for _, note := range v.AllNotes() {
-		if err := si.Index(note); err != nil {
-			return nil, err
-		}
+	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		return si.Index(doc)
+	}); err != nil {
+		_ = si.Close()
+		return nil, err
 	}
 	return si, nil
 }
 
-// Index adds or updates a note in the search index.
-func (si *Index) Index(note *vault.Note) error {
+// OpenPersistent opens an existing persistent bleve index at indexPath.
+func OpenPersistent(indexPath string) (*Index, error) {
+	idx, err := bleve.Open(indexPath)
+	if err != nil {
+		return nil, err
+	}
+	return &Index{idx: idx}, nil
+}
+
+// Index adds or updates a note document in the search index.
+func (si *Index) Index(doc vault.SearchDocument) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
+	if si.idx == nil {
+		return ErrClosed
+	}
+
 	// Flatten tags to space-separated string for indexing
 	tags := ""
-	for i, t := range note.Tags {
+	for i, t := range doc.Tags {
 		if i > 0 {
 			tags += " "
 		}
 		tags += t
 	}
-	doc := noteDoc{
-		Title:   note.Title,
-		Body:    stripHTML(note.HTML),
+	bleveDoc := noteDoc{
+		Title:   doc.Title,
+		Body:    doc.Body,
 		Tags:    tags,
-		Excerpt: note.Excerpt,
+		Excerpt: doc.Excerpt,
 	}
-	return si.idx.Index(note.Slug, doc)
+	return si.idx.Index(doc.Slug, bleveDoc)
 }
 
 // Delete removes a note from the search index.
 func (si *Index) Delete(slug string) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+	if si.idx == nil {
+		return ErrClosed
+	}
 	return si.idx.Delete(slug)
+}
+
+// Close releases resources held by the underlying bleve index. Persistent
+// indexes must be closed so file descriptors and locks are not leaked across
+// reloads.
+func (si *Index) Close() error {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	if si.idx == nil {
+		return nil
+	}
+	err := si.idx.Close()
+	si.idx = nil
+	return err
 }
 
 // Search performs a full-text query and returns ranked results.
@@ -116,6 +153,9 @@ func (si *Index) Delete(slug string) error {
 func (si *Index) Search(query string, limit int) ([]SearchResult, error) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+	if si.idx == nil {
+		return nil, ErrClosed
+	}
 
 	if limit <= 0 {
 		limit = 20
@@ -295,27 +335,6 @@ func buildMapping() mapping.IndexMapping {
 	im.AddDocumentMapping("note", dm)
 	im.DefaultMapping = dm
 	return im
-}
-
-// stripHTML removes HTML tags for plain-text indexing.
-func stripHTML(s string) string {
-	inTag := false
-	var out []byte
-	for i := 0; i < len(s); i++ {
-		if s[i] == '<' {
-			inTag = true
-			continue
-		}
-		if s[i] == '>' {
-			inTag = false
-			out = append(out, ' ')
-			continue
-		}
-		if !inTag {
-			out = append(out, s[i])
-		}
-	}
-	return string(out)
 }
 
 func asString(v interface{}) string {

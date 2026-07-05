@@ -71,6 +71,52 @@ func TestFileTreeSortedFoldersFirstAlpha(t *testing.T) {
 	}
 }
 
+func TestCountReturnsLoadedNoteCount(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Notes/Second.md", "# Second\n")
+	writeVaultTestFile(t, root, "Notes/ignored.txt", "not markdown")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if got := v.Count(); got != 2 {
+		t.Fatalf("Count() = %d, want 2", got)
+	}
+}
+
+func TestSearchDocumentsUsePlainMarkdownBody(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n\nSearchable **bold** text with [[Second|alias]] and `retroctl publish`.")
+	writeVaultTestFile(t, root, "Second.md", "# Second\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		t.Fatalf("SearchDocuments() error = %v", err)
+	}
+	var indexDoc SearchDocument
+	for _, doc := range docs {
+		if doc.Slug == "index" {
+			indexDoc = doc
+			break
+		}
+	}
+	if indexDoc.Slug == "" {
+		t.Fatal("index search document not found")
+	}
+	if strings.Contains(indexDoc.Body, "<") || strings.Contains(indexDoc.Body, ">") {
+		t.Fatalf("search body should not contain rendered HTML: %q", indexDoc.Body)
+	}
+	if !strings.Contains(indexDoc.Body, "Searchable bold text with alias and retroctl publish") {
+		t.Fatalf("search body = %q, want markdown stripped body", indexDoc.Body)
+	}
+}
+
 func TestWikiLinkResolution(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{

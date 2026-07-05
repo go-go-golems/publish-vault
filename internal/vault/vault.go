@@ -2,6 +2,7 @@
 package vault
 
 import (
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -23,7 +24,6 @@ type Note struct {
 	Tags        []string               `json:"tags"`
 	Excerpt     string                 `json:"excerpt"`
 	HTML        string                 `json:"html"`
-	RawMarkdown string                 `json:"rawMarkdown"`
 	WikiLinks   []WikiLinkRef          `json:"wikiLinks"`
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
@@ -44,6 +44,16 @@ type FileNode struct {
 	Path     string      `json:"path"`
 	IsFolder bool        `json:"isFolder"`
 	Children []*FileNode `json:"children,omitempty"`
+}
+
+// SearchDocument is the plain-text representation used by the full-text index.
+// It is built from Markdown source on demand instead of from rendered HTML.
+type SearchDocument struct {
+	Slug    string
+	Title   string
+	Body    string
+	Tags    []string
+	Excerpt string
 }
 
 // Vault holds all notes and provides lookup methods.
@@ -153,7 +163,6 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
-		RawMarkdown: string(src),
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
 	}, nil
@@ -370,6 +379,12 @@ func (v *Vault) GetNote(slug string) (*Note, bool) {
 }
 
 // AllNotes returns a snapshot of all notes.
+func (v *Vault) Count() int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return len(v.notes)
+}
+
 func (v *Vault) AllNotes() []*Note {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -378,6 +393,48 @@ func (v *Vault) AllNotes() []*Note {
 		notes = append(notes, n)
 	}
 	return notes
+}
+
+func (v *Vault) SearchDocument(note *Note) (SearchDocument, error) {
+	raw, err := v.ReadRaw(note.Path)
+	if err != nil {
+		return SearchDocument{}, err
+	}
+	return SearchDocument{
+		Slug:    note.Slug,
+		Title:   note.Title,
+		Body:    parser.PlainText(raw),
+		Tags:    append([]string(nil), note.Tags...),
+		Excerpt: note.Excerpt,
+	}, nil
+}
+
+// ForEachSearchDocument streams Markdown-derived search documents to fn without
+// materializing a full-vault plaintext slice.
+func (v *Vault) ForEachSearchDocument(fn func(SearchDocument) error) error {
+	for _, note := range v.AllNotes() {
+		doc, err := v.SearchDocument(note)
+		if err != nil {
+			return err
+		}
+		if err := fn(doc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SearchDocuments returns all Markdown-derived search documents. Prefer
+// ForEachSearchDocument for indexing large vaults.
+func (v *Vault) SearchDocuments() ([]SearchDocument, error) {
+	docs := make([]SearchDocument, 0, v.Count())
+	if err := v.ForEachSearchDocument(func(doc SearchDocument) error {
+		docs = append(docs, doc)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return docs, nil
 }
 
 // FileTree returns the hierarchical file tree of the vault.
@@ -442,6 +499,36 @@ func sortTree(node *FileNode) {
 // Root returns the vault root directory.
 func (v *Vault) Root() string {
 	return v.root
+}
+
+// ReadRaw reads a Markdown note source from disk on demand. The relPath must be
+// a clean vault-relative Markdown path, normally taken from a Note.Path field.
+func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
+	cleaned := cleanVaultRelativePath(relPath)
+	if cleaned == "" || !strings.EqualFold(filepath.Ext(cleaned), ".md") {
+		return nil, os.ErrNotExist
+	}
+
+	root, err := os.OpenRoot(v.root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	file, err := root.Open(filepath.FromSlash(cleaned))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() || !strings.EqualFold(filepath.Ext(info.Name()), ".md") {
+		return nil, os.ErrNotExist
+	}
+	return io.ReadAll(file)
 }
 
 // pathToSlug converts a relative file path to a URL slug.

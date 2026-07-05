@@ -178,7 +178,8 @@ interface RawNote {
   title: string;
   tags: string[];
   frontmatter: Record<string, unknown>;
-  content: string; // raw Markdown without frontmatter
+  content: string; // Markdown body without frontmatter, used for rendering.
+  rawMarkdown: string; // Original Markdown source, used by static-mode copy/download actions.
   modTime: string;
 }
 
@@ -223,6 +224,7 @@ function buildVault(): {
       tags,
       frontmatter: safeFm,
       content: parsed.content,
+      rawMarkdown: raw as string,
       modTime,
     });
   }
@@ -284,8 +286,8 @@ function buildVault(): {
       html,
       wikiLinks: (wikiLinkMap.get(rn.slug) ?? []).map((t) => ({ target: t })),
       backlinks: backlinkMap.get(rn.slug) ?? [],
-      rawMarkdown: rn.content,
       modTime: rn.modTime,
+      rawMarkdown: rn.rawMarkdown,
     });
   }
 

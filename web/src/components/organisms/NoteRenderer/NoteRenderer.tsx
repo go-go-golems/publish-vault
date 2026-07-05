@@ -270,13 +270,29 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     });
   }, [resolvedHtml]);
 
-  // Copy raw markdown to clipboard
-  const handleCopyMarkdown = useCallback(() => {
-    navigator.clipboard.writeText(note.rawMarkdown).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [note.rawMarkdown]);
+  const rawMarkdownUrl = useMemo(() => {
+    if (note.rawMarkdown !== undefined) {
+      return `data:text/markdown;charset=utf-8,${encodeURIComponent(note.rawMarkdown)}`;
+    }
+    return `/api/notes/${encodeURIComponent(note.slug)}/raw`;
+  }, [note.rawMarkdown, note.slug]);
+
+  // Copy raw markdown to clipboard. Live API notes intentionally do not carry
+  // rawMarkdown; static vault notes keep their bundled source because there is
+  // no same-origin Go /raw endpoint in VITE_STATIC_VAULT builds.
+  const handleCopyMarkdown = useCallback(async () => {
+    if (note.rawMarkdown !== undefined) {
+      await navigator.clipboard.writeText(note.rawMarkdown);
+    } else {
+      const response = await fetch(`/api/notes/${encodeURIComponent(note.slug)}/raw`);
+      if (!response.ok) {
+        throw new Error(`failed to fetch markdown source: ${response.status}`);
+      }
+      await navigator.clipboard.writeText(await response.text());
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [note.rawMarkdown, note.slug]);
 
   // Scroll to heading on hash navigation
   useEffect(() => {
@@ -320,7 +336,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
           {copied ? "✓ Copied" : "⎘ Copy as Markdown"}
         </button>
         <a
-          href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
+          href={rawMarkdownUrl}
           download={`${note.slug}.md`}
           className="retro-btn-flat"
           title="Download markdown file"
@@ -328,7 +344,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
           ↓ Download .md
         </a>
         <a
-          href={`/api/notes/${encodeURIComponent(note.slug)}/raw`}
+          href={rawMarkdownUrl}
           className="retro-btn-flat"
           title="View raw markdown"
         >

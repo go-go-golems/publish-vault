@@ -508,12 +508,15 @@ func extractTags(fm map[string]interface{}) []string {
 	return nil
 }
 
+// PlainText removes frontmatter and common Markdown syntax for search/indexing.
+func PlainText(src []byte) string {
+	content := stripFrontmatter(src)
+	return stripMarkdown(content)
+}
+
 // extractExcerpt returns the first non-empty paragraph as plain text.
 func extractExcerpt(src []byte) string {
-	// Strip frontmatter
-	content := stripFrontmatter(src)
-	// Strip wiki links, markdown syntax
-	plain := stripMarkdown(content)
+	plain := PlainText(src)
 	// Take first 200 chars
 	plain = strings.TrimSpace(plain)
 	if len(plain) > 200 {
@@ -551,8 +554,8 @@ func stripMarkdown(src []byte) string {
 	// Remove bold/italic
 	s = regexp.MustCompile(`\*{1,3}([^*]+)\*{1,3}`).ReplaceAllString(s, "$1")
 	s = regexp.MustCompile(`_{1,3}([^_]+)_{1,3}`).ReplaceAllString(s, "$1")
-	// Remove inline code
-	s = regexp.MustCompile("`[^`]+`").ReplaceAllString(s, "")
+	// Unwrap inline code but keep the code text searchable.
+	s = regexp.MustCompile("`([^`]+)`").ReplaceAllString(s, "$1")
 	// Remove links
 	s = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`).ReplaceAllString(s, "$1")
 	// Remove images

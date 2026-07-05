@@ -64,6 +64,16 @@ Body text.
 	}
 }
 
+func TestPlainTextPreservesInlineCode(t *testing.T) {
+	got := PlainText([]byte("# Tooling\n\nRun `retroctl publish` after editing."))
+	if !strings.Contains(got, "retroctl publish") {
+		t.Fatalf("PlainText() = %q, want inline code contents preserved", got)
+	}
+	if strings.Contains(got, "`") {
+		t.Fatalf("PlainText() = %q, want backticks stripped", got)
+	}
+}
+
 func TestSlugifyPreservesSlashPaths(t *testing.T) {
 	if got, want := Slugify("Folder/My Note!"), "folder/my-note"; got != want {
 		t.Fatalf("Slugify() = %q, want %q", got, want)

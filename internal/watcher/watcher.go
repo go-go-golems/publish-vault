@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -16,10 +17,11 @@ import (
 
 // VaultWatcher wraps fsnotify and debounces rapid file events.
 type VaultWatcher struct {
-	vault   *vault.Vault
-	search  *search.Index
-	watcher *fsnotify.Watcher
-	done    chan struct{}
+	vault     *vault.Vault
+	search    *search.Index
+	watcher   *fsnotify.Watcher
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // Option configures a VaultWatcher.
@@ -69,8 +71,10 @@ func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
 
 // Close stops the watcher.
 func (vw *VaultWatcher) Close() {
-	close(vw.done)
-	_ = vw.watcher.Close()
+	vw.closeOnce.Do(func() {
+		close(vw.done)
+		_ = vw.watcher.Close()
+	})
 }
 
 // loop processes fsnotify events with debouncing.
@@ -130,7 +134,12 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 		return
 	}
 	if vw.search != nil {
-		if err := vw.search.Index(note); err != nil {
+		doc, err := vw.vault.SearchDocument(note)
+		if err != nil {
+			log.Printf("search: document error for %s: %v", note.Slug, err)
+			return
+		}
+		if err := vw.search.Index(doc); err != nil {
 			log.Printf("search: index error for %s: %v", note.Slug, err)
 		}
 	}
