@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"retro-obsidian-publish/internal/search"
+	"retro-obsidian-publish/internal/vault"
 )
 
 func TestRuntimeStateResolvesSymlinkRootAndReloads(t *testing.T) {
@@ -129,6 +132,55 @@ func TestRuntimeStatePersistentSearchReloadDropsDeletedNotes(t *testing.T) {
 	kept, ok := v.GetNote("kept")
 	if !ok || kept.Title != "Kept" {
 		t.Fatalf("active vault missing kept note after reload: %#v ok=%v", kept, ok)
+	}
+}
+
+func TestBuildSearchIndexReopensPersistentIndexAtFinalPath(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n\ninitialterm")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	searchBase := filepath.Join(t.TempDir(), "search")
+	si, finalDir, err := buildSearchIndex(v, searchBase, "rev-final-path")
+	if err != nil {
+		t.Fatalf("buildSearchIndex() error = %v", err)
+	}
+	if finalDir != filepath.Join(searchBase, "snapshots", "rev-final-path") {
+		t.Fatalf("finalDir = %q, want final snapshot dir", finalDir)
+	}
+	if _, err := os.Stat(filepath.Join(searchBase, "snapshots", "rev-final-path.building")); !os.IsNotExist(err) {
+		t.Fatalf("building directory still exists or stat failed unexpectedly: %v", err)
+	}
+
+	writeVaultNote(t, root, "Changed.md", "# Changed\n\nwatcherterm")
+	note, err := v.ReloadNote(filepath.Join(root, "Changed.md"))
+	if err != nil {
+		t.Fatalf("ReloadNote() error = %v", err)
+	}
+	doc, err := v.SearchDocument(note)
+	if err != nil {
+		t.Fatalf("SearchDocument() error = %v", err)
+	}
+	if err := si.Index(doc); err != nil {
+		t.Fatalf("Index() after final move error = %v", err)
+	}
+	if err := si.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := search.OpenPersistent(filepath.Join(finalDir, "index"))
+	if err != nil {
+		t.Fatalf("OpenPersistent(final index) error = %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	results, err := reopened.Search("watcherterm", 10)
+	if err != nil {
+		t.Fatalf("Search(watcherterm) error = %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("watcher-style index update was not persisted in final index path")
 	}
 }
 

@@ -162,7 +162,8 @@ func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search
 	snapshotsDir := filepath.Join(base, "snapshots")
 	buildDir := filepath.Join(snapshotsDir, revision+".building")
 	finalDir := filepath.Join(snapshotsDir, revision)
-	indexDir := filepath.Join(buildDir, "index")
+	buildIndexDir := filepath.Join(buildDir, "index")
+	finalIndexDir := filepath.Join(finalDir, "index")
 	if err := os.MkdirAll(snapshotsDir, 0o755); err != nil {
 		return nil, "", err
 	}
@@ -173,14 +174,22 @@ func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search
 		return nil, "", err
 	}
 
-	si, err := search.NewPersistent(v, indexDir)
+	si, err := search.NewPersistent(v, buildIndexDir)
 	if err != nil {
 		_ = os.RemoveAll(buildDir)
 		return nil, "", err
 	}
-	if err := os.Rename(buildDir, finalDir); err != nil {
-		_ = si.Close()
+	if err := si.Close(); err != nil {
 		_ = os.RemoveAll(buildDir)
+		return nil, "", err
+	}
+	if err := os.Rename(buildDir, finalDir); err != nil {
+		_ = os.RemoveAll(buildDir)
+		return nil, "", err
+	}
+	si, err = search.OpenPersistent(finalIndexDir)
+	if err != nil {
+		_ = os.RemoveAll(finalDir)
 		return nil, "", err
 	}
 	return si, finalDir, nil

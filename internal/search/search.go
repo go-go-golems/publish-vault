@@ -83,6 +83,15 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 	return si, nil
 }
 
+// OpenPersistent opens an existing persistent bleve index at indexPath.
+func OpenPersistent(indexPath string) (*Index, error) {
+	idx, err := bleve.Open(indexPath)
+	if err != nil {
+		return nil, err
+	}
+	return &Index{idx: idx}, nil
+}
+
 // Index adds or updates a note document in the search index.
 func (si *Index) Index(doc vault.SearchDocument) error {
 	si.mu.Lock()

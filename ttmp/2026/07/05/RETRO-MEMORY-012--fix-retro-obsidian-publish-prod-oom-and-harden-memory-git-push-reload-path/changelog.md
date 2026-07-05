@@ -107,3 +107,16 @@ Addressed PR #8 Codex review: persistent/in-memory search indexing now streams S
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Added ForEachSearchDocument streaming API
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Static rawMarkdown fallback for copy/view/download actions
 
+
+## 2026-07-05
+
+Addressed second PR #8 Codex review pass: persistent snapshot indexes are now closed before staging-dir rename and reopened at the final per-revision index path, and Markdown plaintext now unwraps inline code instead of dropping command/API identifiers. Added regression tests for final-path persistent updates and inline-code search text. Validation: go test ./..., pnpm --dir web check, pnpm --dir web build.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/parser/parser.go — PlainText now preserves inline code contents
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/parser/parser_test.go — Regression coverage for inline code plaintext
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/search/search.go — Added OpenPersistent for final-path reopen
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime.go — Persistent indexes are reopened at final snapshot path after staging rename
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/runtime_test.go — Regression coverage for persistent final-path updates
+

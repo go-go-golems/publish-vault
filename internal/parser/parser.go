@@ -554,8 +554,8 @@ func stripMarkdown(src []byte) string {
 	// Remove bold/italic
 	s = regexp.MustCompile(`\*{1,3}([^*]+)\*{1,3}`).ReplaceAllString(s, "$1")
 	s = regexp.MustCompile(`_{1,3}([^_]+)_{1,3}`).ReplaceAllString(s, "$1")
-	// Remove inline code
-	s = regexp.MustCompile("`[^`]+`").ReplaceAllString(s, "")
+	// Unwrap inline code but keep the code text searchable.
+	s = regexp.MustCompile("`([^`]+)`").ReplaceAllString(s, "$1")
 	// Remove links
 	s = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`).ReplaceAllString(s, "$1")
 	// Remove images

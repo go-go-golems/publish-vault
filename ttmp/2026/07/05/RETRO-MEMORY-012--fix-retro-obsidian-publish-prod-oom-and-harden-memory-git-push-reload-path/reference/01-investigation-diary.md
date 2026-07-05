@@ -12,12 +12,24 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: internal/parser/parser.go
+      Note: Inline code is unwrapped
+    - Path: internal/parser/parser_test.go
+      Note: Regression test for inline code plaintext
     - Path: internal/search/search.go
-      Note: Streaming index builders and closed-index guard for review fix
+      Note: |-
+        Streaming index builders and closed-index guard for review fix
+        OpenPersistent helper for final-path reopen
+    - Path: internal/server/runtime.go
+      Note: Close/rename/reopen sequence for final-path persistent indexes
+    - Path: internal/server/runtime_test.go
+      Note: Regression test for final-path persistent index updates
     - Path: internal/server/server.go
       Note: Watcher shutdown before admin reload for review fix
     - Path: internal/vault/vault.go
       Note: Streaming search document iterator for review fix
+    - Path: internal/vault/vault_test.go
+      Note: Search document test includes inline code
     - Path: web/src/components/organisms/NoteRenderer/NoteRenderer.tsx
       Note: Static raw markdown fallback for copy/view/download actions
     - Path: web/src/vault/staticVault.ts
@@ -28,6 +40,7 @@ LastUpdated: 2026-07-05T00:00:00Z
 WhatFor: Record what was tried, what worked, and what to validate
 WhenToUse: Read before resuming work on RETRO-MEMORY-012
 ---
+
 
 
 # Investigation Diary — RETRO-MEMORY-012
@@ -764,3 +777,76 @@ The review found real edge cases: `SearchDocuments()` was convenient but reintro
   - `internal/search/search.go`: stream search documents during persistent indexing.
   - `internal/server/runtime.go`: keep watched indexes alive or disable watcher across reload; implemented watcher disable before reload plus `ErrClosed` guards.
   - `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx`: preserve Copy as Markdown for static vaults.
+
+---
+
+## Step 14: Address second PR #8 review pass
+
+This step addressed the second Codex review pass on PR #8. The feedback focused on two correctness edges introduced by the persistent search and Markdown-derived search-body changes.
+
+The first issue was that the persistent index was opened under a `.building` staging path and then its parent directory was renamed to the final snapshot path. The second issue was that Markdown plaintext extraction dropped inline code entirely, which would make command names, API names, and identifiers disappear from search when they only appeared inside backticks.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address the new comments in code review in https://github.com/go-go-golems/publish-vault/pull/8"
+
+**Assistant interpretation:** Fetch the latest PR #8 review comments, patch the implementation, validate, update docs, and push the branch.
+
+**Inferred user intent:** Keep the PR mergeable and preserve the memory work while fixing newly identified correctness regressions.
+
+**Commit (code):** TBD — will be filled after commit.
+
+### What I did
+- Fetched the latest PR #8 reviews and comments with `gh pr view 8` and `gh api repos/go-go-golems/publish-vault/pulls/8/comments --paginate`.
+- Added `search.OpenPersistent(indexPath)` for opening an existing Bleve index directory.
+- Changed persistent snapshot index construction to:
+  - build under `<revision>.building/index`,
+  - close the staging index,
+  - rename `<revision>.building` to `<revision>`,
+  - reopen the index from `<revision>/index`,
+  - return the reopened final-path index to the runtime.
+- Changed Markdown plaintext extraction to unwrap inline code with `` `([^`]+)` -> `$1` `` rather than deleting inline code spans.
+- Added regression coverage:
+  - `TestBuildSearchIndexReopensPersistentIndexAtFinalPath`
+  - `TestPlainTextPreservesInlineCode`
+  - expanded `TestSearchDocumentsUsePlainMarkdownBody` to include inline code.
+
+### Why
+- A watcher or any live update path should mutate an index whose filesystem path matches the final per-revision snapshot directory, not a path that was created under `.building` and then moved.
+- Search should continue finding notes by command names, API names, and identifiers written as inline code.
+
+### What worked
+- `go test ./...` passed.
+- `pnpm --dir web check` passed.
+- `pnpm --dir web build` passed with only the existing Vite large-chunk warnings.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Moving a directory containing an already-open persistent index is subtle even if basic searches still appear to work; returning an index opened at the final path is clearer and safer.
+- Search-body normalization must preserve semantically important Markdown inline forms such as code spans, not only prose.
+
+### What was tricky to build
+- The persistent-index fix needed to keep atomic staging semantics while avoiding an open handle rooted at the staging path. Closing before rename and reopening after rename keeps failure cleanup straightforward and preserves the final snapshot directory contract.
+- The inline-code fix had to preserve the code text without reintroducing Markdown backticks into the search body.
+
+### What warrants a second pair of eyes
+- Whether fenced code blocks should receive more structured plaintext treatment later. This fix addresses the reviewed inline-code regression specifically.
+- Whether `OpenPersistent` should remain exported long term or be hidden behind a server-local helper if no other package needs it.
+
+### What should be done in the future
+- Add broader Markdown-to-search-body tests for fenced code blocks, HTML entities, and Obsidian-specific syntax if search quality becomes a larger focus.
+
+### Code review instructions
+- Review `internal/server/runtime.go:buildSearchIndex` for the close/rename/reopen sequence.
+- Review `internal/parser/parser.go:stripMarkdown` for inline-code unwrapping.
+- Validate with:
+  - `go test ./...`
+  - `pnpm --dir web check`
+  - `pnpm --dir web build`
+
+### Technical details
+- New review comments addressed:
+  - `internal/server/runtime.go`: keep the open index at its final path.
+  - `internal/vault/vault.go` / `internal/parser/parser.go`: preserve inline code text in search body.
