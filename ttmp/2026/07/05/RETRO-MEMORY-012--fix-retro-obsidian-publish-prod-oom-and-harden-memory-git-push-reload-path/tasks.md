@@ -59,7 +59,7 @@ Goal: move bleve out of heap safely, without stale deleted documents or inconsis
 - [x] E6. Add `--search-index-path` / `SearchIndexPath` plumbing from CLI config into runtime.
 - [x] E7. Add tests: deleted note does not remain searchable after reload; repeated reload closes old indexes; search result slugs resolve in the same snapshot.
 - [x] E8. Run full tests.
-- [ ] E9. Commit Phase E.
+- [x] E9. Commit Phase E (`a134538`).
 
 ## Phase F — Deployment and operational hardening
 

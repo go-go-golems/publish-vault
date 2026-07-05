@@ -526,7 +526,7 @@ The real-vault measurements show the change is meaningful. On `/home/manuel/code
 
 **Inferred user intent:** Land the risky persistent-search architecture with evidence, not just code, and verify it against the production-like vault.
 
-**Commit (code):** pending — "RETRO-MEMORY-012: add persistent snapshot search indexes"
+**Commit (code):** a13453839a6dd45d647540c611d40364400f8f4e — "RETRO-MEMORY-012: add persistent snapshot search indexes"
 
 ### What I did
 - Added `(*search.Index).Close()` and made it idempotent.
@@ -545,6 +545,7 @@ The real-vault measurements show the change is meaningful. On `/home/manuel/code
 ### What worked
 - `go test ./...` passed.
 - `pnpm --dir web check` passed.
+- Pre-commit hook passed `GOWORK=off go test ./...`, plugin unittest, and `golangci-lint` after removing the unused `loadVaultAndSearch` helper.
 - Real-vault in-memory baseline command:
   - `timeout 35s go run ./cmd/retro-obsidian-publish serve --vault /home/manuel/code/wesen/go-go-golems/go-go-parc --port 18180 --serve-web=false --watch=false`
   - `load_search_done heapAllocBytes=311186216 heapSysBytes=389382144 notes=890 duration=7.753506218s`
@@ -558,7 +559,10 @@ The real-vault measurements show the change is meaningful. On `/home/manuel/code
   - reload `load_search_done heapAllocBytes=143931976 heapSysBytes=598376448 notes=890 duration=10.274847824s`
 
 ### What didn't work
-- N/A in code. One measurement nuance: `heapSysBytes` remains high or can grow after persistent indexing because the Go runtime reserves heap arenas and does not immediately return them to the OS. `heapAllocBytes` is the better before/after signal for live heap reduction.
+- First commit attempt failed in pre-commit lint because the snapshot refactor left `loadVaultAndSearch` unused:
+  - error: `internal/server/runtime.go:111:6: func loadVaultAndSearch is unused (unused)`
+  - fix: removed the leftover helper, reran `gofmt`, `go test ./...`, and `pnpm --dir web check`.
+- Measurement nuance: `heapSysBytes` remains high or can grow after persistent indexing because the Go runtime reserves heap arenas and does not immediately return them to the OS. `heapAllocBytes` is the better before/after signal for live heap reduction.
 
 ### What I learned
 - Persistent bleve materially reduces live heap for this vault: ~311MB after in-memory search build vs ~80MB after persistent startup.
