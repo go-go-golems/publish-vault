@@ -58,3 +58,16 @@ Implemented Phase C raw markdown removal: removed RawMarkdown from vault.Note, a
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Copy as Markdown fetches raw source on demand
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/web/src/types/index.ts — Removed rawMarkdown from Note type
 
+
+## 2026-07-05
+
+Implemented Phase D search-document split: added parser.PlainText, introduced vault.SearchDocument built from raw Markdown on demand, changed search indexing to consume SearchDocument bodies instead of stripHTML(note.HTML), and updated watcher incremental indexing accordingly. Validation: gofmt and go test ./... passed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/parser/parser.go — Added PlainText helper for search body generation
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/search/search.go — Index now consumes vault.SearchDocument rather than stripping rendered HTML
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — Added SearchDocument/SearchDocuments built from raw Markdown
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault_test.go — Search document plain-Markdown regression test
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/watcher/watcher.go — Watcher reload path builds a search document before re-indexing changed notes
+

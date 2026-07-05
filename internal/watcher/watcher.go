@@ -130,7 +130,12 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 		return
 	}
 	if vw.search != nil {
-		if err := vw.search.Index(note); err != nil {
+		doc, err := vw.vault.SearchDocument(note)
+		if err != nil {
+			log.Printf("search: document error for %s: %v", note.Slug, err)
+			return
+		}
+		if err := vw.search.Index(doc); err != nil {
 			log.Printf("search: index error for %s: %v", note.Slug, err)
 		}
 	}

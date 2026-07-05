@@ -508,12 +508,15 @@ func extractTags(fm map[string]interface{}) []string {
 	return nil
 }
 
+// PlainText removes frontmatter and common Markdown syntax for search/indexing.
+func PlainText(src []byte) string {
+	content := stripFrontmatter(src)
+	return stripMarkdown(content)
+}
+
 // extractExcerpt returns the first non-empty paragraph as plain text.
 func extractExcerpt(src []byte) string {
-	// Strip frontmatter
-	content := stripFrontmatter(src)
-	// Strip wiki links, markdown syntax
-	plain := stripMarkdown(content)
+	plain := PlainText(src)
 	// Take first 200 chars
 	plain = strings.TrimSpace(plain)
 	if len(plain) > 200 {

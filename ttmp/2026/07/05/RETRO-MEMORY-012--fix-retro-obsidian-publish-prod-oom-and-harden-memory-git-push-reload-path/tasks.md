@@ -33,18 +33,18 @@ Goal: stop retaining every note's source in memory and keep the app working by f
 - [x] C7. Update SSR/tests/stories/static fixtures that still include or expect `rawMarkdown`.
 - [x] C8. Add backend tests for `/raw` success and deletion/missing-file handling.
 - [x] C9. Run Go tests and frontend type/build checks available in the repo.
-- [ ] C10. Commit Phase C.
+- [x] C10. Commit Phase C (`499c6f7`).
 
 ## Phase D — Decouple search indexing from rendered HTML
 
 Goal: make search consume a dedicated search document instead of `stripHTML(note.HTML)`, reducing transients and preparing for lazy HTML.
 
-- [ ] D1. Introduce a `search.Document` / `SearchDocument` type containing slug, title, plain body, tags, and excerpt.
-- [ ] D2. Teach the parser/vault loader to produce or expose plain-text search body from markdown without depending on rendered HTML.
-- [ ] D3. Change `search.Index` to index `SearchDocument` rather than `*vault.Note`.
-- [ ] D4. Update watcher reload path to re-index the changed note's search document.
-- [ ] D5. Add search tests that prove queries still match body, title, tags, and excerpts.
-- [ ] D6. Run full tests.
+- [x] D1. Introduce a `search.Document` / `SearchDocument` type containing slug, title, plain body, tags, and excerpt.
+- [x] D2. Teach the parser/vault loader to produce or expose plain-text search body from markdown without depending on rendered HTML.
+- [x] D3. Change `search.Index` to index `SearchDocument` rather than `*vault.Note`.
+- [x] D4. Update watcher reload path to re-index the changed note's search document.
+- [x] D5. Add search tests that prove queries still match body, title, tags, and excerpts.
+- [x] D6. Run full tests.
 - [ ] D7. Commit Phase D.
 
 ## Phase E — Persistent search index with explicit lifecycle and snapshot isolation

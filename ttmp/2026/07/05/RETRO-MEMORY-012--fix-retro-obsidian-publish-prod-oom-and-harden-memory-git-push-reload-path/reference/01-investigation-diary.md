@@ -401,7 +401,7 @@ This phase is the first direct memory reduction. It does not change HTML caching
 
 **Inferred user intent:** Reduce memory without preserving legacy API fields that the current app can stop depending on.
 
-**Commit (code):** pending — "RETRO-MEMORY-012: lazy-load raw markdown"
+**Commit (code):** 499c6f7ac4aec26cb47800c373cc4bedd1e72ac6 — "RETRO-MEMORY-012: lazy-load raw markdown"
 
 ### What I did
 - Removed `RawMarkdown` from `vault.Note` in `internal/vault/vault.go`.
@@ -419,6 +419,7 @@ This phase is the first direct memory reduction. It does not change HTML caching
 - `go test ./...` passed.
 - After installing web dependencies, `pnpm check` passed.
 - `pnpm build` passed; Vite emitted only chunk-size warnings.
+- Pre-commit hook passed `GOWORK=off go test ./...`, plugin unittest, `golangci-lint`, and `pnpm --dir web check`.
 
 ### What didn't work
 - First `pnpm check` failed because `web/node_modules` was absent:
@@ -451,3 +452,59 @@ This phase is the first direct memory reduction. It does not change HTML caching
   - `gofmt -w internal/vault/vault.go internal/api/api.go internal/api/api_test.go && go test ./...`
   - `cd web && pnpm install --frozen-lockfile && pnpm check`
   - `cd web && pnpm build`
+
+---
+
+## Step 10: Implement Phase D search-document split
+
+Phase D decouples full-text search from rendered HTML. Previously search indexing called `stripHTML(note.HTML)`, which forced search to depend on UI-rendered content and allocated a stripped copy of each note's HTML during indexing. The new path builds a plain-text search document from raw Markdown on demand and passes that into the search index.
+
+This phase does not yet move bleve out of memory. It prepares for persistent per-snapshot indexing by making the search input explicit and independent from the rendered note payload.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Continue implementing the phase checklist in commit-sized chunks.
+
+**Inferred user intent:** Progress toward safe persistent search without the naive drop-in `NewPersistent` implementation.
+
+**Commit (code):** pending — "RETRO-MEMORY-012: decouple search from rendered HTML"
+
+### What I did
+- Added exported `parser.PlainText(src []byte)` that strips frontmatter and Markdown syntax for search/indexing.
+- Added `vault.SearchDocument` plus `Vault.SearchDocument(note)` and `Vault.SearchDocuments()`.
+- Changed `search.New` and `search.NewPersistent` to ask the vault for search documents.
+- Changed `search.Index` to accept `vault.SearchDocument` and removed `stripHTML`.
+- Updated the watcher reload path to generate a search document for the changed note before indexing.
+- Added a vault regression test proving the search body is plain Markdown-derived text, not rendered HTML.
+
+### Why
+- Search should not depend on `Note.HTML`; this blocks future lazy HTML and creates avoidable indexing transients.
+
+### What worked
+- `gofmt` completed.
+- `go test ./...` passed.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- The parser already had private `stripMarkdown`/excerpt machinery, so exporting a small `PlainText` helper was enough for this phase.
+
+### What was tricky to build
+- Avoiding an import cycle: `search` already imports `vault`, so the shared search document type lives in `vault` rather than `search` for now. A future internal model package could clean this up if needed.
+
+### What warrants a second pair of eyes
+- `vault.SearchDocuments()` reads raw files for all notes during search build. This avoids steady-state storage but adds disk I/O during indexing. For a git-synced local worktree this should be fine, but prod measurements should confirm it.
+
+### What should be done in the future
+- Phase E should introduce closeable, per-snapshot persistent indexes without reusing one active directory in place.
+
+### Code review instructions
+- Start with `internal/search/search.go` to see the new indexing contract.
+- Then review `internal/vault/vault.go` and `internal/parser/parser.go` for search document generation.
+- Validate with `go test ./...`.
+
+### Technical details
+- Validation command: `gofmt -w internal/parser/parser.go internal/vault/vault.go internal/vault/vault_test.go internal/search/search.go internal/watcher/watcher.go && go test ./...`

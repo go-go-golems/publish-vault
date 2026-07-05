@@ -46,6 +46,16 @@ type FileNode struct {
 	Children []*FileNode `json:"children,omitempty"`
 }
 
+// SearchDocument is the plain-text representation used by the full-text index.
+// It is built from Markdown source on demand instead of from rendered HTML.
+type SearchDocument struct {
+	Slug    string
+	Title   string
+	Body    string
+	Tags    []string
+	Excerpt string
+}
+
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
 	mu            sync.RWMutex
@@ -383,6 +393,33 @@ func (v *Vault) AllNotes() []*Note {
 		notes = append(notes, n)
 	}
 	return notes
+}
+
+func (v *Vault) SearchDocument(note *Note) (SearchDocument, error) {
+	raw, err := v.ReadRaw(note.Path)
+	if err != nil {
+		return SearchDocument{}, err
+	}
+	return SearchDocument{
+		Slug:    note.Slug,
+		Title:   note.Title,
+		Body:    parser.PlainText(raw),
+		Tags:    append([]string(nil), note.Tags...),
+		Excerpt: note.Excerpt,
+	}, nil
+}
+
+func (v *Vault) SearchDocuments() ([]SearchDocument, error) {
+	notes := v.AllNotes()
+	docs := make([]SearchDocument, 0, len(notes))
+	for _, note := range notes {
+		doc, err := v.SearchDocument(note)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, doc)
+	}
+	return docs, nil
 }
 
 // FileTree returns the hierarchical file tree of the vault.

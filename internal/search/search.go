@@ -44,8 +44,12 @@ func New(v *vault.Vault) (*Index, error) {
 		return nil, err
 	}
 	si := &Index{idx: idx}
-	for _, note := range v.AllNotes() {
-		if err := si.Index(note); err != nil {
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		return nil, err
+	}
+	for _, doc := range docs {
+		if err := si.Index(doc); err != nil {
 			return nil, err
 		}
 	}
@@ -68,34 +72,38 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 
 	si := &Index{idx: idx}
 	// Re-index all notes
-	for _, note := range v.AllNotes() {
-		if err := si.Index(note); err != nil {
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		return nil, err
+	}
+	for _, doc := range docs {
+		if err := si.Index(doc); err != nil {
 			return nil, err
 		}
 	}
 	return si, nil
 }
 
-// Index adds or updates a note in the search index.
-func (si *Index) Index(note *vault.Note) error {
+// Index adds or updates a note document in the search index.
+func (si *Index) Index(doc vault.SearchDocument) error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	// Flatten tags to space-separated string for indexing
 	tags := ""
-	for i, t := range note.Tags {
+	for i, t := range doc.Tags {
 		if i > 0 {
 			tags += " "
 		}
 		tags += t
 	}
-	doc := noteDoc{
-		Title:   note.Title,
-		Body:    stripHTML(note.HTML),
+	bleveDoc := noteDoc{
+		Title:   doc.Title,
+		Body:    doc.Body,
 		Tags:    tags,
-		Excerpt: note.Excerpt,
+		Excerpt: doc.Excerpt,
 	}
-	return si.idx.Index(note.Slug, doc)
+	return si.idx.Index(doc.Slug, bleveDoc)
 }
 
 // Delete removes a note from the search index.
@@ -295,27 +303,6 @@ func buildMapping() mapping.IndexMapping {
 	im.AddDocumentMapping("note", dm)
 	im.DefaultMapping = dm
 	return im
-}
-
-// stripHTML removes HTML tags for plain-text indexing.
-func stripHTML(s string) string {
-	inTag := false
-	var out []byte
-	for i := 0; i < len(s); i++ {
-		if s[i] == '<' {
-			inTag = true
-			continue
-		}
-		if s[i] == '>' {
-			inTag = false
-			out = append(out, ' ')
-			continue
-		}
-		if !inTag {
-			out = append(out, s[i])
-		}
-	}
-	return string(out)
 }
 
 func asString(v interface{}) string {
