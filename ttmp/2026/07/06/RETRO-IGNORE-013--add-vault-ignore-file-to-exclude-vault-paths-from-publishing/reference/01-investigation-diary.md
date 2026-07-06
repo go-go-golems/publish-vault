@@ -24,7 +24,9 @@ RelatedFiles:
     - Path: internal/api/api.go
       Note: all read paths derive from v.notes, covered transitively by LoadAll filtering
     - Path: internal/ignore/ignore.go
-      Note: Phase 1 matcher — Ignore.Load/Match/MatchAbs (commit abad6df)
+      Note: |-
+        Phase 1 matcher — Ignore.Load/Match/MatchAbs (commit abad6df)
+        HasNegations — gates directory pruning so permissive negation is honored (commit d7bc215)
     - Path: internal/parser/parser.go
       Note: downstream of the walk; confirms ignore belongs in vault, not parser
     - Path: internal/search/search.go
@@ -35,10 +37,12 @@ RelatedFiles:
       Note: |-
         assetHandler/validAssetPath; third integration point (asset + raw loopholes)
         assetHandler consults v.IsIgnored and 404s on excluded assets (commit 39fe081)
+        assetHandler snapshot race fix — single snapshot for IsIgnored + OpenRoot (commit d7bc215)
     - Path: internal/vault/vault.go
       Note: |-
         LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
         ignore field + LoadAll SkipDir + IsIgnored + ReloadNote ErrIgnored + ReadRaw guard (commit ccf7e0a)
+        ShouldPruneDir — prune ignored dirs only when no negations exist (commit d7bc215)
     - Path: internal/watcher/watcher.go
       Note: |-
         New() dir walk + loop() .md filter; second integration point
@@ -49,6 +53,9 @@ LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
+
+
 
 
 
@@ -452,4 +459,67 @@ Documentation closes the loop for operators, and a real-binary smoke test is the
 - End-to-end result: every publishing surface (notes, tree, search, backlinks, raw source, assets, live watcher) respects `.vault-ignore`. Ignored writes are dropped; published writes are indexed.
 - Deferred: `--vault-ignore` CLI flag / `NewWithOptions` (Phase 5) — presence-based default is sufficient for the requested feature.
 - Full commit chain: `abad6df` (Phase 1) → `ccf7e0a` (Phase 2) → `88987b6` (Phase 3) → `39fe081` (Phase 4) → `c9cdb03` (Phase 6), each followed by a diary commit.
+
+## Step 7: Address PR #9 code review (snapshot race + negation consistency)
+
+Codex left two P2 review comments on PR #9, both legitimate correctness concerns. This step fixed both: (1) the asset handler checked `.vault-ignore` against one snapshot but opened the file via a fresh `state.ResolvedRoot()`, so a concurrent reload could gate bytes from the new root with the old vault's ignore rules; (2) `LoadAll` pruned ignored directories with `SkipDir`, but the matcher is permissive (last-match-wins), so a `!` re-include under an excluded directory was silently dropped — the matcher said "publish it" while the loader never visited it. Both are now fixed and covered by tests; an end-to-end smoke test confirms a re-included note + asset under `/Secrets/` is served while excluded siblings 404 across notes, tree, raw, and asset paths.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review comments: https://github.com/go-go-golems/publish-vault/pull/9"
+
+**Assistant interpretation:** Read the PR #9 review comments and fix the two correctness issues Codex raised, with tests, then push.
+
+**Inferred user intent:** Get PR #9 to a reviewable/mergeable state by resolving the automated review feedback.
+
+**Commit (code):** `d7bc215` — "RETRO-IGNORE-013: address PR #9 review (snapshot race + negation consistency)"
+
+### What I did
+- **Fix 1 — asset handler snapshot race (`internal/server/server.go`):** captured `v, _ := state.Snapshot()` once and used `v.Root()` for both the `IsIgnored` decision and `os.OpenRoot`, so the ignore check and the bytes always come from one revision (a concurrent `Reload` can no longer mix old rules with a new root).
+- **Fix 2 — negation under excluded directories:** added `Ignore.HasNegations()` and `Vault.ShouldPruneDir(absPath)`. `LoadAll` and `watcher.New` now prune an ignored directory only when the ignore file has **no** negation patterns; when negations exist, the walk (and the fsnotify watch set) descend so each file is matched individually and a `!`-re-included file beneath an excluded dir is actually visited and published. The matcher itself is unchanged (permissive last-match-wins, as documented).
+- **Tests:** `TestMatchNegationUnderExcludedDir` + `TestHasNegations` (ignore); `TestLoadAllNegationUnderExcludedDir` (vault: re-included note published, sibling excluded, tree/raw/`IsIgnored` all agree); `TestAssetHandler_ServesReIncludedAsset` (asset: re-included asset 200, sibling 404).
+- **Docs:** README now states the permissive negation semantics (a `!` can re-include under an excluded dir; excluded dirs are descended rather than pruned when any `!` is present).
+- **Smoke test:** built the binary and served a vault with `/Secrets/` + `!Secrets/Public.md` + `!Secrets/public.png`: `notes` = `index` + `secrets/public`; tree shows `Secrets`; `/api/notes/secrets/public/raw` → 200, `/api/notes/secrets/secret/raw` → 404; `/vault-assets/Secrets/public.png` → 200, `/vault-assets/Secrets/secret.png` → 404.
+- `go test ./...` all pass; `golangci-lint run` 0 issues; `gofmt` clean.
+
+### Why
+Both comments were real correctness gaps. The snapshot race could (rarely) serve an asset that should be ignored after a reload. The pruning inconsistency meant the documented permissive negation did not actually work under excluded directories, and the asset/raw paths disagreed with the loader. Fixing both makes every surface — loader, matcher, `ReadRaw`, asset handler, watcher — give identical answers.
+
+### What worked
+- The `ShouldPruneDir` abstraction encapsulates the "prune only when safe" rule in one place, so `LoadAll` and `watcher.New` share identical logic and cannot drift.
+- Reusing the existing permissive matcher (no rewrite) kept the change low-risk: the only new logic is the `HasNegations` guard on pruning, which is obviously correct (no negations ⇒ pruning cannot drop a re-included file).
+- The end-to-end smoke test was decisive: the same `!`-under-`/Secrets/` case is exercised across notes, tree, raw, and asset paths in one run.
+
+### What didn't work
+- One README edit failed with `ENOENT` because I passed an absolute path that omitted the `publish-vault/` segment. Caught immediately and re-applied with the correct path. A reminder that the workspace root is `…/memory-publish-vault/publish-vault/`, not `…/memory-publish-vault/`.
+
+### What I learned
+- The permissive-vs-strict gitignore question has a clean resolution that preserves the documented intent: keep the matcher permissive (last-match-wins) and make the **walk** honor it by not pruning when negations exist. This avoids rewriting the subtle matcher while still being fully consistent. The trade-off (descending into ignored dirs when `!` is present) is acceptable because `!` patterns are rare and the production deployment uses the reload endpoint, not `--watch`.
+- The asset handler's `state.Snapshot()` returns a vault and a search index that are swapped atomically together, so capturing the vault once and using `v.Root()` for both the check and the open is the correct way to avoid a torn read across a reload.
+
+### What was tricky to build
+- **Choosing the negation fix.** Three options were considered: (A) never prune ignored dirs (simplest, but watches/walks large ignored trees even without negations); (B) make the matcher strict gitignore (git-faithful, keeps pruning, but rewrites the subtle matcher and reverses the documented permissive stance); (C) prune only when no negations exist (chosen). Option C preserves the fast pruning path for the common no-`!` case (e.g. `ttmp/_guidelines/`), only descending when a `!` actually requires it, and keeps the matcher unchanged.
+- **Watcher consistency.** When negations exist, `watcher.New` must NOT prune ignored dirs either, otherwise a live edit to a re-included file under an excluded dir would not be caught. `ShouldPruneDir` is shared by both `LoadAll` and `watcher.New` so they stay in lockstep.
+
+### What warrants a second pair of eyes
+- The `ShouldPruneDir` semantics: confirm that descending into ignored dirs when `!` is present is acceptable for the largest expected ignored trees (the production deployment uses reload, not `--watch`, so the fsnotify-watch-count concern is limited to local dev with small vaults).
+- The asset handler fix assumes `v.Root()` (the snapshot's resolved root) is the correct root to open. Confirm `RuntimeState.Snapshot()` always returns a vault whose `Root()` matches the snapshot the handler should serve from (it does — `loadSnapshot` sets `Vault: v` with `v.root = resolvedRoot`).
+
+### What should be done in the future
+- Consider a strict-gitignore mode (Option B) if users report surprise that `!` re-includes under excluded dirs; the matcher API is shaped to allow it.
+- Optionally watch `.vault-ignore` itself to auto-trigger `state.Reload()` (still open from the design).
+
+### Code review instructions
+- `internal/server/server.go`: `assetHandler` — single `v, _ := state.Snapshot()` used for both `IsIgnored` and `OpenRoot(v.Root())`.
+- `internal/ignore/ignore.go`: `HasNegations()`.
+- `internal/vault/vault.go`: `ShouldPruneDir()`; `LoadAll` uses it for the dir prune decision.
+- `internal/watcher/watcher.go`: `New` uses `ShouldPruneDir` for the dir prune decision.
+- Tests: `TestMatchNegationUnderExcludedDir`, `TestHasNegations`, `TestLoadAllNegationUnderExcludedDir`, `TestAssetHandler_ServesReIncludedAsset`.
+- Validate: `go test ./... -count=1` and the smoke sequence above.
+
+### Technical details
+- Commit: `d7bc215` (pushed to `origin/task/memory-publish-vault`; PR #9 updated).
+- New symbols: `ignore.Ignore.HasNegations()`, `vault.Vault.ShouldPruneDir(absPath) bool`.
+- Invariant: directory pruning happens iff the ignore file has no negation patterns; otherwise the walk descends and matches each file, so permissive negation is honored everywhere consistently.
+- Asset handler invariant: the ignore decision and the file open use the same snapshot (`v.Root()`), eliminating the reload race.
 

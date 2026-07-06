@@ -58,3 +58,12 @@ Phase 6: documented .vault-ignore in README; end-to-end smoke test passed (notes
 
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/README.md — Excluding paths section documents the supported gitignore subset and reload semantics
 
+
+## 2026-07-06
+
+Addressed PR #9 review: asset handler snapshot race (single snapshot for check+open) and negation-under-excluded-dir consistency (ShouldPruneDir/HasNegations); added tests + smoke (commit d7bc215)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — assetHandler uses v.Root() for both IsIgnored and OpenRoot
+
