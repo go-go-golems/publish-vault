@@ -30,7 +30,9 @@ RelatedFiles:
     - Path: internal/server/runtime.go
       Note: loadSnapshot rebuilds vault per reload — ignore is re-read for free
     - Path: internal/server/server.go
-      Note: assetHandler/validAssetPath; third integration point (asset + raw loopholes)
+      Note: |-
+        assetHandler/validAssetPath; third integration point (asset + raw loopholes)
+        assetHandler consults v.IsIgnored and 404s on excluded assets (commit 39fe081)
     - Path: internal/vault/vault.go
       Note: |-
         LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
@@ -45,6 +47,7 @@ LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
 
 
 
@@ -328,4 +331,56 @@ The watcher is the one path that can re-introduce a file into `v.notes` after `L
 - Commit: `88987b6`.
 - Two gates: `New` prunes ignored dirs from the fsnotify watch set; `loop` drops ignored `.md` events; `apply` no-ops on `ErrIgnored`.
 - No new exported symbols.
+
+## Step 5: Phase 4 — honor .vault-ignore in the static asset handler
+
+This step closed the last loophole: the `/vault-assets/*` handler reads files straight off disk and bypasses `v.notes`, so before this change an excluded image was still served if its URL was guessed. The handler now consults the active snapshot's vault and returns 404 for any asset whose path `IsIgnored`. With this, the raw-source endpoint (guarded in Phase 2 via `ReadRaw`) and the asset endpoint both respect the ignore, so no off-`notes` reader can leak excluded content.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 2)
+
+**Assistant interpretation:** Implement Phase 4: make the asset handler ignore-aware, with tests.
+
+**Inferred user intent:** Ensure no HTTP surface can serve excluded files, completing the exclusion guarantee across notes, raw source, and assets.
+
+**Commit (code):** `39fe081` — "RETRO-IGNORE-013: honor .vault-ignore in the static asset handler"
+
+### What I did
+- `internal/server/server.go`: in `assetHandler`, after `validAssetPath`, fetch the active snapshot's vault via `state.Snapshot()` and return `http.NotFound` when `v.IsIgnored(filepath.Join(v.Root(), rel), false)` is true. The check runs before `os.OpenRoot`, so an ignored request never touches the filesystem.
+- `internal/server/asset_test.go` (new): `TestAssetHandler_404OnIgnored` (an image under an ignored `/Secrets/` directory 404s while a published image 200s) and `TestAssetHandler_NoIgnoreFileServesAll` (behavior unchanged with no ignore file).
+- Ran `go test ./internal/server/...`, `go build ./...`, `go vet`, `gofmt -l` (all clean). Existing server tests (`TestAssetHandlerServesVaultFiles`, `TestAssetHandlerRejectsSymlinks`, `TestAssetHandlerRejectsUnsafePaths`) still pass unchanged.
+
+### Why
+The asset handler is the second off-`notes` reader (the first was `ReadRaw`, guarded in Phase 2). Both read directly from disk via `os.OpenRoot` and would otherwise serve excluded content. Placing the check before the open means ignored requests are cheap and never reach the filesystem.
+
+### What worked
+- Reusing the existing favicon-test setup pattern (`NewRuntimeState(vaultDir)` + `httptest.NewRequest`/`NewRecorder`) made the new tests consistent with the suite.
+- `v.IsIgnored(filepath.Join(v.Root(), rel), false)` reuses the same accessor the watcher uses, so asset and watch paths agree on exclusion.
+
+### What didn't work
+- None blocking. The discovery that there were pre-existing asset-handler tests (`TestAssetHandler*` in another server test file) only confirmed the change is non-regressive.
+
+### What I learned
+- The asset handler already rejected `.md` files and dotpaths/traversal via `validAssetPath` and the `info.IsDir()`/extension checks; the ignore check slots in cleanly as an additional early return.
+- `state.Snapshot()` returns the active vault atomically with the search index, so the ignore check always reflects the currently-served vault (important during a reload swap).
+
+### What was tricky to build
+- **Choosing where to place the check.** It must run after `validAssetPath` (so traversal/dotpath rejection stays first and cheapest) but before `os.OpenRoot` (so ignored requests are free and never touch disk). The chosen spot — right after `validAssetPath`, fetching the snapshot once — satisfies both.
+- **`IsIgnored` takes an absolute path.** The handler has a vault-relative `rel`, so I join `v.Root()` + `rel`. This round-trips to the same rel inside `isIgnored` via `filepath.Rel`, matching the `ReadRaw` guard's path semantics. Verified by the test.
+
+### What warrants a second pair of eyes
+- Confirm the snapshot fetched for the ignore check is the same one used for `os.OpenRoot(state.ResolvedRoot())`. A reload between the two calls is harmless (the new snapshot's ignore would be at least as strict), but worth noting for the concurrency-aware reader.
+
+### What should be done in the future
+- Consider a single shared helper `state.IsIgnoredRel(rel, isDir)` to avoid the `filepath.Join(v.Root(), rel)` round-trip in both the asset handler and `ReadRaw`. Minor; not worth the abstraction yet.
+
+### Code review instructions
+- Read `internal/server/server.go`: `assetHandler` (snapshot fetch + `IsIgnored` early return).
+- Read `internal/server/asset_test.go`: `TestAssetHandler_404OnIgnored` is the key test.
+- Validate: `go test ./internal/server/... -count=1 -run Asset -v`.
+
+### Technical details
+- Commit: `39fe081`.
+- Exclusion is now complete across all surfaces: notes/tree/search/backlinks/API (via `LoadAll`), raw source (via `ReadRaw`), assets (via `assetHandler`), and live edits (via the watcher).
 

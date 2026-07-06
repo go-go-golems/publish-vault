@@ -40,3 +40,12 @@ Phase 3: watcher prunes ignored dirs, drops ignored events, no-ops on ErrIgnored
 
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/watcher/watcher.go — two gates (New dir walk + loop event filter) keep ignored paths out of the hot reload path
 
+
+## 2026-07-06
+
+Phase 4: assetHandler returns 404 for ignored assets; raw endpoint already covered by ReadRaw guard (commit 39fe081)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — assetHandler closes the off-notes static-asset loophole
+
