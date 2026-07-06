@@ -9,4 +9,4 @@
 - [x] Phase 3: Wire ignore into watcher (skip ignored dirs in New, drop ignored events in loop) + test
 - [x] Phase 4: Wire ignore into asset handler + raw serving (404 on ignored) + server test
 - [ ] Phase 5: Add --vault-ignore CLI flag, thread through server.Config/RuntimeOptions/loadSnapshot
-- [ ] Phase 6: Update README.md with an 'Excluding paths' section
+- [x] Phase 6: Update README.md with an 'Excluding paths' section

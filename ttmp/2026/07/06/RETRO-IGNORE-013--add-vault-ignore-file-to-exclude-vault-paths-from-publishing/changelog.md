@@ -49,3 +49,12 @@ Phase 4: assetHandler returns 404 for ignored assets; raw endpoint already cover
 
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/server/server.go — assetHandler closes the off-notes static-asset loophole
 
+
+## 2026-07-06
+
+Phase 6: documented .vault-ignore in README; end-to-end smoke test passed (notes/tree/search/raw/asset/watcher all respect ignore) (commit c9cdb03)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/README.md — Excluding paths section documents the supported gitignore subset and reload semantics
+

@@ -17,6 +17,8 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: README.md
+      Note: Excluding paths with .vault-ignore section (commit c9cdb03)
     - Path: cmd/retro-obsidian-publish/commands/serve/serve.go
       Note: Settings struct; where a future --vault-ignore flag would land
     - Path: internal/api/api.go
@@ -47,6 +49,7 @@ LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
 
 
 
@@ -383,4 +386,70 @@ The asset handler is the second off-`notes` reader (the first was `ReadRaw`, gua
 ### Technical details
 - Commit: `39fe081`.
 - Exclusion is now complete across all surfaces: notes/tree/search/backlinks/API (via `LoadAll`), raw source (via `ReadRaw`), assets (via `assetHandler`), and live edits (via the watcher).
+
+## Step 6: Phase 6 — README docs and end-to-end smoke test
+
+This step documented the feature in the README and ran a full end-to-end smoke test with the real binary serving a vault containing `ttmp/_guidelines`, `ttmp/_templates`, `Secrets/`, and draft notes. It also finalized the scoping decision to defer the optional `--vault-ignore` CLI override flag (design Phase 5) in line with AGENT.md's guidance against adding config surface / adapters unless necessary — the presence-based default (`vault.New` reads `<root>/.vault-ignore`) covers the user's actual request.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 2)
+
+**Assistant interpretation:** Finish the implementation: document the feature and validate it end-to-end with the real binary.
+
+**Inferred user intent:** Ship a complete, tested, documented feature with confidence that every publishing surface respects the ignore.
+
+**Commit (code):** `c9cdb03` — "RETRO-IGNORE-013: document .vault-ignore in the README"
+
+### What I did
+- `README.md`: added an "Excluding paths with `.vault-ignore`" section after Frontmatter, with a worked example (`ttmp/_guidelines/`, `ttmp/_templates/`, `/Secrets/`, `*.draft.md` + `!Drafts/Pinned.draft.md`), the supported gitignore subset bullets, and reload semantics.
+- Built the binary (`go build ./cmd/retro-obsidian-publish`) and served a smoke vault at `--watch=false`:
+  - `/api/healthz` reported `notes: 3` (Index, Notes/Public, Drafts/Pinned) — the four ignored notes were absent.
+  - `/api/notes` listed exactly the 3 published slugs.
+  - `/api/tree` top-level names were `Drafts`, `Index`, `Notes` (no `ttmp`, no `Secrets`).
+  - `/api/search?q=NOT` returned only published notes; the ignored `ttmp/_guidelines/Style.md` ("Should NOT") was absent.
+  - `/api/notes/ttmp/_guidelines/style/raw` → 404; `/api/notes/index/raw` → 200.
+  - `/vault-assets/Secrets/secret.png` → 404 (asset loophole closed).
+- Re-ran with `--watch=true`:
+  - Writing a new ignored file `ttmp/_guidelines/Extra.md` left the count at 3 (watcher dropped/ignored it).
+  - Writing a new published note `Notes/Fresh.md` incremented the count to 4 and `search?q=freshly` returned `notes/fresh`.
+- Ran `go test ./... -count=1` (all packages pass), `gofmt -l` (clean), `golangci-lint run` (0 issues).
+
+### Why
+Documentation closes the loop for operators, and a real-binary smoke test is the only way to confirm the four integration points (vault load, watcher, raw, asset) agree across the HTTP surface — unit tests cover each in isolation but cannot prove the wiring is consistent end-to-end.
+
+### What worked
+- The smoke vault mirrored the README example exactly, so the docs and the validated behavior are guaranteed consistent.
+- The watcher test was decisive: an ignored write left the count unchanged while a published write incremented it, proving both the `loop` event-drop and the `apply` `ErrIgnored` no-op.
+
+### What didn't work
+- One smoke-setup typo: I initially wrote `tmp/_templates/` (missing a `t`) in the `.vault-ignore`, which would have let `ttmp/_templates/Note.md` through. Caught immediately by checking the notes count and the tree, and fixed before the recorded run. A reminder that ignore patterns are literal and a single-character typo silently under-excludes — the README's literal example is the source of truth.
+
+### What I learned
+- The four integration points are mutually consistent because they all route through `(*Vault).IsIgnored` / the `LoadAll` filter. The smoke test's `notes: 3` across `/api/notes`, `/api/tree`, `/api/search`, and `/api/healthz` is strong evidence there is no second code path that bypasses the filter.
+- `parser.Slugify` preserves underscores (confirmed again: `ttmp/_guidelines/style`), so the design doc's earlier claim about underscores-to-dashes is wrong and should be corrected in a future doc revision.
+
+### What was tricky to build
+- **Validating search exclusion.** A naive `search?q=Should` could match published notes by coincidence (fuzziness/prefix). The decisive check was that the ignored note's unique phrase ("Should NOT") never appears in any result, combined with the count staying at 3. The raw/asset 404s are the unambiguous proofs for those surfaces.
+
+### What warrants a second pair of eyes
+- The deferred `--vault-ignore` CLI flag (design Phase 5): confirm that presence-based default (`vault.New` reads `<root>/.vault-ignore`) is acceptable and that no deployment needs to redirect or disable ignore processing. If one does, Phase 5 is a small follow-up (add `NewWithOptions` + a `--vault-ignore` flag threaded through `server.Config`).
+- The `.vault-ignore` reload semantics: in `--watch` mode, editing the ignore file requires a restart (documented). Confirm this is acceptable for local dev; git-sync deployments already use `/api/admin/reload`.
+
+### What should be done in the future
+- Implement the optional `--vault-ignore` CLI override / disable flag if a real deployment needs it (deferred Phase 5).
+- Watch `.vault-ignore` for changes in `--watch` mode and auto-trigger `state.Reload()` (design open question #1).
+- Correct the design doc's slug-underscore claim.
+- Consider a `/api/config` field advertising the active ignore file path for debugging (design open question #3).
+
+### Code review instructions
+- Read `README.md`: the "Excluding paths with `.vault-ignore`" section.
+- Reproduce the smoke test: build the binary, create the example vault from the README, and curl `/api/notes`, `/api/tree`, the raw and asset endpoints.
+- Validate: `go test ./... -count=1` and `golangci-lint run`.
+
+### Technical details
+- Commit: `c9cdb03`.
+- End-to-end result: every publishing surface (notes, tree, search, backlinks, raw source, assets, live watcher) respects `.vault-ignore`. Ignored writes are dropped; published writes are indexed.
+- Deferred: `--vault-ignore` CLI flag / `NewWithOptions` (Phase 5) — presence-based default is sufficient for the requested feature.
+- Full commit chain: `abad6df` (Phase 1) → `ccf7e0a` (Phase 2) → `88987b6` (Phase 3) → `39fe081` (Phase 4) → `c9cdb03` (Phase 6), each followed by a diary commit.
 
