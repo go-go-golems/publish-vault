@@ -2,6 +2,7 @@
 package watcher
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -51,12 +52,19 @@ func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
 		opt(vw)
 	}
 
-	// Watch the vault root and all subdirectories
+	// Watch the vault root and all non-ignored subdirectories. Ignored
+	// directories are pruned so fsnotify never reports events for them.
 	if err := filepath.Walk(v.Root(), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
 		if info.IsDir() {
+			// Prune ignored directories only when no negation patterns exist, so a
+			// "!" can still re-include a file beneath them. When negations exist we
+			// watch the directory and let the per-event ignore check decide.
+			if v.ShouldPruneDir(path) {
+				return filepath.SkipDir
+			}
 			return fw.Add(path)
 		}
 		return nil
@@ -95,6 +103,11 @@ func (vw *VaultWatcher) loop() {
 			if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
 				continue
 			}
+			// Drop events for paths excluded by .vault-ignore (a file may have
+			// been moved into an ignored tree mid-run).
+			if vw.vault.IsIgnored(event.Name, false) {
+				continue
+			}
 			pending[event.Name] = event.Op
 
 		case err, ok := <-vw.watcher.Errors:
@@ -130,6 +143,9 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 	log.Printf("vault: reloading %s", path)
 	note, err := vw.vault.ReloadNote(path)
 	if err != nil {
+		if errors.Is(err, vault.ErrIgnored) {
+			return // path excluded by .vault-ignore; nothing to do
+		}
 		log.Printf("vault: reload error: %v", err)
 		return
 	}

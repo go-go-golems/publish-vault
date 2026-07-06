@@ -99,6 +99,10 @@ topics:
       description: Release automation and artifact publishing
     - slug: tooling
       description: Developer tooling, templates, and automation
+    - slug: watcher
+      description: Filesystem watcher (fsnotify) for live vault reload
+    - slug: ignore
+      description: Vault path exclusion / .vault-ignore mechanism
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
