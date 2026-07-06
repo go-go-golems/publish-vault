@@ -353,6 +353,40 @@ The frontend receives `frontmatter` as a JSON object. Tags are also extracted in
 
 ---
 
+## Excluding paths with `.vault-ignore`
+
+You can keep authoring scaffolding, drafts, and private folders inside your vault without publishing them. Create a `.vault-ignore` file at the vault root. It uses a familiar, documented subset of `gitignore` syntax, and exclusion applies everywhere: the note index, the file tree, full-text search, backlinks, the raw-source endpoint, the `/vault-assets/` handler, and the live file watcher.
+
+```bash
+# my-vault/.vault-ignore
+
+# docmgr authoring scaffolding — never publish
+ttmp/_guidelines/
+ttmp/_templates/
+
+# a whole private folder, anchored to the vault root
+/Secrets/
+
+# any draft note, at any depth
+*.draft.md
+
+# ...but keep this one published
+!Drafts/Pinned.draft.md
+```
+
+Supported syntax:
+
+- Blank lines and `#` comments are ignored.
+- A leading `!` negates a pattern (last match wins), so `!Drafts/Pinned.draft.md` re-includes a file excluded by `*.draft.md`.
+- A trailing `/` restricts a pattern to directories, e.g. `Secrets/`.
+- A leading `/` or any internal `/` anchors the pattern to the vault root; otherwise it matches a single path segment at any depth (e.g. `*.draft.md`).
+- Globs use shell-style `*`, `?`, and `[abc]` (they do not cross `/`).
+- To match a literal `#` or `!` filename, escape it with a backslash (`\#keep.md`, `\!keep.md`).
+
+A missing `.vault-ignore` file is harmless (everything is published). A malformed file is logged and treated as “ignore nothing”, so a bad ignore file never takes the site down. Changes to `.vault-ignore` take effect on the next full reload — in `--watch` mode restart the server, or call the admin reload endpoint (see [Keeping a published vault up to date](#keeping-a-published-vault-up-to-date)) in git-sync deployments.
+
+---
+
 ## Keeping a published vault up to date
 
 For local use, leave file watching enabled. It is the default:
