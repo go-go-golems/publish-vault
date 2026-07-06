@@ -22,3 +22,12 @@ Phase 1: added internal/ignore package (gitignore subset matcher) with table-dri
 
 - /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/ignore/ignore.go — Ignore.Load/Match/MatchAbs — the matcher consumed by vault
 
+
+## 2026-07-06
+
+Phase 2: wired .vault-ignore into vault.New/LoadAll/ReloadNote/ReadRaw + IsIgnored accessor; added tests (commit ccf7e0a)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-05/memory-publish-vault/publish-vault/internal/vault/vault.go — LoadAll filters at the walk so all consumers are covered transitively
+

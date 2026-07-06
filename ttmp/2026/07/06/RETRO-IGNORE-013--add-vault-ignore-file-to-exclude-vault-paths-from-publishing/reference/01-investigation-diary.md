@@ -32,7 +32,9 @@ RelatedFiles:
     - Path: internal/server/server.go
       Note: assetHandler/validAssetPath; third integration point (asset + raw loopholes)
     - Path: internal/vault/vault.go
-      Note: LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
+      Note: |-
+        LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
+        ignore field + LoadAll SkipDir + IsIgnored + ReloadNote ErrIgnored + ReadRaw guard (commit ccf7e0a)
     - Path: internal/watcher/watcher.go
       Note: New() dir walk + loop() .md filter; second integration point
 ExternalSources: []
@@ -41,6 +43,7 @@ LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
 
 
 # Investigation diary
@@ -202,4 +205,68 @@ The matcher is the semantic core of the feature and the most error-prone part (n
 - Public API: `Ignore.Load(root)`, `Ignore.LoadFromPath(p)`, `Ignore.Parse(r)`, `Ignore.Match(rel, isDir)`, `Ignore.MatchAbs(root, abs, isDir)`, `Ignore.Empty()`.
 - Matching invariant: a pattern matches a path iff it matches the path or one of its ancestor directories; dir-only patterns match files only through an ancestor dir; last matching pattern wins (negations flip the result).
 - Files: `internal/ignore/ignore.go` (7.3 KB), `internal/ignore/ignore_test.go` (6.9 KB).
+
+## Step 3: Phase 2 — wire ignore into the vault package
+
+This step made `vault.New` read `<root>/.vault-ignore` and filter the walk, plus closed the raw-source loophole. After this change, ignored directories and files are absent from the notes map, so the file tree, search documents, backlinks, and every API read path exclude them transitively — without any change to those consumers. `ReloadNote` now refuses to re-add an ignored path (returns `ErrIgnored`), and `ReadRaw` returns `os.ErrNotExist` for ignored slugs so `/api/notes/{slug}/raw` cannot bypass the ignore.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 2)
+
+**Assistant interpretation:** Implement Phase 2 of the design: thread the ignore matcher into vault loading and the on-demand raw reader, with tests.
+
+**Inferred user intent:** Make exclusion effective for all note-derived surfaces and close the raw-source bypass, with a focused, well-tested commit.
+
+**Commit (code):** `ccf7e0a` — "RETRO-IGNORE-013: wire .vault-ignore into vault loading and raw reads"
+
+### What I did
+- `internal/vault/vault.go`: added `errors`, `log`, and `internal/ignore` imports; exported `ErrIgnored`.
+- Added an `ignore *ignore.Ignore` field to `Vault`.
+- `New(rootDir)` now calls `ignore.Load(rootDir)`; on a non-NotExist error it logs a warning and falls back to an empty `Ignore` (publishing is not blocked by a bad ignore file).
+- `LoadAll` walk: `filepath.SkipDir` for ignored directories; `return nil` for ignored `.md` files.
+- Added `IsIgnored(absPath, isDir)` (exported, lock-free, mirrors `Root()`) and `isIgnored` (unexported, nil-safe, used inside `LoadAll`/`ReloadNote`/`ReadRaw` where taking a lock would deadlock or is unnecessary).
+- `ReloadNote` returns `(nil, ErrIgnored)` when the path is ignored, before `os.Stat`.
+- `ReadRaw` returns `os.ErrNotExist` when the cleaned path is ignored.
+- `internal/vault/vault_test.go`: added `errors` import and five tests — `TestLoadAllRespectsVaultIgnore` (dirs, globs, negation re-include, file tree, search docs), `TestLoadAllWithoutIgnoreFileIsUnchanged`, `TestReloadNoteIgnoresExcludedPath`, `TestReadRawRejectsIgnoredSlug`, `TestIsIgnoredIsNilSafeWithoutIgnoreFile` — plus a `folderAndFileNames` helper.
+- Ran `go test ./internal/vault/...`, `go build ./...`, `go vet`, `gofmt -l` (all clean).
+
+### Why
+Filtering once at the walk is the design's core invariant: every read consumer derives from `v.notes`, so one filter covers the file tree, search, backlinks, and the whole API. `ReadRaw` and (later) the asset handler read files off-disk and bypass `notes`, so they need their own explicit checks — `ReadRaw`'s guard closes half of that loophole here.
+
+### What worked
+- The lock-free `isIgnored`/`IsIgnored` split avoided an RLock-while-holding-Lock deadlock in `LoadAll` (which holds the write lock) and in `ReloadNote` (which takes the write lock after the check). Since `v.ignore` and `v.root` are write-once, no lock is needed — mirroring the existing `Root()` accessor.
+- Reusing the existing `writeVaultTestFile` helper kept the new tests compact and consistent with the suite.
+- `errors.Is(err, ErrIgnored)` / `errors.Is(err, os.ErrNotExist)` made the test assertions precise.
+
+### What didn't work
+- My first draft of `TestLoadAllRespectsVaultIgnore` used wrong slugs (`tmp/-guidelines/style`, `drafts/pinned-draft-md`). I had incorrectly assumed in the design doc that `parser.Slugify` turns `_` into `-` and that `.draft.md` survives trimming. A quick check (`Slugify` keeps `a-z0-9-_` and `/`; `pathToSlug` strips only the trailing `.md`) showed the real slugs are `ttmp/_guidelines/style` and `drafts/pinned-draft`. Fixed the test slugs and the ignore patterns (I had also typo'd `tmp/` for `ttmp/`).
+
+### What I learned
+- **`parser.Slugify` preserves underscores and slashes** — the character class is `[^a-z0-9\-_/]`, so `_` and `/` are kept. The design doc's claim that "the underscore becomes a dash" is wrong; the diary and a future doc revision should correct it. This matters because ignore patterns and slugs both use slash-separated paths, so matching stays consistent.
+- `pathToSlug` only trims a single trailing `.md` (via `strings.TrimSuffix`), so `Pinned.draft.md` → `Pinned.draft` → slug `pinned-draft` (the `.` becomes `-`).
+- The existing test suite is a good regression net: all prior vault tests still pass unchanged, confirming the ignore feature is additive.
+
+### What was tricky to build
+- **Avoiding a deadlock in `LoadAll`.** `LoadAll` holds `v.mu.Lock()` for the whole walk. If `isIgnored` took `v.mu.RLock()`, it would deadlock. The fix is the unexported lock-free `isIgnored` used inside locked regions, with the exported `IsIgnored` as a thin wrapper for external callers. The safety argument is that `v.ignore`/`v.root` are set once in `New` and never mutated.
+- **`ReloadNote` returning a sentinel vs. `(nil, nil)`.** Returning `(nil, nil)` would make the watcher's `apply` dereference a nil note in `SearchDocument(note)`. Returning `(nil, ErrIgnored)` lets `apply` recognise the no-op case (handled in Phase 3).
+
+### What warrants a second pair of eyes
+- The `ReadRaw` guard constructs an absolute path with `filepath.Join(v.root, filepath.FromSlash(cleaned))` and calls `isIgnored`. Confirm this round-trips to the same rel path the asset handler will check, so raw and asset paths agree on exclusion.
+- The non-fatal-error policy: a malformed `.vault-ignore` logs a warning and publishes everything. Confirm the warning is surfaced in production logs.
+
+### What should be done in the future
+- Correct the design doc's slug-underscore claim (the underscore is preserved, not dashed).
+- Reconsider the `--vault-ignore` CLI override flag (deferred from Phase 5) if a deployment needs to disable or redirect ignore processing.
+
+### Code review instructions
+- Read `internal/vault/vault.go`: `New` (ignore load + fallback), `LoadAll` walk (two `isIgnored` checks), `IsIgnored`/`isIgnored`, `ReloadNote` (ErrIgnored guard), `ReadRaw` (ignore guard).
+- Read `internal/vault/vault_test.go`: `TestLoadAllRespectsVaultIgnore` is the broad test; the rest pin edge cases.
+- Validate: `go test ./internal/vault/... -count=1 -v`.
+
+### Technical details
+- Commit: `ccf7e0a`.
+- New exported symbols: `vault.ErrIgnored`, `(*Vault).IsIgnored(absPath string, isDir bool) bool`.
+- Invariant: `v.ignore` and `v.root` are write-once; `IsIgnored` takes no lock (mirrors `Root()`).
+- Filtering point: `LoadAll` walk only. `ReadRaw` is the only off-`notes` reader guarded so far; the asset handler is next (Phase 4).
 
