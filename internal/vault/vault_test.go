@@ -2,6 +2,7 @@ package vault
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,4 +265,165 @@ func writeVaultTestFile(t *testing.T, root, rel, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestLoadAllRespectsVaultIgnore(t *testing.T) {
+	root := t.TempDir()
+	// Published content.
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Notes/Public.md", "# Public\n")
+	// Authoring scaffolding that must never be published.
+	writeVaultTestFile(t, root, "ttmp/_guidelines/Style.md", "# Style\n")
+	writeVaultTestFile(t, root, "ttmp/_templates/Note.md", "# Template\n")
+	// A draft excluded by glob, with one re-included note.
+	writeVaultTestFile(t, root, "Drafts/WIP.draft.md", "# WIP\n")
+	writeVaultTestFile(t, root, "Drafts/Pinned.draft.md", "# Pinned\n")
+	// A private folder.
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+
+	ignore := "# scaffolding\nttmp/_guidelines/\nttmp/_templates/\n# drafts\n*.draft.md\n!Drafts/Pinned.draft.md\n# private\n/Secrets/\n"
+	if err := os.WriteFile(filepath.Join(root, ".vault-ignore"), []byte(ignore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	wantPresent := []string{"index", "notes/public", "drafts/pinned-draft"}
+	for _, slug := range wantPresent {
+		if _, ok := v.GetNote(slug); !ok {
+			t.Errorf("expected note %q to be published, but it is absent", slug)
+		}
+	}
+
+	wantAbsent := []string{"ttmp/_guidelines/style", "ttmp/_templates/note", "drafts/wip-draft", "secrets/secret"}
+	for _, slug := range wantAbsent {
+		if _, ok := v.GetNote(slug); ok {
+			t.Errorf("expected note %q to be ignored, but it is present", slug)
+		}
+	}
+
+	if got := v.Count(); got != len(wantPresent) {
+		t.Errorf("Count() = %d, want %d (only published notes)", got, len(wantPresent))
+	}
+
+	// File tree must not contain ignored folders.
+	tree := v.FileTree()
+	names := folderAndFileNames(tree)
+	for _, bad := range []string{"_guidelines", "_templates", "Secrets"} {
+		if names[bad] {
+			t.Errorf("file tree should omit ignored entry %q", bad)
+		}
+	}
+	if !names["Notes"] {
+		t.Errorf("file tree should still contain published folder Notes")
+	}
+
+	// Search documents must omit ignored notes.
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		t.Fatalf("SearchDocuments() error = %v", err)
+	}
+	for _, d := range docs {
+		if strings.HasPrefix(d.Slug, "ttmp/_guidelines") || strings.HasPrefix(d.Slug, "ttmp/_templates") || strings.HasPrefix(d.Slug, "secrets") {
+			t.Errorf("search document %q should have been excluded", d.Slug)
+		}
+		if d.Slug == "drafts/wip-draft" {
+			t.Errorf("draft WIP should have been excluded from search docs")
+		}
+	}
+}
+
+func TestLoadAllWithoutIgnoreFileIsUnchanged(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if got := v.Count(); got != 2 {
+		t.Errorf("without .vault-ignore, Count() = %d, want 2", got)
+	}
+}
+
+func TestReloadNoteIgnoresExcludedPath(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "tmp/_guidelines/Style.md", "# Style\n")
+	if err := os.WriteFile(filepath.Join(root, ".vault-ignore"), []byte("tmp/_guidelines/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	// Edit the ignored file and reload; it must not enter the index.
+	target := filepath.Join(root, "tmp/_guidelines/Style.md")
+	if err := os.WriteFile(target, []byte("# Updated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	note, err := v.ReloadNote(target)
+	if !errors.Is(err, ErrIgnored) {
+		t.Fatalf("ReloadNote(ignored) err = %v, want ErrIgnored", err)
+	}
+	if note != nil {
+		t.Errorf("ReloadNote(ignored) should return nil note, got %v", note)
+	}
+	if _, ok := v.GetNote("ttmp/_guidelines/style"); ok {
+		t.Errorf("ignored note must not appear in the index after ReloadNote")
+	}
+}
+
+func TestReadRawRejectsIgnoredSlug(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+	if err := os.WriteFile(filepath.Join(root, ".vault-ignore"), []byte("/Secrets/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, err := v.ReadRaw("Secrets/secret.md"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ReadRaw(ignored) err = %v, want os.ErrNotExist", err)
+	}
+	// A published note still reads fine.
+	if _, err := v.ReadRaw("Index.md"); err != nil {
+		t.Errorf("ReadRaw(published) err = %v, want nil", err)
+	}
+}
+
+func TestIsIgnoredIsNilSafeWithoutIgnoreFile(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if v.IsIgnored(filepath.Join(root, "Index.md"), false) {
+		t.Errorf("IsIgnored must be false when no ignore file is present")
+	}
+}
+
+// folderAndFileNames flattens a FileNode tree into a set of entry names.
+func folderAndFileNames(n *FileNode) map[string]bool {
+	out := map[string]bool{}
+	var walk func(*FileNode)
+	walk = func(node *FileNode) {
+		if node == nil {
+			return
+		}
+		if node.Name != "root" {
+			out[node.Name] = true
+		}
+		for _, c := range node.Children {
+			walk(c)
+		}
+	}
+	walk(n)
+	return out
 }

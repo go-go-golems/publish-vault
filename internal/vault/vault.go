@@ -2,7 +2,9 @@
 package vault
 
 import (
+	"errors"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -12,8 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"retro-obsidian-publish/internal/ignore"
 	"retro-obsidian-publish/internal/parser"
 )
+
+// ErrIgnored is returned by ReloadNote when the target path is excluded by a
+// .vault-ignore file. Callers (the file watcher) treat it as a no-op rather
+// than an error.
+var ErrIgnored = errors.New("vault: path is excluded by .vault-ignore")
 
 // Note represents a single Obsidian note.
 type Note struct {
@@ -62,14 +70,25 @@ type Vault struct {
 	notes         map[string]*Note  // keyed by slug
 	wikiLinkIndex map[string]string // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
 	root          string            // absolute path to vault directory
+	ignore        *ignore.Ignore    // compiled .vault-ignore; nil/empty means exclude nothing
 }
 
-// New creates a Vault and loads all notes from rootDir.
+// New creates a Vault and loads all notes from rootDir. If <rootDir>/.vault-ignore
+// exists it is read and used to exclude directories and files from the index, the
+// file tree, search, backlinks, and the raw-source endpoint. A missing ignore
+// file is harmless; a malformed one is logged and treated as "ignore nothing" so
+// publishing is not blocked by a bad ignore file.
 func New(rootDir string) (*Vault, error) {
+	ig, err := ignore.Load(rootDir)
+	if err != nil {
+		log.Printf("vault: warning reading %s: %v; ignoring no paths", ignore.IgnoreFile, err)
+		ig = &ignore.Ignore{}
+	}
 	v := &Vault{
 		notes:         make(map[string]*Note),
 		wikiLinkIndex: make(map[string]string),
 		root:          rootDir,
+		ignore:        ig,
 	}
 	if err := v.LoadAll(); err != nil {
 		return nil, err
@@ -93,9 +112,15 @@ func (v *Vault) LoadAll() error {
 			if strings.HasPrefix(info.Name(), ".") {
 				return filepath.SkipDir
 			}
+			if v.isIgnored(path, true) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+			return nil
+		}
+		if v.isIgnored(path, false) {
 			return nil
 		}
 		note, err := v.loadNote(path, info)
@@ -338,8 +363,13 @@ func (v *Vault) buildBacklinks() {
 }
 
 // ReloadNote re-parses a single file, updates the vault index, and returns the
-// updated note so callers can refresh secondary indexes.
+// updated note so callers can refresh secondary indexes. If absPath is excluded
+// by .vault-ignore, ReloadNote returns ErrIgnored and leaves the index untouched;
+// callers (the file watcher) treat this as a no-op.
 func (v *Vault) ReloadNote(absPath string) (*Note, error) {
+	if v.isIgnored(absPath, false) {
+		return nil, ErrIgnored
+	}
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return nil, err
@@ -368,6 +398,24 @@ func (v *Vault) RemoveNote(absPath string) string {
 	v.buildBacklinks()
 	v.mu.Unlock()
 	return slug
+}
+
+// IsIgnored reports whether absPath (an absolute, OS-native path inside the
+// vault root) is excluded by the current .vault-ignore. isDir indicates whether
+// the path is a directory, which affects directory-only patterns. v.ignore and
+// v.root are set once at construction and never mutated, so IsIgnored is safe to
+// call concurrently without a lock (mirroring Root).
+func (v *Vault) IsIgnored(absPath string, isDir bool) bool {
+	return v.isIgnored(absPath, isDir)
+}
+
+// isIgnored is the lock-free internal matcher used from contexts that may
+// already hold v.mu (e.g. LoadAll). It is nil-safe.
+func (v *Vault) isIgnored(absPath string, isDir bool) bool {
+	if v.ignore == nil || v.ignore.Empty() {
+		return false
+	}
+	return v.ignore.MatchAbs(v.root, absPath, isDir)
 }
 
 // GetNote returns a note by slug.
@@ -503,9 +551,14 @@ func (v *Vault) Root() string {
 
 // ReadRaw reads a Markdown note source from disk on demand. The relPath must be
 // a clean vault-relative Markdown path, normally taken from a Note.Path field.
+// Paths excluded by .vault-ignore return os.ErrNotExist so the raw-source
+// endpoint cannot be used to bypass an ignore.
 func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
 	cleaned := cleanVaultRelativePath(relPath)
 	if cleaned == "" || !strings.EqualFold(filepath.Ext(cleaned), ".md") {
+		return nil, os.ErrNotExist
+	}
+	if v.isIgnored(filepath.Join(v.root, filepath.FromSlash(cleaned)), false) {
 		return nil, os.ErrNotExist
 	}
 
