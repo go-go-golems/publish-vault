@@ -178,6 +178,24 @@ func (ig *Ignore) Empty() bool {
 	return ig == nil || len(ig.patterns) == 0
 }
 
+// HasNegations reports whether any pattern is a negation (!). When negations
+// are present, directory pruning is unsafe: a later "!" could re-include a file
+// beneath an otherwise-ignored directory, and pruning the directory would
+// silently drop that file before it can be matched. Callers that prune ignored
+// directories (the vault walk and the file watcher) therefore descend and match
+// each file individually when HasNegations is true.
+func (ig *Ignore) HasNegations() bool {
+	if ig == nil {
+		return false
+	}
+	for _, p := range ig.patterns {
+		if p.negate {
+			return true
+		}
+	}
+	return false
+}
+
 // matches reports whether the pattern excludes rel. A pattern matches rel if it
 // matches rel itself or any ancestor directory of rel (so "foo/" excludes
 // "foo/bar.md"). Directory-only patterns never match a file directly, but still

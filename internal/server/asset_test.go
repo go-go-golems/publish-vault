@@ -89,3 +89,48 @@ func TestAssetHandler_NoIgnoreFileServesAll(t *testing.T) {
 		t.Fatalf("expected 200 without ignore file, got %d", rr.Code)
 	}
 }
+
+// TestAssetHandler_ServesReIncludedAsset confirms the asset handler agrees with
+// the permissive matcher: a "!" re-include under an excluded directory is served,
+// while a sibling asset stays 404. This keeps the static-asset path consistent
+// with the note index and the raw-source endpoint.
+func TestAssetHandler_ServesReIncludedAsset(t *testing.T) {
+	vaultDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vaultDir, "Secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultDir, "Secrets", "secret.png"), []byte("SECRET"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultDir, "Secrets", "public.png"), []byte("PUBLIC"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultDir, ".vault-ignore"), []byte("/Secrets/\n!Secrets/public.png\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := NewRuntimeState(vaultDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := assetHandler(state)
+
+	// Re-included asset -> 200.
+	req := httptest.NewRequest(http.MethodGet, "/vault-assets/Secrets/public.png", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("re-included asset: expected 200, got %d", rr.Code)
+	}
+	if rr.Body.String() != "PUBLIC" {
+		t.Errorf("re-included asset body = %q, want PUBLIC", rr.Body.String())
+	}
+
+	// Excluded sibling -> 404.
+	req = httptest.NewRequest(http.MethodGet, "/vault-assets/Secrets/secret.png", nil)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("excluded sibling asset: expected 404, got %d", rr.Code)
+	}
+}

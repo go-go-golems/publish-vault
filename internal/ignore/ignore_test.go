@@ -224,3 +224,41 @@ func TestParseFromReader(t *testing.T) {
 		t.Errorf("Secrets/keep.md should be re-included by negation")
 	}
 }
+
+// TestMatchNegationUnderExcludedDir pins the permissive, last-match-wins
+// behavior: a "!" re-includes a file even when its parent directory is excluded
+// by an earlier pattern. (LoadAll only prunes ignored directories when no
+// negation exists, so this re-included file is actually visited and published.)
+func TestMatchNegationUnderExcludedDir(t *testing.T) {
+	runMatchTable(t, "/Secrets/\n!Secrets/Public.md\n", []matchCase{
+		{"other file under dir still ignored", "Secrets/secret.md", false, true},
+		{"re-included file is published", "Secrets/Public.md", false, false},
+		{"excluded dir itself is ignored", "Secrets", true, true},
+	})
+}
+
+func TestHasNegations(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"no patterns", "# only a comment\n", false},
+		{"only positive patterns", "Drafts/\n*.draft.md\n", false},
+		{"has a negation", "*.draft.md\n!Keep.draft.md\n", true},
+		{"negation under dir", "Secrets/\n!Secrets/Public.md\n", true},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			root := writeIgnore(t, c.content)
+			ig, err := Load(root)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got := ig.HasNegations(); got != c.want {
+				t.Errorf("HasNegations() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

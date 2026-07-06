@@ -409,6 +409,62 @@ func TestIsIgnoredIsNilSafeWithoutIgnoreFile(t *testing.T) {
 	}
 }
 
+// TestLoadAllNegationUnderExcludedDir verifies the consistency fix for the
+// permissive matcher: when a "!" re-includes a file beneath an excluded
+// directory, LoadAll must NOT prune the directory, so the re-included file is
+// actually visited and published. Other files under the excluded dir stay
+// excluded. (Without the ShouldPruneDir guard, SkipDir would drop Public.md.)
+func TestLoadAllNegationUnderExcludedDir(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+	writeVaultTestFile(t, root, "Secrets/Public.md", "# Public\n")
+	ignore := "/Secrets/\n!Secrets/Public.md\n"
+	if err := os.WriteFile(filepath.Join(root, ".vault-ignore"), []byte(ignore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	// The negated file is re-included and published.
+	if _, ok := v.GetNote("secrets/public"); !ok {
+		t.Errorf("re-included note secrets/public should be published, but it is absent")
+	}
+	// The non-negated sibling stays excluded.
+	if _, ok := v.GetNote("secrets/secret"); ok {
+		t.Errorf("secrets/secret should remain ignored")
+	}
+	if got := v.Count(); got != 2 { // index + secrets/public
+		t.Errorf("Count() = %d, want 2", got)
+	}
+
+	// The file tree contains the re-included note but not the excluded sibling.
+	names := folderAndFileNames(v.FileTree())
+	if !names["Secrets"] {
+		t.Errorf("file tree should contain the Secrets folder (it holds a published note)")
+	}
+	if !names["Public"] {
+		t.Errorf("file tree should contain the re-included Public note")
+	}
+	if names["secret"] {
+		t.Errorf("file tree should omit the excluded secret note")
+	}
+
+	// The matcher, raw endpoint, and loader all agree: Public.md is not ignored.
+	if v.IsIgnored(filepath.Join(root, "Secrets/Public.md"), false) {
+		t.Errorf("IsIgnored(Secrets/Public.md) should be false (re-included)")
+	}
+	if _, err := v.ReadRaw("Secrets/Public.md"); err != nil {
+		t.Errorf("ReadRaw(re-included) err = %v, want nil", err)
+	}
+	if _, err := v.ReadRaw("Secrets/secret.md"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ReadRaw(excluded) err = %v, want os.ErrNotExist", err)
+	}
+}
+
 // folderAndFileNames flattens a FileNode tree into a set of entry names.
 func folderAndFileNames(n *FileNode) map[string]bool {
 	out := map[string]bool{}

@@ -378,6 +378,7 @@ Supported syntax:
 
 - Blank lines and `#` comments are ignored.
 - A leading `!` negates a pattern (last match wins), so `!Drafts/Pinned.draft.md` re-includes a file excluded by `*.draft.md`.
+- Unlike strict git, a `!` can re-include a file even under an excluded directory (e.g. `/Secrets/` then `!Secrets/Public.md` keeps `Secrets/Public.md`). When an ignore file contains any `!` pattern, excluded directories are descended rather than pruned, so re-included files are visited and published.
 - A trailing `/` restricts a pattern to directories, e.g. `Secrets/`.
 - A leading `/` or any internal `/` anchors the pattern to the vault root; otherwise it matches a single path segment at any depth (e.g. `*.draft.md`).
 - Globs use shell-style `*`, `?`, and `[abc]` (they do not cross `/`).

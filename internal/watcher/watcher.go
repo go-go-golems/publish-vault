@@ -59,7 +59,10 @@ func New(v *vault.Vault, opts ...Option) (*VaultWatcher, error) {
 			return nil
 		}
 		if info.IsDir() {
-			if v.IsIgnored(path, true) {
+			// Prune ignored directories only when no negation patterns exist, so a
+			// "!" can still re-include a file beneath them. When negations exist we
+			// watch the directory and let the per-event ignore check decide.
+			if v.ShouldPruneDir(path) {
 				return filepath.SkipDir
 			}
 			return fw.Add(path)

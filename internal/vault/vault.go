@@ -112,7 +112,9 @@ func (v *Vault) LoadAll() error {
 			if strings.HasPrefix(info.Name(), ".") {
 				return filepath.SkipDir
 			}
-			if v.isIgnored(path, true) {
+			// Prune ignored directories only when no negation patterns exist;
+			// otherwise descend so a "!" can re-include a file beneath them.
+			if v.ShouldPruneDir(path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -407,6 +409,22 @@ func (v *Vault) RemoveNote(absPath string) string {
 // call concurrently without a lock (mirroring Root).
 func (v *Vault) IsIgnored(absPath string, isDir bool) bool {
 	return v.isIgnored(absPath, isDir)
+}
+
+// ShouldPruneDir reports whether a filesystem walk should skip absPath entirely.
+// It returns true only when the directory is ignored AND the ignore file has no
+// negation patterns. When negations exist, a later "!" could re-include a file
+// beneath an otherwise-ignored directory, so pruning the directory would
+// silently drop that file; in that case the walk must descend and match each
+// file individually. This keeps the loader and the matcher consistent.
+func (v *Vault) ShouldPruneDir(absPath string) bool {
+	if v.ignore == nil || v.ignore.Empty() {
+		return false
+	}
+	if v.ignore.HasNegations() {
+		return false
+	}
+	return v.isIgnored(absPath, true)
 }
 
 // isIgnored is the lock-free internal matcher used from contexts that may
