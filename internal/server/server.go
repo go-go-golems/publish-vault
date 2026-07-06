@@ -218,6 +218,14 @@ func assetHandler(state *RuntimeState) http.Handler {
 			return
 		}
 
+		v, _ := state.Snapshot()
+		// Honor .vault-ignore: an excluded asset returns 404 so the static
+		// handler cannot be used to bypass an ignore.
+		if v.IsIgnored(filepath.Join(v.Root(), rel), false) {
+			http.NotFound(w, r)
+			return
+		}
+
 		root, err := os.OpenRoot(state.ResolvedRoot())
 		if err != nil {
 			http.NotFound(w, r)
