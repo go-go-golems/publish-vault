@@ -36,13 +36,16 @@ RelatedFiles:
         LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
         ignore field + LoadAll SkipDir + IsIgnored + ReloadNote ErrIgnored + ReadRaw guard (commit ccf7e0a)
     - Path: internal/watcher/watcher.go
-      Note: New() dir walk + loop() .md filter; second integration point
+      Note: |-
+        New() dir walk + loop() .md filter; second integration point
+        New prunes ignored dirs; loop drops ignored events; apply no-ops on ErrIgnored (commit 88987b6)
 ExternalSources: []
 Summary: 'Chronological investigation diary for RETRO-IGNORE-013: evidence gathering across vault/watcher/server/api and the resulting .vault-ignore design.'
 LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
 
 
 
@@ -269,4 +272,60 @@ Filtering once at the walk is the design's core invariant: every read consumer d
 - New exported symbols: `vault.ErrIgnored`, `(*Vault).IsIgnored(absPath string, isDir bool) bool`.
 - Invariant: `v.ignore` and `v.root` are write-once; `IsIgnored` takes no lock (mirrors `Root()`).
 - Filtering point: `LoadAll` walk only. `ReadRaw` is the only off-`notes` reader guarded so far; the asset handler is next (Phase 4).
+
+## Step 4: Phase 3 — respect .vault-ignore in the file watcher
+
+This step made the live watcher ignore-aware at two points: `New` no longer adds ignored directories to fsnotify, and `loop` drops events for ignored `.md` paths before they reach `apply`. `apply` now recognises `vault.ErrIgnored` from `ReloadNote` and no-ops silently. Together these guarantee a file moved into (or edited under) an ignored tree cannot re-enter the vault or the search index while the server runs.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 2)
+
+**Assistant interpretation:** Implement Phase 3: keep the fsnotify watcher from observing and acting on ignored paths.
+
+**Inferred user intent:** Prevent ignored content from leaking back in via live edits, matching the design's two-gate watcher approach.
+
+**Commit (code):** `88987b6` — "RETRO-IGNORE-013: respect .vault-ignore in the file watcher"
+
+### What I did
+- `internal/watcher/watcher.go`: added `errors` import.
+- `New`'s directory walk now calls `v.IsIgnored(path, true)` and returns `filepath.SkipDir` for ignored directories, so fsnotify never watches them.
+- `loop`, after the `.md` suffix filter, drops events where `vw.vault.IsIgnored(event.Name, false)` is true.
+- `apply` checks `errors.Is(err, vault.ErrIgnored)` after `ReloadNote` and returns without logging an error or indexing.
+- `internal/watcher/watcher_test.go`: added `TestApplySkipsIgnoredPath`, which writes a `.vault-ignore`, an ignored file under `ttmp/_guidelines/`, and a published `Index.md`, then calls `vw.apply(ignoredPath, fsnotify.Write)` and asserts the ignored note is absent from both the vault and the search index.
+- Ran `go test ./internal/watcher/...`, `go build`, `go vet`, `gofmt -l` (all clean).
+
+### Why
+The watcher is the one path that can re-introduce a file into `v.notes` after `LoadAll` filtered it out. Without the two gates, editing a file under `ttmp/_guidelines/` would call `ReloadNote`, which (before Phase 2) would re-add it. Phase 2 made `ReloadNote` return `ErrIgnored`; Phase 3 makes the watcher respect that and, better, never observe the event in the first place.
+
+### What worked
+- Reusing the existing `apply`-direct test style kept the new test small and avoided a fragile real-fsnotify timing test.
+- `errors.Is(err, vault.ErrIgnored)` keeps `apply`'s error handling precise: real reload errors are still logged, ignored paths are silent.
+
+### What didn't work
+- None blocking. The existing `TestApplyKeepsSearchIndexInSync` still passes unchanged, confirming the change is additive.
+
+### What I learned
+- The watcher already only enqueued `.md` events, so adding the `IsIgnored` check right after the suffix check is the natural single insertion point — no other event types need filtering.
+- `New`'s `filepath.Walk` returning `filepath.SkipDir` for ignored dirs means fsnotify never establishes a watch on them, which is both more efficient and avoids spurious events from newly-created files under those dirs.
+
+### What was tricky to build
+- **`apply` vs. `loop` responsibility.** The design puts the primary gate in `loop` (drop ignored events before enqueueing). But `apply` is the function that actually calls `ReloadNote`, so it must also handle `ErrIgnored` defensively — otherwise a future caller of `apply` (or an event that slips through) would log a misleading "reload error". Both gates are intentional and documented.
+- **Deciding not to test `New`'s SkipDir directly.** Asserting that fsnotify did not add a specific directory would require inspecting fsnotify internals or relying on event timing, which is brittle. The `apply` test plus the `loop` gate cover the observable behavior (ignored edits do not surface in search). The `New` SkipDir is a performance/correctness optimization validated by the manual smoke test.
+
+### What warrants a second pair of eyes
+- Confirm that a directory created *after* startup under an ignored parent is still not watched. fsnotify watches the parent; a `Create` event for a new ignored subdir would pass the `.md` filter (it's a dir, not `.md`) and be dropped, but the new subdir itself would not be added to the watch. This is fine for the ignore semantics (its `.md` children are ignored by the `loop` gate), but confirm there is no scenario where an ignored new dir's children are watched without passing through the gate.
+
+### What should be done in the future
+- Optionally watch `.vault-ignore` itself and trigger `state.Reload()` so a local edit to the ignore file hot-applies (open question #1 in the design). Currently ignore changes need a restart or `/api/admin/reload`.
+
+### Code review instructions
+- Read `internal/watcher/watcher.go`: `New` walk (SkipDir on ignored), `loop` (event filter), `apply` (ErrIgnored handling).
+- Read `internal/watcher/watcher_test.go`: `TestApplySkipsIgnoredPath`.
+- Validate: `go test ./internal/watcher/... -count=1 -v`.
+
+### Technical details
+- Commit: `88987b6`.
+- Two gates: `New` prunes ignored dirs from the fsnotify watch set; `loop` drops ignored `.md` events; `apply` no-ops on `ErrIgnored`.
+- No new exported symbols.
 
