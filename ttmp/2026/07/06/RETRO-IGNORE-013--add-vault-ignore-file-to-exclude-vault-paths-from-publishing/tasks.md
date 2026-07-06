@@ -4,7 +4,7 @@
 
 - [ ] Add tasks here
 
-- [ ] Phase 1: Create internal/ignore package (Ignore type, Load/Match/MatchAbs) with table-driven tests covering gitignore subset
+- [x] Phase 1: Create internal/ignore package (Ignore type, Load/Match/MatchAbs) with table-driven tests covering gitignore subset
 - [ ] Phase 2: Wire ignore into vault (NewWithOptions, LoadAll SkipDir checks, IsIgnored accessor, ReloadNote/ReadRaw guards) + tests
 - [ ] Phase 3: Wire ignore into watcher (skip ignored dirs in New, drop ignored events in loop) + test
 - [ ] Phase 4: Wire ignore into asset handler + raw serving (404 on ignored) + server test

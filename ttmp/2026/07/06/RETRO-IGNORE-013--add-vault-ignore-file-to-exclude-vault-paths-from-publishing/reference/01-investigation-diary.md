@@ -17,28 +17,31 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: internal/vault/vault.go
-      Note: LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
-    - Path: internal/watcher/watcher.go
-      Note: New() dir walk + loop() .md filter; second integration point
-    - Path: internal/server/server.go
-      Note: assetHandler/validAssetPath; third integration point (asset + raw loopholes)
-    - Path: internal/server/runtime.go
-      Note: loadSnapshot rebuilds vault per reload — ignore is re-read for free
+    - Path: cmd/retro-obsidian-publish/commands/serve/serve.go
+      Note: Settings struct; where a future --vault-ignore flag would land
     - Path: internal/api/api.go
       Note: all read paths derive from v.notes, covered transitively by LoadAll filtering
+    - Path: internal/ignore/ignore.go
+      Note: Phase 1 matcher — Ignore.Load/Match/MatchAbs (commit abad6df)
     - Path: internal/parser/parser.go
       Note: downstream of the walk; confirms ignore belongs in vault, not parser
     - Path: internal/search/search.go
       Note: New/NewPersistent index from v.ForEachSearchDocument; covered transitively
-    - Path: cmd/retro-obsidian-publish/commands/serve/serve.go
-      Note: Settings struct; where a future --vault-ignore flag would land
+    - Path: internal/server/runtime.go
+      Note: loadSnapshot rebuilds vault per reload — ignore is re-read for free
+    - Path: internal/server/server.go
+      Note: assetHandler/validAssetPath; third integration point (asset + raw loopholes)
+    - Path: internal/vault/vault.go
+      Note: LoadAll walk + hidden-dir skip; primary integration point for ignore filtering
+    - Path: internal/watcher/watcher.go
+      Note: New() dir walk + loop() .md filter; second integration point
 ExternalSources: []
 Summary: 'Chronological investigation diary for RETRO-IGNORE-013: evidence gathering across vault/watcher/server/api and the resulting .vault-ignore design.'
 LastUpdated: 2026-07-06T00:00:00Z
 WhatFor: Onboarding and continuation reference for the .vault-ignore feature investigation
 WhenToUse: Read before resuming RETRO-IGNORE-013 or before editing vault loading, the watcher, or the asset handler
 ---
+
 
 # Investigation diary
 
@@ -140,3 +143,63 @@ The feature is small in surface but spans three subsystems (vault loading, live 
 - Design invariant: filter once at the walk; consumers derive from `v.notes`; only off-disk readers (asset, raw) need explicit checks.
 - New package proposed: `internal/ignore` with `Ignore{ Load, LoadFromPath, Match, MatchAbs, Empty }` over a documented gitignore subset.
 - New constructor proposed: `vault.NewWithOptions(root, ignorePath)`; `vault.New(root)` becomes a wrapper (existing callers/tests unchanged).
+
+## Step 2: Phase 1 — internal/ignore package
+
+This step built and tested the `internal/ignore` package in isolation, before touching any caller. The package is the single source of truth for exclusion semantics: it parses a `.vault-ignore` file and answers `Match`/`MatchAbs` queries with a documented gitignore subset. Getting it right here (with a table-driven test for every rule) means the later wiring steps only have to call `Match` in the right places.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead, commit at appropriate intervals, keep a detailed diary as you work (see skill for format)."
+
+**Assistant interpretation:** Implement the `.vault-ignore` feature per the design doc's phased plan, committing at each phase boundary, and record each step in the investigation diary following the `diary` skill format.
+
+**Inferred user intent:** Turn the analysis/design into working, tested code with clean commits and a continuation-friendly audit trail.
+
+**Commit (code):** `abad6df` — "RETRO-IGNORE-013: add internal/ignore package"
+
+### What I did
+- Wrote `internal/ignore/ignore.go`: `Ignore` type, `Load(root)`, `LoadFromPath`, `Parse(io.Reader)`, `Match(rel, isDir)`, `MatchAbs(root, abs, isDir)`, `Empty()`, plus unexported `pattern`/`parseLine`/`matches`/`matchSegment`/`ancestors`/`cleanRel`.
+- Wrote `internal/ignore/ignore_test.go`: table-driven tests for absent file, explicit path, read error, comments/blanks, directory-only, anchored + sibling-prefix collision, leading-slash root anchoring, unanchored basename globs, `!` negation last-match-wins, `\#`/`\!` escaping, malformed-pattern skipping, `MatchAbs` (incl. outside-root), root-itself-never-ignored, CRLF, and `Parse` from a reader.
+- Ran `go test ./internal/ignore/... -count=1 -v` (all pass), `gofmt -l` (clean), `go vet`, `go build`.
+
+### Why
+The matcher is the semantic core of the feature and the most error-prone part (negation, anchoring, directory-only, ancestor-based subtree exclusion). Building it standalone with exhaustive cases means the vault/watcher/server wiring in later phases can trust `Match` and stay small.
+
+### What worked
+- The uniform matching model — "a pattern matches a path if it matches the path itself OR any ancestor directory" — collapsed all the gitignore subtleties (dir-only excluding files beneath, anchored subtree, unanchored basename at any depth) into one `matches` function plus an `ancestors` helper.
+- `path.Match` returning `ErrBadPattern` for malformed globs gave a clean way to skip bad lines without panicking; the test `TestMatchMalformedPatternSkipped` pins this.
+- Treating a missing `.vault-ignore` as `(&Ignore{}, nil)` lets every caller use the same nil-safe path.
+
+### What didn't work
+- Initially I planned `vault.NewWithOptions` + a `--vault-ignore` CLI flag (Phase 5 in the design). After re-reading `AGENT.md` ("Don't add backwards compatibility layers or adapters unless explicitly asked… ASK IF NECESSARY"), I decided to keep `vault.New(root)` as the single constructor that reads the default `<root>/.vault-ignore` (presence-based) and defer the optional override flag to future work. This avoids a wrapper shim and extra config surface. Documented here as a deliberate scope reduction.
+
+### What I learned
+- gitignore anchoring has a subtlety: a trailing `/` does NOT anchor a pattern; only a leading or internal `/` does. So `Secrets/` matches a `Secrets` directory at any depth, while `/Secrets/` matches only at the root. The parser strips the trailing slash first, then decides anchored from the remaining body.
+- `path.Match` (slash semantics) is the right choice over `filepath.Match` because the matcher normalises everything to slash-separated paths, matching the vault's existing `filepath.ToSlash` slug convention.
+- The sibling-prefix case (`ttmp/_guidelines` vs `ttmp/_guidelines-backup`) is handled correctly for free because `path.Match` does exact matching on non-glob patterns — no special prefix logic needed beyond the ancestor walk.
+
+### What was tricky to build
+- **Directory-only patterns excluding files beneath them.** A naive `if dirOnly && !isDir { skip }` would let `ttmp/_guidelines/Index.md` through when only `ttmp/_guidelines/` is listed. The fix is the ancestor rule: a dir-only pattern is still tested against each *ancestor directory* of a file, so `ttmp/_guidelines/Index.md` matches via its ancestor `ttmp/_guidelines`. The `matches`/`ancestors` split makes this explicit and is covered by `TestMatchDirectoryOnly` and `TestMatchAnchored`.
+- **Negation vs. directory exclusion.** Strict gitignore forbids re-including a file under an excluded *directory* (`Secrets/` then `!Secrets/keep.md` is a no-op). This package uses simple last-match-wins, so that negation *does* re-include. This is documented as a known deviation; the design doc's real example (`*.draft.md` + `!Projects/Pinned.draft.md`) is a file-pattern exclusion, not a directory exclusion, so it works correctly.
+
+### What warrants a second pair of eyes
+- The `cleanRel` normalisation (`path.Clean` + strip leading `/`): confirm it handles Windows backslash inputs and `..` segments the way we want. `MatchAbs` rejects outside-root paths via `filepath.Rel` error, but `Match` itself trusts its rel input.
+- The negation-under-directory deviation: confirm operators will not rely on strict gitignore `!`-under-dir semantics.
+
+### What should be done in the future
+- Implement the optional `--vault-ignore` CLI override / disable flag if a real deployment needs it (was Phase 5; deferred per AGENT.md).
+- Revisit strict gitignore `!`-under-directory re-inclusion rules if real vaults need it.
+- Consider `**` support if deep globs are requested.
+
+### Code review instructions
+- Read `internal/ignore/ignore.go`: focus on `parseLine` (directive parsing) and `pattern.matches` + `matchSegment` + `ancestors` (the matching model).
+- Read `internal/ignore/ignore_test.go`: each `TestMatch*` pins one rule.
+- Validate: `go test ./internal/ignore/... -count=1 -v`.
+
+### Technical details
+- Commit: `abad6df`.
+- Public API: `Ignore.Load(root)`, `Ignore.LoadFromPath(p)`, `Ignore.Parse(r)`, `Ignore.Match(rel, isDir)`, `Ignore.MatchAbs(root, abs, isDir)`, `Ignore.Empty()`.
+- Matching invariant: a pattern matches a path iff it matches the path or one of its ancestor directories; dir-only patterns match files only through an ancestor dir; last matching pattern wins (negations flip the result).
+- Files: `internal/ignore/ignore.go` (7.3 KB), `internal/ignore/ignore_test.go` (6.9 KB).
+
