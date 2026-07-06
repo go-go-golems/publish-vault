@@ -64,6 +64,8 @@ WhenToUse: Read before changing vault loading, the watcher, the asset handler, o
 **Audience:** A new engineer joining the team who needs to understand the whole system before adding the `.vault-ignore` feature.
 **Goal of this document:** Explain, end to end, (1) what `retro-obsidian-publish` is and how a vault becomes a website, (2) where files are enumerated and why some paths cannot currently be excluded, (3) exactly what a `.vault-ignore` file is and the rules it should follow, and (4) a concrete, phased implementation plan with pseudocode, diagrams, and tests. Every claim is anchored to a file and (where useful) a line number.
 
+> **Implementation status (2026-07-06):** Implemented and merged to branch `task/memory-publish-vault`. Commit chain: `abad6df` (Phase 1 `internal/ignore`) → `ccf7e0a` (Phase 2 vault wiring) → `88987b6` (Phase 3 watcher) → `39fe081` (Phase 4 asset handler) → `c9cdb03` (Phase 6 README). End-to-end smoke test passed (notes/tree/search/raw/asset/watcher all respect the ignore). **One deviation from this plan:** the optional `--vault-ignore` CLI override flag (Phase 5) was deferred — `vault.New(root)` reads the default `<root>/.vault-ignore` (presence-based), which covers the requested feature without adding config surface (per AGENT.md). See the investigation diary for full detail.
+
 ---
 
 ## 0. How to read this document
@@ -216,7 +218,7 @@ type Vault struct {
 
 `loadNote` (`vault.go:118-167`) reads the file, calls `parser.Parse`, derives a slug via `pathToSlug(relPath)`, and fills a `Note` struct (`Slug`, `Title`, `Path`, `Frontmatter`, `Tags`, `Excerpt`, `HTML`, `WikiLinks`, `ModTime`).
 
-> **Evidence** — `pathToSlug` (`vault.go:331-336`) lowercases, replaces non-`[a-z0-9\-_/]` runs with `-`, and strips a trailing `.md`. So `ttmp/_guidelines/Index.md` → slug `ttmp-guidelines-index` (the underscore becomes a dash). That slug is what the API and URLs use.
+> **Evidence** — `pathToSlug` (`vault.go:331-336`) lowercases, replaces non-`[a-z0-9\-_/]` runs with `-`, and strips a single trailing `.md`. The character class keeps `_` and `/`, so underscores and slashes are **preserved**: `ttmp/_guidelines/Index.md` → slug `ttmp/_guidelines/index`; `Drafts/Pinned.draft.md` → slug `drafts/pinned-draft` (the `.` becomes `-`, the trailing `.md` is stripped). That slug is what the API and URLs use.
 
 Because `FileTree()` (`vault.go:288-326`), `AllNotes()`, `Count()`, `ForEachSearchDocument()` (`vault.go:235-262`), and the backlink/wiki-link builders **all derive from `v.notes`**, filtering at the walk is sufficient to exclude a path everywhere except the static-asset handler (see §3.6) and the watcher (see §3.5).
 
