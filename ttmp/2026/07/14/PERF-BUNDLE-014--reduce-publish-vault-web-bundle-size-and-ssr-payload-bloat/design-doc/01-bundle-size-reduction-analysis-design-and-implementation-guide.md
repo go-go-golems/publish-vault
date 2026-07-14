@@ -908,3 +908,30 @@ curl -s https://parc.yolo.scapegoat.dev/note/<slug> | grep -o 'listNotes(undefin
 - `main-CZnSi4zO.js`: 2,030,018 B raw / 598,884 B gzipped
 - `main-C9LScDXt.css`: 125,549 B raw / 20,225 B gzipped
 - `/` HTML: 1,305,031 B (of which ~834 KB is inlined `__PRELOADED_STATE__`)
+
+## 12. Implementation status (2026-07-14)
+
+**Implemented.** The five planned phases landed in commits `88af573`, `f84d634`, `7d1a490`,
+`208f105`, and `0b032b5`.
+
+- The browser has a separate `NotePage` chunk; initial home/note hydration resolves that chunk
+  before hydration to preserve the SSR component tree, while non-note routes retain lazy loading.
+- Mermaid is dynamically imported only after a Mermaid code block is detected.
+- highlight.js uses its core engine plus explicit dynamic imports for curated languages. The
+  original `import.meta.glob` implementation was replaced with an explicit dynamic-import map and
+  SSR no-op alias after it generated invalid Vite SSR output; language chunks remain individual.
+- The SSR sidecar no longer serializes `listNotes` on any route. On `/`, it uses the list only on
+  the server to choose a note, then serializes a small `window.__HOME_SLUG__` value so the browser
+  hydrates the same home note without the index. The tree remains preloaded for the always-visible
+  sidebar.
+- Development-only JSX-location/Manus/debug/storage plugins run only under `vite serve`.
+
+**Validation passed:** `pnpm check`; 13 SSR unit tests; `pnpm build:all`; and
+`pnpm smoke:ssr` (production Vite client + SSR sidecar + Go backend + Chromium, including mobile
+sidebar and note navigation), all with zero browser warnings/errors.
+
+**Final local build metrics:** main client chunk 388.78 KB raw / 125.83 KB gzipped; `NotePage`
+72.77 KB raw / 25.90 KB gzipped; Mermaid core 145.16 KB gzipped on demand; individual curated
+highlight languages 0.32–4.30 KB gzipped. The five-note fixture SSR root response fell to
+37,211 B. Deploy to preview and re-measure the live 934-note payload before declaring the live
+site result.
