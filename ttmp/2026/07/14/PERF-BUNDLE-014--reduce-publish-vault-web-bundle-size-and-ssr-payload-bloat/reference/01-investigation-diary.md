@@ -14,6 +14,10 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: repo://Dockerfile
+      Note: Step 7 builder image aligned to Go 1.26.5
+    - Path: repo://go.mod
+      Note: Step 7 Go 1.26.5 security bump; commit 2d0df8090d207f968424b0969ccb7cd930294066
     - Path: repo://internal/api/api.go
       Note: Go API route registration lines 60-66 — backend endpoints the sidecar prefetches
     - Path: repo://web/src/App.tsx
@@ -38,6 +42,7 @@ LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -626,3 +631,71 @@ leave other paper surfaces visibly off-white.
 
 ### Technical details
 - Base white value: `#ffffff`; retained panel value: `#e8e4de`.
+
+## Step 7: Bump Go to the patched standard-library release for PR CI
+
+PR #10's Dependency Scanning workflow failed in the Go Vulnerability Check job because CI selected
+Go 1.26.4. `govulncheck` reported reachable standard-library vulnerabilities GO-2026-5856
+(crypto/tls Encrypted Client Hello privacy leak) and GO-2026-4970 (trailing-slash symlink root
+escape in os); both are fixed in Go 1.26.5. The repository's `go.mod` is the CI version source and
+the Docker builder must match it, so both pins were updated together.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address the bump needed for https://github.com/go-go-golems/publish-vault/actions/runs/29373295744/job/87221273797?pr=10"
+
+**Assistant interpretation:** Inspect the failing PR workflow, identify the necessary version bump,
+apply it consistently, validate the same vulnerability scan locally, and push the result to PR #10.
+
+**Inferred user intent:** Restore green CI using the smallest secure runtime upgrade required by
+`govulncheck`.
+
+**Commit (code):** 2d0df8090d207f968424b0969ccb7cd930294066 — "build: bump Go to 1.26.5"
+
+### What I did
+- Read the failed GitHub Actions job with `gh run view 29373295744 --log-failed`.
+- Confirmed CI's two reachable standard-library findings and their fixed version: Go 1.26.5.
+- Changed `go.mod` from `go 1.26.4` to `go 1.26.5`.
+- Changed the builder stage in `Dockerfile` from `golang:1.26.4-alpine` to `golang:1.26.5-alpine`.
+- Ran `GOWORK=off go test ./... -count=1`.
+- Ran `GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@latest ./...`.
+
+### Why
+GitHub Actions uses `go-version-file: go.mod`, while Docker would otherwise keep compiling with
+the vulnerable 1.26.4 standard library. Pinning both surfaces prevents CI/runtime drift.
+
+### What worked
+- Go auto-selected `go1.26.5 linux/amd64` locally.
+- All Go package tests passed.
+- `govulncheck` now reports: `No vulnerabilities found.` and `Your code is affected by 0 vulnerabilities.`
+
+### What didn't work
+- The original PR workflow failed with exit code 3 because Go 1.26.4 exposed the two reachable
+  standard-library vulnerabilities. No application-code change was needed.
+
+### What I learned
+- The vulnerability workflow is correctly following `go.mod`; upgrading a module dependency would
+  not fix a standard-library finding. The language/runtime pin is the required remediation.
+
+### What was tricky to build
+- The important invariant is aligning the CI toolchain source (`go.mod`) and container runtime
+  source (`Dockerfile`). Updating only the former would make CI green but leave production images
+  vulnerable.
+
+### What warrants a second pair of eyes
+- Confirm the CI run uses Go 1.26.5 after the branch push and that the dependency scanning job
+  becomes green.
+
+### What should be done in the future
+- N/A
+
+### Code review instructions
+- Review the version-only changes in `go.mod` and `Dockerfile`.
+- Validate with:
+  ```bash
+  GOWORK=off go test ./... -count=1
+  GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+  ```
+
+### Technical details
+- CI findings fixed by Go 1.26.5: GO-2026-5856 (`crypto/tls`) and GO-2026-4970 (`os`).

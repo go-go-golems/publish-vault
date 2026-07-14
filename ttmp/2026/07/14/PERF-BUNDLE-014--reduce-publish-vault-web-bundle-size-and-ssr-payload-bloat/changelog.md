@@ -71,3 +71,13 @@ Step 6 complete (commit 4542d8514a96ff7a49b39d4aee3ddf4846bd9154): changed the b
 
 - /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/index.css — True-white base paper and background tokens
 
+
+## 2026-07-14
+
+Step 7 (commit 2d0df8090d207f968424b0969ccb7cd930294066): bumped go.mod and Docker builder from Go 1.26.4 to 1.26.5 to remediate CI-reported reachable standard-library CVEs GO-2026-5856 and GO-2026-4970. Go tests and govulncheck pass cleanly.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/Dockerfile — Production builder aligned to 1.26.5
+- /home/manuel/code/wesen/go-go-golems/publish-vault/go.mod — CI go-version-file pin raised to 1.26.5
+
