@@ -33,7 +33,9 @@ RelatedFiles:
     - Path: repo://web/src/entry-server.test.tsx
       Note: Regression tests proving home/note SSR cache omits listNotes; commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc
     - Path: repo://web/src/index.css
-      Note: Step 6 true-white CSS token update; commit 4542d8514a96ff7a49b39d4aee3ddf4846bd9154
+      Note: |-
+        Step 6 true-white CSS token update; commit 4542d8514a96ff7a49b39d4aee3ddf4846bd9154
+        Step 9 softened warm-gray palette; commit a13ab406831725e2dbb61fbac820c4caa17db20c
     - Path: repo://web/src/lib/highlightLanguages.ts
       Note: |-
         Phase 3 per-language import.meta.glob loader; commit 7d1a490633be241d8088ca41200fbc27a16b6895
@@ -44,6 +46,7 @@ LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -771,3 +774,60 @@ HTML, while later navigation never commits stale content.
 ### Technical details
 - Addressed threads: `discussion_r3583097063` (note change reset) and
   `discussion_r3583097070` (canonical highlight alias).
+
+## Step 9: Soften the warm gray UI surfaces
+
+After switching the base canvas to pure white, the old aged-paper panel/chrome colors looked too
+beige and contrasty. I moved the supporting surfaces to lighter warm-neutral grays, preserving the
+retro hierarchy without competing with the white page background.
+
+### Prompt Context
+
+**User prompt (verbatim):** "now that we have full white, make the grey a little bit less contrasty and warm. elegant gray"
+
+**Assistant interpretation:** Soften the gray panel, chrome, sidebar, and muted token palette while
+keeping the white canvas and legible UI structure.
+
+**Inferred user intent:** Create a more elegant, low-contrast neutral UI around the true-white
+content surface.
+
+**Commit (code):** a13ab406831725e2dbb61fbac820c4caa17db20c — "style: soften warm gray surfaces"
+
+### What I did
+- Changed `--color-panel`/card/secondary/sidebar from `#e8e4de` to `#f4f4f1`.
+- Changed dark panel from `#d0ccc6` to `#e5e5e1` and chrome from `#c8c4be` to `#ecece8`.
+- Changed muted/sidebar-accent from `#d8d4ce` to `#e1e1dd` and softened muted text slightly.
+- Kept the primary background/paper token as pure white (`#ffffff`).
+- Ran `pnpm check` and `pnpm build` successfully.
+
+### Why
+The old warm gray was designed against an off-white page and became visually heavy once the canvas
+became true white. The replacement values remain slightly warm but are close enough to white to
+feel restrained.
+
+### What worked
+- TypeScript and production build passed.
+- The CSS-only palette change does not materially change bundle size.
+
+### What didn't work
+- N/A
+
+### What I learned
+- The design distinguishes page paper, panels, chrome, and muted accents through separate tokens,
+  so the contrast can be tuned without changing the white content canvas.
+
+### What was tricky to build
+- N/A
+
+### What warrants a second pair of eyes
+- Visual review on an actual production-sized note page, especially panel borders and disabled UI.
+
+### What should be done in the future
+- N/A
+
+### Code review instructions
+- Review `web/src/index.css` under Retro-specific tokens and `:root`.
+- Validate: `cd web && pnpm check && pnpm build`.
+
+### Technical details
+- New palette: paper `#ffffff`; panel `#f4f4f1`; chrome `#ecece8`; muted `#e1e1dd`.

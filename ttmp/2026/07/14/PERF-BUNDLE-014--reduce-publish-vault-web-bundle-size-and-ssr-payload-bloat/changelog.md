@@ -91,3 +91,12 @@ Step 8 (commit 35d910b59c36bfde9917d1eceaf269821e0e03bc): addressed PR #10 P2 re
 - /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Pre-commit reset prevents stale note body flash
 - /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/lib/highlightLanguages.ts — Canonical alias highlighting
 
+
+## 2026-07-14
+
+Step 9 (commit a13ab406831725e2dbb61fbac820c4caa17db20c): softened panel/chrome/muted surfaces to subtle warm-neutral grays against the #ffffff canvas. TypeScript and production build pass.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/index.css — Elegant warm-neutral gray token adjustment
+
