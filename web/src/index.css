@@ -73,9 +73,9 @@
   --color-link-visited: #551a8b;
   --color-selection-bg: #1a1a1a;
   --color-selection-fg: #ffffff;
-  --color-panel: #e8e4de;
-  --color-panel-dark: #d0ccc6;
-  --color-chrome: #c8c4be;
+  --color-panel: #f4f4f1;
+  --color-panel-dark: #e5e5e1;
+  --color-chrome: #ecece8;
   --color-active: #0000cc;
   --color-destructive-accent: #cc0000;
   --color-tag: #005500;
@@ -84,16 +84,16 @@
 :root {
   --background: #ffffff;
   --foreground: #1a1a1a;
-  --card: #e8e4de;
+  --card: #f4f4f1;
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
   --primary: #1a1a1a;
   --primary-foreground: #ffffff;
-  --secondary: #e8e4de;
+  --secondary: #f4f4f1;
   --secondary-foreground: #1a1a1a;
-  --muted: #d8d4ce;
-  --muted-foreground: #666660;
+  --muted: #e1e1dd;
+  --muted-foreground: #696966;
   --accent: #0000cc;
   --accent-foreground: #ffffff;
   --destructive: #cc0000;
@@ -101,11 +101,11 @@
   --border: #1a1a1a;
   --input: #ffffff;
   --ring: #0000cc;
-  --sidebar: #e8e4de;
+  --sidebar: #f4f4f1;
   --sidebar-foreground: #1a1a1a;
   --sidebar-primary: #1a1a1a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #d8d4ce;
+  --sidebar-accent: #e1e1dd;
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: #1a1a1a;
   --sidebar-ring: #0000cc;
