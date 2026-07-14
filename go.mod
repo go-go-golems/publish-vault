@@ -1,6 +1,6 @@
 module retro-obsidian-publish
 
-go 1.26.4
+go 1.26.5
 
 require (
 	dagger.io/dagger v0.20.8

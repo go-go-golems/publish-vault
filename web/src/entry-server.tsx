@@ -12,18 +12,15 @@ import { Provider } from "react-redux";
 import { makeStore } from "./store/store";
 import { vaultApi } from "./store/vaultApi";
 import { AppRoutes } from "./App";
-import type {
-  SiteConfig,
-  NoteListItem,
-  Note,
-  FileNode,
-} from "./types/index";
+import { NotePage } from "./components/pages/NotePage/NotePage";
+import type { SiteConfig, NoteListItem, Note, FileNode } from "./types/index";
 
 export interface SSRData {
   config?: SiteConfig | null;
   notes?: NoteListItem[] | null;
   tree?: FileNode | null;
   note?: Note | null;
+  homeSlug?: string | null;
 }
 
 export interface SSRResult {
@@ -101,14 +98,18 @@ export async function renderApp(
 ): Promise<SSRResult> {
   const store = makeStore();
   const pathname = url.split("#")[0]?.split("?")[0] || "/";
-  const slug = extractNoteSlug(url) ?? (pathname === "/" ? data.note?.slug : undefined);
+  const slug =
+    extractNoteSlug(url) ?? (pathname === "/" ? data.note?.slug : undefined);
 
   await preloadCache(store, data, slug);
 
   const html = renderToString(
     <Provider store={store}>
       <StaticRouter location={url}>
-        <AppRoutes />
+        <AppRoutes
+          NotePageComponent={NotePage}
+          initialHomeSlug={data.homeSlug ?? undefined}
+        />
       </StaticRouter>
     </Provider>
   );

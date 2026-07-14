@@ -111,6 +111,18 @@ describe("renderApp", () => {
     expect(JSON.stringify(preloadedState)).toContain("listNotes");
   });
 
+  it("renders the home note without seeding the full notes list", async () => {
+    const { html, preloadedState } = await renderApp("/", {
+      config,
+      tree,
+      note,
+      homeSlug: "index",
+    });
+
+    expect(html).toContain("This is the vault index");
+    expect(JSON.stringify(preloadedState)).not.toContain("listNotes");
+  });
+
   it("renders a note page with title and body", async () => {
     const { html, preloadedState } = await renderApp("/note/index", {
       config,
@@ -124,6 +136,25 @@ describe("renderApp", () => {
     expect(html).toContain("This is the vault index");
     expect(html).toContain("Research Notes");
     expect(JSON.stringify(preloadedState)).toContain("getNote");
+  });
+
+  it("does not require the full notes list to SSR a note page", async () => {
+    const { html, preloadedState } = await renderApp("/note/index", {
+      config,
+      tree,
+      note,
+    });
+    const state = preloadedState as {
+      vaultApi: {
+        queries: Record<string, { data?: unknown }>;
+      };
+    };
+
+    expect(html).toContain("This is the vault index");
+    expect(
+      state.vaultApi.queries["listNotes(undefined)"]?.data
+    ).toBeUndefined();
+    expect(state.vaultApi.queries['getNote("index")']?.data).toEqual(note);
   });
 
   it("renders loading state if a note route is rendered without a preloaded note", async () => {

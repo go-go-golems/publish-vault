@@ -103,6 +103,12 @@ topics:
       description: Filesystem watcher (fsnotify) for live vault reload
     - slug: ignore
       description: Vault path exclusion / .vault-ignore mechanism
+    - slug: bundle
+      description: JavaScript/asset bundle size and code-splitting concerns
+    - slug: performance
+      description: Frontend and backend performance optimization
+    - slug: vite
+      description: Vite build tooling and configuration
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes

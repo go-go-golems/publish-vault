@@ -17,7 +17,8 @@
     "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../shared/*"]
+      "@shared/*": ["../shared/*"],
+      "@highlight-languages": ["./src/lib/highlightLanguages.ts"]
     }
   }
 }

@@ -33,7 +33,9 @@ function packageNameForSpecifier(specifier) {
 
 function packageVersion(packageName) {
   try {
-    const packageJsonPath = requireFromWeb.resolve(`${packageName}/package.json`);
+    const packageJsonPath = requireFromWeb.resolve(
+      `${packageName}/package.json`
+    );
     return JSON.parse(readFileSync(packageJsonPath, "utf-8")).version;
   } catch {
     return "unknown";
@@ -103,7 +105,7 @@ function parseRoute(pathname) {
 function chooseHomeSlug(notes) {
   if (!Array.isArray(notes) || notes.length === 0) return null;
 
-  const normalized = notes.map((note) => ({
+  const normalized = notes.map(note => ({
     note,
     slug: String(note.slug || "").toLowerCase(),
     title: String(note.title || "").toLowerCase(),
@@ -118,21 +120,38 @@ function chooseHomeSlug(notes) {
     "research/institute/guidelines/guidelines-index",
   ];
 
-  const indexScore = (item) => {
+  const indexScore = item => {
     const depth = item.slug.split("/").length;
-    const sourcePenalty = item.slug.includes("/sources/") || item.path.includes("/sources/") ? 1000 : 0;
+    const sourcePenalty =
+      item.slug.includes("/sources/") || item.path.includes("/sources/")
+        ? 1000
+        : 0;
     const titlePenalty = item.title === "index" ? 0 : 10;
     return sourcePenalty + depth + titlePenalty;
   };
 
   const eligibleIndexes = normalized
-    .filter(({ slug, path }) => (slug === "index" || slug.endsWith("/index")) && !slug.includes("/sources/") && !path.includes("/sources/"))
+    .filter(
+      ({ slug, path }) =>
+        (slug === "index" || slug.endsWith("/index")) &&
+        !slug.includes("/sources/") &&
+        !path.includes("/sources/")
+    )
     .sort((a, b) => indexScore(a) - indexScore(b));
 
   return (
-    preferredHomeSlugs.map((candidate) => normalized.find(({ slug }) => slug === candidate)?.note.slug).find(Boolean) ??
-    normalized.find(({ title }) => ["index", "home", "readme"].includes(title))?.note.slug ??
-    normalized.find(({ path }) => path === "index.md" || path === "home.md" || path === "readme.md")?.note.slug ??
+    preferredHomeSlugs
+      .map(
+        candidate =>
+          normalized.find(({ slug }) => slug === candidate)?.note.slug
+      )
+      .find(Boolean) ??
+    normalized.find(({ title }) => ["index", "home", "readme"].includes(title))
+      ?.note.slug ??
+    normalized.find(
+      ({ path }) =>
+        path === "index.md" || path === "home.md" || path === "readme.md"
+    )?.note.slug ??
     eligibleIndexes[0]?.note.slug ??
     normalized.find(({ slug }) => slug.includes("project-index"))?.note.slug ??
     notes[0].slug
@@ -187,22 +206,23 @@ app.get("*", async (req, res) => {
       indexHtmlTemplate = getIndexHtml();
     }
 
-    // 1. Pre-fetch common data from the Go API
+    // 1. Fetch the list only to select the home note and build noscript text.
+    // Never seed it into RTK Query's serialized SSR cache: note pages fetch it
+    // lazily for backlinks/wiki links, while the home route receives its chosen
+    // slug separately and can hydrate directly into that note.
     const [config, notes, tree] = await Promise.all([
       fetchAPI("/api/config"),
-      fetchAPI("/api/notes"),
+      route.type === "home" ? fetchAPI("/api/notes") : null,
       fetchAPI("/api/tree"),
     ]);
 
     // 2. Pre-fetch route-specific data
     let note = null;
+    const homeSlug = route.type === "home" ? chooseHomeSlug(notes ?? []) : null;
     if (route.type === "note" && route.slug) {
       note = await fetchAPI(`/api/notes/${encodeURIComponent(route.slug)}`);
-    } else if (route.type === "home" && notes?.length) {
-      const homeSlug = chooseHomeSlug(notes);
-      if (homeSlug) {
-        note = await fetchAPI(`/api/notes/${encodeURIComponent(homeSlug)}`);
-      }
+    } else if (homeSlug) {
+      note = await fetchAPI(`/api/notes/${encodeURIComponent(homeSlug)}`);
     }
 
     // Missing note routes should be real 404s. Otherwise crawlers treat
@@ -215,30 +235,31 @@ app.get("*", async (req, res) => {
     // 3. Render React to HTML
     const { html, preloadedState } = await renderApp(url, {
       config,
-      notes,
+      // Do not inline the complete note index in the SSR state.
       tree,
       note,
+      homeSlug,
     });
     const serializedPreloadedState = serializeForInlineScript(preloadedState);
 
     // 4. Determine page title and description
     const vaultName = config?.vaultName || "Vault";
     const siteTitle = config?.pageTitle || vaultName;
-    const title = note?.title
-      ? `${note.title} — ${siteTitle}`
-      : siteTitle;
+    const title = note?.title ? `${note.title} — ${siteTitle}` : siteTitle;
     const description =
       note?.excerpt ||
       (notes?.length
         ? `${vaultName} is a read-only published Obsidian vault with ${notes.length} notes, backlinks, search, and markdown mirrors for agents.`
         : `${vaultName} is a read-only published Obsidian vault with markdown mirrors and agent-readable indexes.`);
-    const dateModified = note?.modTime || new Date().toISOString().split("T")[0];
+    const dateModified =
+      note?.modTime || new Date().toISOString().split("T")[0];
     const canonicalPath = url.split("#")[0].split("?")[0] || "/";
-    const markdownPath = route.type === "note" && route.slug
-      ? `/note/${route.slug}.md`
-      : canonicalPath === "/search"
-        ? "/sitemap.md"
-        : "/index.md";
+    const markdownPath =
+      route.type === "note" && route.slug
+        ? `/note/${route.slug}.md`
+        : canonicalPath === "/search"
+          ? "/sitemap.md"
+          : "/index.md";
 
     // 5. Assemble HTML
     let htmlPage = indexHtmlTemplate;
@@ -267,7 +288,8 @@ app.get("*", async (req, res) => {
       }
       noscriptContent += "</ul>";
     }
-    noscriptContent += '\n  <p><a href="/AGENTS.md">Terminology and agent guide</a> | <a href="/sitemap.md">Sitemap</a> | <a href="/llms.txt">LLMs.txt</a></p>';
+    noscriptContent +=
+      '\n  <p><a href="/AGENTS.md">Terminology and agent guide</a> | <a href="/sitemap.md">Sitemap</a> | <a href="/llms.txt">LLMs.txt</a></p>';
     htmlPage = htmlPage.replace(
       "</body>",
       `<noscript>${noscriptContent}</noscript>\n</body>`
@@ -305,7 +327,8 @@ app.get("*", async (req, res) => {
       itemListElement: breadcrumbItems,
     };
 
-    const srOnly = 'style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"';
+    const srOnly =
+      'style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"';
     htmlPage = htmlPage.replace(
       '<div id="root">',
       `<a href="/AGENTS.md" ${srOnly}>Terminology and agent guide</a><div id="root">`
@@ -313,7 +336,7 @@ app.get("*", async (req, res) => {
 
     htmlPage = htmlPage.replace(
       "</head>",
-      `<script>window.__PRELOADED_STATE__=${serializedPreloadedState};</script>
+      `<script>window.__PRELOADED_STATE__=${serializedPreloadedState};window.__HOME_SLUG__=${serializeForInlineScript(homeSlug)};</script>
   <meta name="description" content="${description.replace(/"/g, "&quot;")}" />
   <meta property="og:title" content="${title.replace(/"/g, "&quot;")}" />
   <meta property="og:description" content="${description.replace(/"/g, "&quot;")}" />
@@ -324,7 +347,10 @@ app.get("*", async (req, res) => {
   </head>`
     );
 
-    res.set("Link", `<${BASE_URL}${canonicalPath}>; rel="canonical", <${BASE_URL}${markdownPath}>; rel="alternate"; type="text/markdown"`);
+    res.set(
+      "Link",
+      `<${BASE_URL}${canonicalPath}>; rel="canonical", <${BASE_URL}${markdownPath}>; rel="alternate"; type="text/markdown"`
+    );
 
     // Update the page title
     htmlPage = htmlPage.replace(
