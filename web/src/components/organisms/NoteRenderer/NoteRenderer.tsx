@@ -58,6 +58,18 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
   // with the raw server HTML so hydration sees identical markup, then resolve
   // wiki links in an effect after hydration has completed.
   const [resolvedHtml, setResolvedHtml] = useState(note.html);
+  const renderedNote = useRef({ slug: note.slug, html: note.html });
+
+  // Reset synchronously during render when SPA navigation swaps notes. Waiting
+  // for the link-resolution effect would briefly commit the previous note body
+  // under the next note's title/frontmatter.
+  if (
+    renderedNote.current.slug !== note.slug ||
+    renderedNote.current.html !== note.html
+  ) {
+    renderedNote.current = { slug: note.slug, html: note.html };
+    setResolvedHtml(note.html);
+  }
 
   useEffect(() => {
     setResolvedHtml(resolveWikiLinks(note.html, slugSet));

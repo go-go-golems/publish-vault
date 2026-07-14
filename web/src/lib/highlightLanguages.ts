@@ -128,7 +128,16 @@ export async function highlightCodeBlocks(root: HTMLElement): Promise<void> {
     if (block.dataset.highlighted) continue;
 
     const language = normalizeLanguage(block);
-    if (!language || hljs.getLanguage(language)) {
+    if (language && hljs.getLanguage(language)) {
+      // highlightElement re-reads the original language-* class. Use the
+      // normalized canonical name so aliases such as language-shell resolve to
+      // the language definition that was just lazy-loaded (bash).
+      block.innerHTML = hljs.highlight(block.textContent ?? "", {
+        language,
+      }).value;
+      block.classList.add("hljs");
+    } else {
+      // Preserve bounded auto-detection for unlabelled and unsupported fences.
       hljs.highlightElement(block);
     }
     block.dataset.highlighted = "true";
