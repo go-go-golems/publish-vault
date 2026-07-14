@@ -28,6 +28,8 @@ RelatedFiles:
       Note: Hydration-safe initial route component and home slug consumption; commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc
     - Path: repo://web/src/entry-server.test.tsx
       Note: Regression tests proving home/note SSR cache omits listNotes; commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc
+    - Path: repo://web/src/index.css
+      Note: Step 6 true-white CSS token update; commit 4542d8514a96ff7a49b39d4aee3ddf4846bd9154
     - Path: repo://web/src/lib/highlightLanguages.ts
       Note: Phase 3 per-language import.meta.glob loader; commit 7d1a490633be241d8088ca41200fbc27a16b6895
 ExternalSources: []
@@ -36,6 +38,7 @@ LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -567,3 +570,59 @@ shape that SSR used; on routes without SSR note content, keep the lazy component
   - Mermaid core: 145.16 KB gzipped, fetched only for Mermaid blocks
   - individual highlight language chunks: 0.32–4.30 KB gzipped for the curated set
   - fixture SSR root response: 37,211 B; browser hydration smoke: PASS
+
+## Step 6: Make the base paper surface true white
+
+The user requested a true white background instead of the aged-paper off-white. I changed the
+base paper/background token and related surface foreground tokens from `#f0ede8` to `#ffffff`.
+The deliberately separate panel and chrome gray tokens remain unchanged, preserving the retro
+window hierarchy while making the page canvas white.
+
+### Prompt Context
+
+**User prompt (verbatim):** "make the background real white and not off white in the css"
+
+**Assistant interpretation:** Change the global background/paper design token to pure white,
+without flattening intentional UI panel/chrome contrast.
+
+**Inferred user intent:** Remove the aged-paper tint from the primary page background.
+
+**Commit (code):** 4542d8514a96ff7a49b39d4aee3ddf4846bd9154 — "style: use white base background"
+
+### What I did
+- Updated `web/src/index.css` `--color-paper`, `--background`, popover/input, and inverse
+  foreground tokens to `#ffffff`.
+- Updated the design-token comments to describe a true-white foundation.
+- Kept `--color-panel`, `--color-panel-dark`, and `--color-chrome` unchanged.
+- Ran `pnpm check` and `pnpm build` successfully.
+
+### Why
+The page canvas uses `--color-paper`/`--background`; changing only an individual component would
+leave other paper surfaces visibly off-white.
+
+### What worked
+- TypeScript and production build passed.
+- The main client artifact remains effectively unchanged at 125.82 KB gzipped.
+
+### What didn't work
+- N/A
+
+### What I learned
+- The visual paper surface and retro panel/chrome shades are independently tokenized, so the
+  requested white background does not require removing UI contrast.
+
+### What was tricky to build
+- N/A
+
+### What warrants a second pair of eyes
+- Confirm visually after deployment that panel gray remains desirable against pure white.
+
+### What should be done in the future
+- N/A
+
+### Code review instructions
+- Review `web/src/index.css` design tokens near `--color-paper` and `:root`.
+- Validate: `cd web && pnpm check && pnpm build`.
+
+### Technical details
+- Base white value: `#ffffff`; retained panel value: `#e8e4de`.
