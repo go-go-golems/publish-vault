@@ -12,8 +12,8 @@ import React, {
   useState,
 } from "react";
 import { clsx } from "clsx";
-import hljs from "highlight.js";
 import { nanoid } from "nanoid";
+import { highlightCodeBlocks } from "../../../lib/highlightLanguages";
 import { resolveWikiLinks, buildSlugSet } from "../../../lib/wikiLinks";
 import { FrontmatterPanel } from "../../molecules/FrontmatterPanel/FrontmatterPanel";
 import { BreadcrumbBar } from "../../molecules/BreadcrumbBar/BreadcrumbBar";
@@ -203,38 +203,39 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     const el = contentRef.current;
     if (!el) return;
 
-    const codeBlocks = el.querySelectorAll<HTMLElement>(
-      "pre code:not(.language-mermaid)"
-    );
-    codeBlocks.forEach(block => {
-      // Only highlight if not already processed
-      if (!block.dataset.highlighted) {
-        hljs.highlightElement(block);
-        block.dataset.highlighted = "true";
-      }
-    });
+    let cancelled = false;
 
-    // Add copy buttons to pre blocks that don't already have one
-    const pres = el.querySelectorAll<HTMLElement>("pre");
-    pres.forEach(pre => {
-      if (pre.querySelector(".copy-code-btn")) return;
-      const btn = document.createElement("button");
-      btn.className = "copy-code-btn";
-      btn.title = "Copy code";
-      btn.textContent = "⎘";
-      btn.addEventListener("click", () => {
-        const code = pre.querySelector("code");
-        if (!code) return;
-        navigator.clipboard.writeText(code.textContent ?? "").then(() => {
-          btn.textContent = "✓";
-          setTimeout(() => {
-            btn.textContent = "⎘";
-          }, 1500);
+    const highlight = async () => {
+      await highlightCodeBlocks(el);
+      if (cancelled) return;
+
+      // Add copy buttons to pre blocks that don't already have one
+      const pres = el.querySelectorAll<HTMLElement>("pre");
+      pres.forEach(pre => {
+        if (pre.querySelector(".copy-code-btn")) return;
+        const btn = document.createElement("button");
+        btn.className = "copy-code-btn";
+        btn.title = "Copy code";
+        btn.textContent = "⎘";
+        btn.addEventListener("click", () => {
+          const code = pre.querySelector("code");
+          if (!code) return;
+          navigator.clipboard.writeText(code.textContent ?? "").then(() => {
+            btn.textContent = "✓";
+            setTimeout(() => {
+              btn.textContent = "⎘";
+            }, 1500);
+          });
         });
+        pre.style.position = "relative";
+        pre.appendChild(btn);
       });
-      pre.style.position = "relative";
-      pre.appendChild(btn);
-    });
+    };
+
+    void highlight();
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedHtml]);
 
   // Embed rendering — resolve ![[Note]] placeholders with inline note content
