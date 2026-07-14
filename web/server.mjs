@@ -187,10 +187,12 @@ app.get("*", async (req, res) => {
       indexHtmlTemplate = getIndexHtml();
     }
 
-    // 1. Pre-fetch common data from the Go API
+    // 1. Pre-fetch common data from the Go API.
+    // Note pages fetch their full notes index in the browser for backlinks and
+    // wiki-link resolution; do not duplicate that ~large payload in SSR HTML.
     const [config, notes, tree] = await Promise.all([
       fetchAPI("/api/config"),
-      fetchAPI("/api/notes"),
+      route.type === "note" ? null : fetchAPI("/api/notes"),
       fetchAPI("/api/tree"),
     ]);
 

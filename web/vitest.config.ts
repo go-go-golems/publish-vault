@@ -9,6 +9,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(WEB_ROOT, "src"),
+      "@highlight-languages": path.resolve(
+        WEB_ROOT,
+        "src/lib/highlightLanguages.server.ts"
+      ),
     },
   },
   test: {

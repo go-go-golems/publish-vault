@@ -4,22 +4,21 @@ import type { LanguageFn } from "highlight.js";
 type LanguageModule = { default: LanguageFn };
 type LanguageLoader = () => Promise<LanguageModule>;
 
-const languageModules = import.meta.glob<LanguageModule>(
-  "../vendor/highlight-languages/*.ts"
-);
-
-const languageFiles: Record<string, string> = {
-  bash: "../vendor/highlight-languages/bash.ts",
-  css: "../vendor/highlight-languages/css.ts",
-  go: "../vendor/highlight-languages/go.ts",
-  javascript: "../vendor/highlight-languages/javascript.ts",
-  json: "../vendor/highlight-languages/json.ts",
-  markdown: "../vendor/highlight-languages/markdown.ts",
-  python: "../vendor/highlight-languages/python.ts",
-  sql: "../vendor/highlight-languages/sql.ts",
-  typescript: "../vendor/highlight-languages/typescript.ts",
-  xml: "../vendor/highlight-languages/xml.ts",
-  yaml: "../vendor/highlight-languages/yaml.ts",
+// Keep the imports explicit rather than globbing node_modules. Vite emits one
+// browser chunk per dynamic import, and the SSR build can parse this map without
+// attempting to evaluate import.meta.glob on the server.
+const languageModules: Record<string, () => Promise<LanguageModule>> = {
+  bash: () => import("../vendor/highlight-languages/bash"),
+  css: () => import("../vendor/highlight-languages/css"),
+  go: () => import("../vendor/highlight-languages/go"),
+  javascript: () => import("../vendor/highlight-languages/javascript"),
+  json: () => import("../vendor/highlight-languages/json"),
+  markdown: () => import("../vendor/highlight-languages/markdown"),
+  python: () => import("../vendor/highlight-languages/python"),
+  sql: () => import("../vendor/highlight-languages/sql"),
+  typescript: () => import("../vendor/highlight-languages/typescript"),
+  xml: () => import("../vendor/highlight-languages/xml"),
+  yaml: () => import("../vendor/highlight-languages/yaml"),
 };
 
 const aliases: Record<string, string> = {
@@ -87,10 +86,7 @@ async function loadLanguage(name: string): Promise<void> {
   const pending = pendingLanguages.get(name);
   if (pending) return pending;
 
-  const path = languageFiles[name];
-  const loader = path
-    ? (languageModules[path] as LanguageLoader | undefined)
-    : undefined;
+  const loader = languageModules[name] as LanguageLoader | undefined;
   if (!loader) return;
 
   const promise = loader()

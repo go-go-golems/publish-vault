@@ -13,7 +13,7 @@ import React, {
 } from "react";
 import { clsx } from "clsx";
 import { nanoid } from "nanoid";
-import { highlightCodeBlocks } from "../../../lib/highlightLanguages";
+import { highlightCodeBlocks } from "@highlight-languages";
 import { resolveWikiLinks, buildSlugSet } from "../../../lib/wikiLinks";
 import { FrontmatterPanel } from "../../molecules/FrontmatterPanel/FrontmatterPanel";
 import { BreadcrumbBar } from "../../molecules/BreadcrumbBar/BreadcrumbBar";

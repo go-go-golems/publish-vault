@@ -126,6 +126,25 @@ describe("renderApp", () => {
     expect(JSON.stringify(preloadedState)).toContain("getNote");
   });
 
+  it("does not require the full notes list to SSR a note page", async () => {
+    const { html, preloadedState } = await renderApp("/note/index", {
+      config,
+      tree,
+      note,
+    });
+    const state = preloadedState as {
+      vaultApi: {
+        queries: Record<string, { data?: unknown }>;
+      };
+    };
+
+    expect(html).toContain("This is the vault index");
+    expect(
+      state.vaultApi.queries["listNotes(undefined)"]?.data
+    ).toBeUndefined();
+    expect(state.vaultApi.queries['getNote("index")']?.data).toEqual(note);
+  });
+
   it("renders loading state if a note route is rendered without a preloaded note", async () => {
     const { html } = await renderApp("/note/nonexistent", {
       config,
