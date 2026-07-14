@@ -35,13 +35,16 @@ RelatedFiles:
     - Path: repo://web/src/index.css
       Note: Step 6 true-white CSS token update; commit 4542d8514a96ff7a49b39d4aee3ddf4846bd9154
     - Path: repo://web/src/lib/highlightLanguages.ts
-      Note: Phase 3 per-language import.meta.glob loader; commit 7d1a490633be241d8088ca41200fbc27a16b6895
+      Note: |-
+        Phase 3 per-language import.meta.glob loader; commit 7d1a490633be241d8088ca41200fbc27a16b6895
+        Step 8 canonical highlight alias fix; commit 35d910b59c36bfde9917d1eceaf269821e0e03bc
 ExternalSources: []
 Summary: ""
 LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -699,3 +702,72 @@ the vulnerable 1.26.4 standard library. Pinning both surfaces prevents CI/runtim
 
 ### Technical details
 - CI findings fixed by Go 1.26.5: GO-2026-5856 (`crypto/tls`) and GO-2026-4970 (`os`).
+
+## Step 8: Address PR #10 inline review feedback
+
+The automated review identified two P2 correctness issues in the newly lazy-loaded rendering path.
+The first allowed a previous note body to remain visible for one committed frame when React reused
+`NoteRenderer` during SPA navigation. The second loaded canonical highlight.js languages for aliases
+but asked highlight.js to interpret the original alias class. Both fixes preserve the bundle design
+while making the state transition and alias behavior explicit.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address the code review comments on : https://github.com/go-go-golems/publish-vault/pull/10"
+
+**Assistant interpretation:** Read PR #10's inline review threads, fix every actionable issue,
+validate the changes, document them, and push the result.
+
+**Inferred user intent:** Resolve reviewer-identified correctness regressions before merge.
+
+**Commit (code):** 35d910b59c36bfde9917d1eceaf269821e0e03bc — "fix: address note rendering review feedback"
+
+### What I did
+- Retrieved PR review comments through `gh api repos/go-go-golems/publish-vault/pulls/10/comments`.
+- In `NoteRenderer`, tracked the currently rendered slug/HTML in a ref and conditionally reset
+  `resolvedHtml` during render when either changes, so the raw new note body commits immediately.
+- In `highlightLanguages`, replaced alias-sensitive `highlightElement` use with
+  `hljs.highlight(source, { language: normalizedLanguage })`, assigned the resulting HTML, and
+  added the `hljs` class. Unlabelled or unsupported blocks retain bounded auto-detection.
+- Ran Prettier, `pnpm check`, 13 SSR unit tests, and `pnpm build:all`.
+
+### Why
+A post-paint effect is too late when a component instance receives a different note: it can show
+new metadata with old body content. Likewise, `language-shell` normalizes to `bash`, but
+`highlightElement` re-reads `language-shell`; explicit canonical highlighting ensures the loaded
+language is actually applied.
+
+### What worked
+- TypeScript passed.
+- All 13 SSR tests passed.
+- Client and SSR production builds passed.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Lazy post-processing must not be the only mechanism that updates the visible source HTML across
+  SPA note changes; the raw source needs a synchronous reset first.
+- A normalized language name must be passed explicitly when the DOM class is an application alias.
+
+### What was tricky to build
+The reset had to preserve hydration safety from Step 5. The conditional state update runs only when
+note identity/content differs, so the initial server/client render still begins with identical raw
+HTML, while later navigation never commits stale content.
+
+### What warrants a second pair of eyes
+- Test a real `language-shell` block after deployment and confirm both highlighting and copy text.
+- Test rapid A→B→A note navigation with slow network throttling to confirm no stale body flash.
+
+### What should be done in the future
+- Add DOM/browser-level tests for alias highlighting and same-component note transitions when a
+  DOM test environment is introduced.
+
+### Code review instructions
+- Review `NoteRenderer.tsx` near `resolvedHtml` and `highlightLanguages.ts` near the final
+  highlighting loop.
+- Validate: `cd web && pnpm check && pnpm exec vitest run src/entry-server.test.tsx && pnpm build:all`.
+
+### Technical details
+- Addressed threads: `discussion_r3583097063` (note change reset) and
+  `discussion_r3583097070` (canonical highlight alias).

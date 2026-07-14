@@ -81,3 +81,13 @@ Step 7 (commit 2d0df8090d207f968424b0969ccb7cd930294066): bumped go.mod and Dock
 - /home/manuel/code/wesen/go-go-golems/publish-vault/Dockerfile — Production builder aligned to 1.26.5
 - /home/manuel/code/wesen/go-go-golems/publish-vault/go.mod — CI go-version-file pin raised to 1.26.5
 
+
+## 2026-07-14
+
+Step 8 (commit 35d910b59c36bfde9917d1eceaf269821e0e03bc): addressed PR #10 P2 review feedback: synchronously reset rendered note HTML on SPA note changes and explicitly highlight with normalized canonical alias names. TypeScript, 13 SSR tests, and build:all pass.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/components/organisms/NoteRenderer/NoteRenderer.tsx — Pre-commit reset prevents stale note body flash
+- /home/manuel/code/wesen/go-go-golems/publish-vault/web/src/lib/highlightLanguages.ts — Canonical alias highlighting
+
