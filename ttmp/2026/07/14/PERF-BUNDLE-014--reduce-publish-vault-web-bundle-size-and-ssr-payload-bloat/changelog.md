@@ -57,3 +57,8 @@ Steps 4-5 complete (commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc): removed fu
 - /home/manuel/code/wesen/go-go-golems/publish-vault/web/server.mjs — Home slug contract and no listNotes preload
 - /home/manuel/code/wesen/go-go-golems/publish-vault/web/vite.config.ts — Dev-only plugin gating
 
+
+## 2026-07-14
+
+Final documentation bundle refreshed on reMarkable after implementation and validation (forced overwrite after dry-run): /ai/2026/07/14/PERF-BUNDLE-014/PERF-BUNDLE-014 — Bundle Size Reduction.pdf.
+
