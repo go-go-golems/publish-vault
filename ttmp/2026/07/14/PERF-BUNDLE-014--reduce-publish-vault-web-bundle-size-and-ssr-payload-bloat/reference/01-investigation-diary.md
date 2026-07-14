@@ -18,16 +18,27 @@ RelatedFiles:
       Note: Go API route registration lines 60-66 — backend endpoints the sidecar prefetches
     - Path: repo://web/src/App.tsx
       Note: Injected NotePageComponent and shared Suspense boundary; commit 88af5739d58c513b97d396985b53f39e067ed3b1
+    - Path: repo://web/src/components/organisms/NoteRenderer/NoteRenderer.tsx
+      Note: Phase 2 dynamic Mermaid import; commit f84d634f2b0a99925237dd5bbd032e485d11e99f
     - Path: repo://web/src/components/pages/NotePage/NotePage.tsx
       Note: Only consumer of NoteRenderer; lazy-loading target for Phase 1
     - Path: repo://web/src/components/pages/VaultLayout/VaultLayout.tsx
       Note: Sidebar calls useGetTreeQuery line 68 — reason tree stays in SSR preload
+    - Path: repo://web/src/entry-client.tsx
+      Note: Hydration-safe initial route component and home slug consumption; commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc
+    - Path: repo://web/src/entry-server.test.tsx
+      Note: Regression tests proving home/note SSR cache omits listNotes; commit 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc
+    - Path: repo://web/src/lib/highlightLanguages.ts
+      Note: Phase 3 per-language import.meta.glob loader; commit 7d1a490633be241d8088ca41200fbc27a16b6895
 ExternalSources: []
 Summary: ""
 LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
+
+
 
 
 
@@ -235,3 +246,324 @@ render a fallback because `renderToString` cannot fetch a client chunk. The solu
   - `main-B430904A.js`: 395,314 B raw / 126.52 KB gzipped
   - `NotePage-rj2S5xGt.js`: 1,633,432 B raw / 474.63 KB gzipped
   - `dist/index.html`: 367.48 KB raw / 105.47 KB gzipped (Vite shell, not SSR response)
+
+## Step 3: Lazy-load Mermaid only for Mermaid notes
+
+The second phase removed the top-level Mermaid import from `NoteRenderer` and moved it inside the
+existing effect that already detects `code.language-mermaid` blocks. The effect now imports
+Mermaid only when at least one diagram is present and cancels pending work when the note changes.
+This preserves the raw `<pre>` fallback for failed rendering and prevents an old asynchronous
+render from replacing DOM belonging to a newer note.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 2)
+
+**Assistant interpretation:** Continue the next implementation phase after route-level splitting,
+with the same validation and diary/commit discipline.
+
+**Inferred user intent:** Remove Mermaid and its d3-heavy dependency graph from the note route's
+immediate payload unless the current note actually contains a diagram.
+
+**Commit (code):** f84d634f2b0a99925237dd5bbd032e485d11e99f — "perf: lazy load mermaid rendering"
+
+### What I did
+- Removed the static `import mermaid from "mermaid"` from `NoteRenderer.tsx`.
+- Added `await import("mermaid")` after the existing zero-block early return.
+- Kept the module-level initialization guard and existing Mermaid theme configuration.
+- Added an effect cancellation flag and checked `pre.isConnected` before replacing raw code.
+- Used `Promise.all` so multiple diagrams in one note render concurrently.
+- Ran Prettier, `pnpm check`, `pnpm exec vitest run src/entry-server.test.tsx`, and `pnpm build`.
+
+### Why
+The previous phase moved Mermaid into the route chunk, but every note still downloaded it before
+knowing whether it contained a diagram. Dynamic importing at the point where blocks are detected
+makes the existing runtime early return effective at the network level too.
+
+### What worked
+- Build emitted `mermaid.core-B0R8ZnMT.js` at 607,354 B raw / 145.16 KB gzipped.
+- `NotePage` fell from 474.63 KB to 329.48 KB gzipped.
+- The initial `main` chunk remained approximately 126.51 KB gzipped.
+- TypeScript and all 11 SSR unit tests passed.
+
+### What didn't work
+- The Vite build still reports large Mermaid-internal chunks. This is expected: those chunks are
+  Mermaid's diagram-specific dynamic graph and are only fetched by Mermaid as needed.
+- Browser-level network verification is still blocked until Playwright Chromium is installed.
+
+### What I learned
+- Mermaid 11 already dynamically imports many diagram definitions internally; moving the package
+  boundary out of `NoteRenderer` compounds that behavior and avoids the core download entirely on
+  non-diagram notes.
+- Async DOM effects need cancellation even when the imported library is cached, because a render
+  promise can resolve after a route transition.
+
+### What was tricky to build
+The effect has two asynchronous boundaries: loading Mermaid and rendering each diagram. A single
+`cancelled` flag covers both. The DOM connection check prevents replacing a `<pre>` that React has
+already removed during a note transition; errors deliberately leave the raw code visible.
+
+### What warrants a second pair of eyes
+- Check that Mermaid initialization remains safe if two `NoteRenderer` instances mount at the same
+  time (the module-level guard is retained from the original code).
+- Verify a note with several diagrams does not generate duplicate IDs or leave stale SVGs after
+  navigation.
+
+### What should be done in the future
+- Add a browser smoke fixture containing one Mermaid note and one plain-code note, then assert the
+  Mermaid chunk is absent/present respectively.
+- Proceed to Phase 3: per-language highlight.js loading.
+
+### Code review instructions
+- Review the Mermaid effect in `web/src/components/organisms/NoteRenderer/NoteRenderer.tsx`.
+- Validate with:
+  ```bash
+  cd web
+  pnpm check
+  pnpm exec vitest run src/entry-server.test.tsx
+  pnpm build
+  ```
+
+### Technical details
+- Phase 2 build output:
+  - `main`: 395,300 B raw / 126.51 KB gzipped
+  - `NotePage`: 1,025,652 B raw / 329.48 KB gzipped
+  - `mermaid.core`: 607,354 B raw / 145.16 KB gzipped
+
+## Step 4: Load individual highlight.js languages on demand
+
+The third implementation phase replaced the full highlight.js registry with the small core
+engine and a Vite-generated lazy module map. Each curated language is represented by a tiny
+adapter under `web/src/vendor/highlight-languages/`; `import.meta.glob` turns those adapters into
+independent dynamic chunks. `NoteRenderer` now awaits highlighting and only adds copy buttons
+after the language definitions have loaded, with cancellation on note changes.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 2)
+
+**Assistant interpretation:** Implement the per-language highlight.js lazy-loading design and
+continue validating and committing the work in phases.
+
+**Inferred user intent:** Avoid paying for highlight.js's all-language registry and make a note
+with a few code languages download only those language definitions.
+
+**Commit (code):** 7d1a490633be241d8088ca41200fbc27a16b6895 — "perf: lazy load highlight languages on demand"
+
+### What I did
+- Added `web/src/lib/highlightLanguages.ts` with `highlight.js/lib/core`.
+- Added a Vite `import.meta.glob` map over curated language adapter files.
+- Added aliases for common markdown class names (`js`, `ts`, `tsx`, `py`, `sh`, `yml`, `html`,
+  and related variants).
+- Added a bounded auto-detection set for unlabelled blocks instead of restoring the full registry.
+- Added an in-flight promise map so concurrent renderers do not register one language twice.
+- Added language adapters for bash, CSS, Go, JavaScript, JSON, Markdown, Python, SQL, TypeScript,
+  XML, and YAML.
+- Updated `NoteRenderer` to await `highlightCodeBlocks` and cancel stale copy-button work.
+- Ran Prettier, TypeScript checking, SSR unit tests, and a production build.
+
+### Why
+The bare `highlight.js` import registered approximately 190 languages and was part of the large
+note route chunk. The core-plus-glob design creates one independently cacheable chunk per language,
+so the browser downloads only the definitions represented by the current note.
+
+### What worked
+- Vite emitted individual language chunks:
+  - `json`: 0.32 KB gzipped
+  - `go`: 0.70 KB gzipped
+  - `yaml`: 0.83 KB gzipped
+  - `xml`: 0.78 KB gzipped
+  - `python`: 1.49 KB gzipped
+  - `bash`: 1.57 KB gzipped
+  - `javascript`: 2.62 KB gzipped
+  - `typescript`: 3.08 KB gzipped
+  - `css`: 4.30 KB gzipped
+- The note route chunk fell to 26.64 KB gzipped before any language, Mermaid, or diagram chunks.
+- The initial `main` chunk remained 126.51 KB gzipped.
+- `pnpm check`, all 11 SSR unit tests, and the production build passed.
+
+### What didn't work
+- The first implementation used `[...requestedLanguages]` and failed TypeScript because this
+  project has no ES2015 target/downlevel iteration enabled:
+  ```text
+  src/lib/highlightLanguages.ts(129,25): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+  ```
+  I changed it to `Array.from(requestedLanguages).map(loadLanguage)`, then reran checking and tests successfully.
+- Browser-level network assertions remain pending on the Playwright browser installation.
+
+### What I learned
+- Vite's `import.meta.glob` keys must be matched using the exact relative adapter paths; explicit
+  `languageFiles` mapping makes this visible and stable while the build still emits one chunk per
+  adapter.
+- `highlight.js/lib/core` is small enough to remain in the note route, while language definitions
+  are independently cacheable.
+- An in-flight promise cache matters because React Strict Mode and simultaneous renderer mounts can
+  otherwise call `registerLanguage` more than once.
+
+### What was tricky to build
+The old code highlighted synchronously and added copy buttons in the same pass. Dynamic language
+loading makes that pass asynchronous. The new helper discovers all needed languages, loads them in
+parallel, highlights only registered/known languages, and the component adds copy buttons only if
+its effect is still current. Unknown language classes remain readable plain code instead of causing
+an import failure.
+
+### What warrants a second pair of eyes
+- Confirm the curated language list covers the actual production vault after deployment; add a
+  small audit script or expand adapters when new `language-*` classes appear.
+- Validate that unlabelled blocks' bounded auto-detection is acceptable compared with the old full
+  registry.
+- Verify no language adapter is accidentally included in the initial route chunk; build output
+  currently shows each as a separate file.
+
+### What should be done in the future
+- Add a browser fixture with mixed TypeScript/JSON/Bash blocks and assert only those language
+  chunks are fetched.
+- Proceed to Phase 4: omit the full `listNotes` data from note-route SSR while preserving the
+  client-side backlinks/wiki-link query.
+
+### Code review instructions
+- Start at `web/src/lib/highlightLanguages.ts`, then inspect the adapter directory and the
+  `NoteRenderer` highlighting effect.
+- Validate with:
+  ```bash
+  cd web
+  pnpm check
+  pnpm exec vitest run src/entry-server.test.tsx
+  pnpm build
+  find dist/assets -type f | grep -E '(bash|json|typescript|yaml)-'
+  ```
+
+### Technical details
+- Phase 3 build output:
+  - `main`: 395,300 B raw / 126.51 KB gzipped
+  - `NotePage`: 80,050 B raw / 26.64 KB gzipped
+  - `mermaid.core`: remains a separate 145.16 KB gzipped chunk
+
+## Step 5: Trim all SSR cache payloads and complete hydration-safe delivery
+
+The final phases removed the full note index from the serialized RTK Query cache on both note and
+home routes. The sidecar still fetches it on `/` to choose the home note and create the noscript
+list, but sends only the selected slug in `window.__HOME_SLUG__`; `HomeRedirect` uses that slug
+during SSR and first hydration. The browser fetches the complete index only when a later feature
+(backlinks/wiki-link verification) actually needs it.
+
+This phase also uncovered and fixed hydration constraints introduced by route splitting. The
+initial client implementation used a Suspense boundary around every route, which changed the
+React hydration shape. The corrected design eagerly resolves the already-SSR-rendered note chunk
+on `/` and `/note/*`, uses no Suspense boundary for those first renders, and retains the lazy
+boundary for non-note initial routes. A baseline worktree at `08bab91` confirmed that the original
+application passed the browser smoke test, isolating the issue to this implementation rather than
+masking it as pre-existing.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 2)
+
+**Assistant interpretation:** Finish the remaining SSR-payload and production-build phases,
+resolve any regressions discovered by end-to-end validation, and keep commits/diary evidence.
+
+**Inferred user intent:** Ship a real performance improvement without regressing SSR, hydration,
+search, or navigation.
+
+**Commit (code):** 0b032b5610ac450a8f1f3be6d2ee87f7365c13bc — "perf: reduce SSR payload and production bundle"
+
+### What I did
+- Changed `web/server.mjs` to fetch `/api/notes` only on `/`, only for home selection/noscript
+  content, and never insert it into `renderApp`'s preloaded RTK cache.
+- Added `homeSlug` to `SSRData`, passed it to `AppRoutes`, serialized it as `window.__HOME_SLUG__`,
+  and consumed/deleted it in the client entry before hydration.
+- Made `HomeRedirect` skip `useListNotesQuery` when a server-selected slug exists.
+- Added a unit test proving `renderApp("/", { homeSlug: "index", ... })` renders the home note
+  without a `listNotes` cache entry; SSR test count is now 13.
+- Reworked client route hydration so home/note initial renders use the resolved `NotePage` component
+  without a Suspense boundary; other initial routes retain the lazy fallback.
+- Made `NoteRenderer` start from raw note HTML and resolve wiki links after hydration, avoiding
+  server/client `DOMParser` serialization differences; deferred heading-anchor DOM enhancement.
+- Ran the pre-change `08bab91` worktree smoke test to establish that the hydration failure was new.
+- Gated JSX-location, Manus runtime/debug collector, and storage proxy plugins to `vite serve`
+  in `vite.config.ts`; production builds no longer contain `data-loc` markers.
+- Installed Playwright Chromium locally because the original smoke failure was caused by a missing
+  browser executable, then ran the full browser hydration smoke test successfully.
+
+### Why
+The prior note-route change cut note HTML, but the root route still shipped the entire 934-note
+index to let the client select the same home note. A tiny explicit home-slug contract preserves
+identical SSR/client rendering while removing that payload. Production-only plugin gating also
+removes development instrumentation from delivered JS and SSR output.
+
+### What worked
+- `pnpm check` passed.
+- `pnpm exec vitest run src/entry-server.test.tsx` passed: **13 tests**.
+- `pnpm build:all` passed; final main chunk is **388.78 KB raw / 125.83 KB gzipped**, down from
+  the live baseline's **2.03 MB raw / 598.88 KB gzipped**.
+- `pnpm smoke:ssr` passed end to end: production client build, SSR build, Go backend, Node sidecar,
+  mobile sidebar interaction, desktop navigation, and zero browser console warnings/errors.
+- Fixture root SSR HTML fell from the prior 432,424 B payload to **37,211 B** after list-index
+  omission and production instrumentation removal.
+- The final production `index.html` shell is 0.64 KB raw / 0.39 KB gzipped; no `data-loc` markers
+  appear in built JavaScript.
+
+### What didn't work
+- `pnpm smoke:ssr` initially failed because Playwright Chromium was not installed. Exact message:
+  ```text
+  browserType.launch: Executable doesn't exist at .../chromium_headless_shell-1223/...
+  Please run: pnpm exec playwright install
+  ```
+  Running `pnpm exec playwright install chromium` resolved the environment failure.
+- The first `import.meta.glob` implementation of language adapters broke `pnpm build:ssr` with:
+  ```text
+  assets/yaml-!~{001}~.js:16:0: ERROR: Expected ":" but found "}"
+  ```
+  The loader now uses explicit dynamic imports plus an SSR alias to a no-op module; Vite still
+  emits individual language chunks and the SSR graph stays browser-free.
+- The first route-wide Suspense design produced React hydration error #418. A baseline smoke test
+  passed, so it was not accepted as pre-existing. The final route-specific boundary fixed it.
+
+### What I learned
+- SSR payload decisions must account for the hydration render contract, not merely what the
+  server fetched. Passing a small deterministic `homeSlug` is sufficient; serializing all note
+  metadata is not.
+- Browser-only HTML normalization and DOM enhancement must happen after hydration when the server
+  rendered raw HTML.
+- Vite client dynamic imports need an SSR-safe module boundary when their imported graph is not
+  meaningful on the server.
+
+### What was tricky to build
+The central sharp edge was retaining SSR content *and* route splitting. A universal lazy/Suspense
+boundary changed React's component/useId path and caused hydration failure. The solution is route
+aware: on initial home/note URLs, wait for the note chunk and hydrate the same eager component
+shape that SSR used; on routes without SSR note content, keep the lazy component and Suspense.
+
+### What warrants a second pair of eyes
+- Review the home-slug contract in `server.mjs`, `entry-server.tsx`, `entry-client.tsx`, and
+  `App.tsx` together; server/client property names and deletion timing must remain aligned.
+- The large Mermaid diagram chunks remain intentionally on-demand. Confirm CDN/cache behavior on
+  a real Mermaid-heavy note after deployment.
+- The first client visit to a note still fetches the note index after hydration for backlinks and
+  wiki-link verification; this is deliberate and should be measured separately if that interaction
+  becomes a bottleneck.
+
+### What should be done in the future
+- Deploy to a preview environment, measure the live 934-note root/note HTML and HTTP transfer
+  sizes, and compare them to the documented production baseline.
+- Add browser network assertions for exact language/Mermaid chunk requests.
+- Consider lazy-loading the tree/sidebar in a future ticket if its 284 KB payload remains material.
+
+### Code review instructions
+- Review commits `88af573`, `f84d634`, `7d1a490`, `208f105`, and `0b032b5` in order.
+- Validate with:
+  ```bash
+  cd web
+  pnpm check
+  pnpm exec vitest run src/entry-server.test.tsx
+  pnpm build:all
+  pnpm smoke:ssr
+  ```
+
+### Technical details
+- Final final validation baseline:
+  - initial client `main`: 388.78 KB raw / 125.83 KB gzipped
+  - `NotePage`: 72.77 KB raw / 25.90 KB gzipped
+  - Mermaid core: 145.16 KB gzipped, fetched only for Mermaid blocks
+  - individual highlight language chunks: 0.32–4.30 KB gzipped for the curated set
+  - fixture SSR root response: 37,211 B; browser hydration smoke: PASS
