@@ -5,12 +5,17 @@
 // window.__PRELOADED_STATE__; the browser restores it before hydration so the
 // first client render matches the server render.
 
-import React from "react";
+import React, { lazy } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { Provider } from "react-redux";
 import { makeStore } from "./store/store";
 import { AppRoutes } from "./App";
+
+const LazyNotePage = lazy(async () => {
+  const module = await import("./components/pages/NotePage/NotePage");
+  return { default: module.NotePage };
+});
 import "./index.css";
 
 declare global {
@@ -32,7 +37,7 @@ hydrateRoot(
   <React.StrictMode>
     <Provider store={store}>
       <BrowserRouter>
-        <AppRoutes />
+        <AppRoutes NotePageComponent={LazyNotePage} />
       </BrowserRouter>
     </Provider>
   </React.StrictMode>
