@@ -16,6 +16,8 @@ Owners: []
 RelatedFiles:
     - Path: repo://internal/api/api.go
       Note: Go API route registration lines 60-66 — backend endpoints the sidecar prefetches
+    - Path: repo://web/src/App.tsx
+      Note: Injected NotePageComponent and shared Suspense boundary; commit 88af5739d58c513b97d396985b53f39e067ed3b1
     - Path: repo://web/src/components/pages/NotePage/NotePage.tsx
       Note: Only consumer of NoteRenderer; lazy-loading target for Phase 1
     - Path: repo://web/src/components/pages/VaultLayout/VaultLayout.tsx
@@ -26,6 +28,7 @@ LastUpdated: 2026-07-14T17:05:15.025954318-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -135,3 +138,100 @@ set up the follow-up design ticket.
 ### Technical details
 - Live baseline (2026-07-14): `main.js` 2,030,018 B raw / 598,884 B gz; root HTML 1,305,031 B;
   inlined state ~834 KB (listNotes 934 items ~550 KB + getTree ~284 KB).
+
+## Step 2: Split the note route from the initial client bundle
+
+The first implementation phase moved the note route behind a client-side dynamic import while
+keeping the SSR path eager. This preserves server-rendered note content and hydration structure,
+but prevents the initial home/search bundle from statically importing the note page and its
+renderer dependency graph. The implementation required making the note-page component an explicit
+injection point in `AppRoutes`: the server passes the eager component, while the browser passes a
+`React.lazy` component.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Continue implementing PERF-BUNDLE-014 according to the ticket design,
+keeping a detailed diary and committing at appropriate checkpoints.
+
+**Inferred user intent:** Turn the analysis into production-quality code changes, validate each
+phase, and leave a reviewable history rather than making one unstructured batch edit.
+
+**Commit (code):** 88af5739d58c513b97d396985b53f39e067ed3b1 — "perf: split note page from client entry"
+
+### What I did
+- Installed the locked frontend dependencies with `cd web && pnpm install --frozen-lockfile`.
+- Added `AppRoutesProps` and injected `NotePageComponent` into `web/src/App.tsx`.
+- Added a shared Suspense fallback so the route boundary exists in both server and client trees.
+- Kept `web/src/entry-server.tsx` importing `NotePage` eagerly for SSR.
+- Added a `React.lazy(() => import(...NotePage...))` loader in `web/src/entry-client.tsx`.
+- Ran Prettier and TypeScript checking.
+- Ran `pnpm exec vitest run src/entry-server.test.tsx` — all 11 tests passed.
+- Ran `pnpm build:all`; the client build emitted a separate `NotePage-*.js` chunk.
+
+### Why
+The initial bundle contained the entire note route despite home/search not needing it. Passing the
+component into the shared route tree avoids duplicating route logic and lets SSR and hydration use
+different loading policies without changing route behavior.
+
+### What worked
+- The initial client chunk changed from the original ~599 KB gzipped to `main-B430904A.js` at
+  126.52 KB gzipped.
+- The new `NotePage-rj2S5xGt.js` route chunk is 474.63 KB gzipped and is loaded only when the note
+  component is needed.
+- `pnpm check` passed and the 11 SSR unit tests passed.
+- `pnpm build:all` completed successfully, including the 78.74 KB SSR bundle.
+
+### What didn't work
+- `pnpm smoke:ssr` reached the SSR HTTP assertion successfully (`raw SSR HTML ok (432424 bytes, X-Powered-By=Express)`),
+  then failed because Playwright's browser binary is absent:
+  ```text
+  browserType.launch: Executable doesn't exist at /home/manuel/.cache/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell
+  Looks like Playwright was just installed or updated. Please run: pnpm exec playwright install
+  ```
+- The local build emitted many Mermaid internal chunks and still warns about large chunks; that is
+  expected because Phase 2 has not yet moved the static Mermaid import out of the route chunk.
+
+### What I learned
+- The route-level split is most safely implemented as dependency injection: `AppRoutes` does not
+  statically import `NotePage`; the SSR entry supplies the eager component, and the client entry
+  supplies the lazy component.
+- A shared Suspense boundary is needed so server and browser trees have the same structural boundary.
+- `NotePage` still calls `useListNotesQuery()` for wiki-link resolution/backlinks; the SSR preload
+  optimization must therefore omit only the data on note routes and allow the client query to run.
+
+### What was tricky to build
+The main sharp edge was avoiding a hydration mismatch. A lazy component in the SSR entry would
+render a fallback because `renderToString` cannot fetch a client chunk. The solution was to keep
+`NotePage` eager in `entry-server.tsx`, inject it into `AppRoutes`, and use `React.lazy` only in
+`entry-client.tsx`. The shared Suspense boundary keeps the tree shape consistent.
+
+### What warrants a second pair of eyes
+- Validate browser hydration after installing Chromium; specifically inspect the console for
+  Suspense or hydration warnings on `/`, `/note/index`, and `/search`.
+- Verify that `NotePage` is not accidentally pulled back into the initial chunk through a type or
+  default import.
+
+### What should be done in the future
+- Install the Playwright browser and rerun `pnpm smoke:ssr` before considering the phase fully
+  validated.
+- Proceed to Phase 2: dynamic Mermaid import.
+
+### Code review instructions
+- Start at `web/src/entry-client.tsx` and `web/src/entry-server.tsx`, then follow the injected
+  `NotePageComponent` through `web/src/App.tsx`.
+- Validate with:
+  ```bash
+  cd web
+  pnpm check
+  pnpm exec vitest run src/entry-server.test.tsx
+  pnpm build:all
+  pnpm smoke:ssr
+  ```
+
+### Technical details
+- Build output after Phase 1:
+  - `main-B430904A.js`: 395,314 B raw / 126.52 KB gzipped
+  - `NotePage-rj2S5xGt.js`: 1,633,432 B raw / 474.63 KB gzipped
+  - `dist/index.html`: 367.48 KB raw / 105.47 KB gzipped (Vite shell, not SSR response)
