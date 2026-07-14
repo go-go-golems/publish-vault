@@ -4,10 +4,15 @@
  * syntax highlighting, and mermaid diagram rendering.
  * Handles click events on wiki-links for SPA navigation.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { clsx } from "clsx";
 import hljs from "highlight.js";
-import mermaid from "mermaid";
 import { nanoid } from "nanoid";
 import { resolveWikiLinks, buildSlugSet } from "../../../lib/wikiLinks";
 import { FrontmatterPanel } from "../../molecules/FrontmatterPanel/FrontmatterPanel";
@@ -142,40 +147,55 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     const blocks = el.querySelectorAll<HTMLElement>("code.language-mermaid");
     if (blocks.length === 0) return;
 
-    if (!mermaidInitialized) {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "base",
-        themeVariables: {
-          primaryColor: "#1a1a1a",
-          primaryTextColor: "#faf8f4",
-          primaryBorderColor: "#1a1a1a",
-          lineColor: "#555",
-          secondaryColor: "#f0ede8",
-          tertiaryColor: "#faf8f4",
-          fontSize: "12px",
-        },
-      });
-      mermaidInitialized = true;
-    }
+    let cancelled = false;
 
-    blocks.forEach((block) => {
-      const pre = block.parentElement;
-      if (!pre || pre.tagName !== "PRE") return;
-      const src = block.textContent ?? "";
-      const id = `mermaid-${nanoid(6)}`;
-      mermaid
-        .render(id, src)
-        .then(({ svg }) => {
-          const container = document.createElement("div");
-          container.className = "mermaid-svg retro-inset my-2 overflow-x-auto";
-          container.innerHTML = svg;
-          pre.replaceWith(container);
-        })
-        .catch(() => {
-          // Leave raw <pre> as fallback
+    const renderMermaid = async () => {
+      const { default: mermaid } = await import("mermaid");
+      if (cancelled) return;
+
+      if (!mermaidInitialized) {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "base",
+          themeVariables: {
+            primaryColor: "#1a1a1a",
+            primaryTextColor: "#faf8f4",
+            primaryBorderColor: "#1a1a1a",
+            lineColor: "#555",
+            secondaryColor: "#f0ede8",
+            tertiaryColor: "#faf8f4",
+            fontSize: "12px",
+          },
         });
-    });
+        mermaidInitialized = true;
+      }
+
+      await Promise.all(
+        Array.from(blocks).map(async block => {
+          const pre = block.parentElement;
+          if (!pre || pre.tagName !== "PRE") return;
+          const src = block.textContent ?? "";
+          const id = `mermaid-${nanoid(6)}`;
+
+          try {
+            const { svg } = await mermaid.render(id, src);
+            if (cancelled || !pre.isConnected) return;
+            const container = document.createElement("div");
+            container.className =
+              "mermaid-svg retro-inset my-2 overflow-x-auto";
+            container.innerHTML = svg;
+            pre.replaceWith(container);
+          } catch {
+            // Leave raw <pre> as fallback
+          }
+        })
+      );
+    };
+
+    void renderMermaid();
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedHtml]);
 
   // Syntax highlighting — runs after mermaid has consumed its blocks
@@ -186,7 +206,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     const codeBlocks = el.querySelectorAll<HTMLElement>(
       "pre code:not(.language-mermaid)"
     );
-    codeBlocks.forEach((block) => {
+    codeBlocks.forEach(block => {
       // Only highlight if not already processed
       if (!block.dataset.highlighted) {
         hljs.highlightElement(block);
@@ -196,7 +216,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
 
     // Add copy buttons to pre blocks that don't already have one
     const pres = el.querySelectorAll<HTMLElement>("pre");
-    pres.forEach((pre) => {
+    pres.forEach(pre => {
       if (pre.querySelector(".copy-code-btn")) return;
       const btn = document.createElement("button");
       btn.className = "copy-code-btn";
@@ -207,7 +227,9 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
         if (!code) return;
         navigator.clipboard.writeText(code.textContent ?? "").then(() => {
           btn.textContent = "✓";
-          setTimeout(() => { btn.textContent = "⎘"; }, 1500);
+          setTimeout(() => {
+            btn.textContent = "⎘";
+          }, 1500);
         });
       });
       pre.style.position = "relative";
@@ -221,7 +243,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     if (!el) return;
 
     const embeds = el.querySelectorAll<HTMLElement>(".wiki-embed");
-    embeds.forEach((embed) => {
+    embeds.forEach(embed => {
       const target = embed.getAttribute("data-target") ?? "";
       if (!target) return;
       // Don't re-render already-populated embeds
@@ -229,8 +251,8 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       embed.dataset.resolved = "true";
 
       fetch(`/api/notes/${encodeURIComponent(target)}`)
-        .then((res) => res.json())
-        .then((data) => {
+        .then(res => res.json())
+        .then(data => {
           if (data.html) {
             const container = document.createElement("div");
             container.className = "wiki-embed-content retro-inset my-2";
@@ -252,7 +274,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     if (!el) return;
 
     const headings = el.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6");
-    headings.forEach((heading) => {
+    headings.forEach(heading => {
       if (heading.querySelector(".heading-anchor")) return;
       const id = heading.id;
       if (!id) return;
@@ -261,7 +283,7 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       anchor.href = `#${id}`;
       anchor.title = "Link to this section";
       anchor.textContent = "#";
-      anchor.addEventListener("click", (e) => {
+      anchor.addEventListener("click", e => {
         e.preventDefault();
         window.location.hash = id;
         heading.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -284,7 +306,9 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     if (note.rawMarkdown !== undefined) {
       await navigator.clipboard.writeText(note.rawMarkdown);
     } else {
-      const response = await fetch(`/api/notes/${encodeURIComponent(note.slug)}/raw`);
+      const response = await fetch(
+        `/api/notes/${encodeURIComponent(note.slug)}/raw`
+      );
       if (!response.ok) {
         throw new Error(`failed to fetch markdown source: ${response.status}`);
       }
@@ -371,7 +395,9 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
       {/* Lightbox for full-screen image/mermaid viewing */}
       <LightboxModal
         open={lightbox !== null}
-        onOpenChange={(open) => { if (!open) setLightbox(null); }}
+        onOpenChange={open => {
+          if (!open) setLightbox(null);
+        }}
         imageSrc={lightbox?.type === "image" ? lightbox.src : undefined}
         imageAlt={lightbox?.type === "image" ? lightbox.alt : undefined}
         svgHtml={lightbox?.type === "mermaid" ? lightbox.svgHtml : undefined}
