@@ -20,6 +20,7 @@ export interface SSRData {
   notes?: NoteListItem[] | null;
   tree?: FileNode | null;
   note?: Note | null;
+  homeSlug?: string | null;
 }
 
 export interface SSRResult {
@@ -105,7 +106,10 @@ export async function renderApp(
   const html = renderToString(
     <Provider store={store}>
       <StaticRouter location={url}>
-        <AppRoutes NotePageComponent={NotePage} />
+        <AppRoutes
+          NotePageComponent={NotePage}
+          initialHomeSlug={data.homeSlug ?? undefined}
+        />
       </StaticRouter>
     </Provider>
   );

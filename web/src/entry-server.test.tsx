@@ -111,6 +111,18 @@ describe("renderApp", () => {
     expect(JSON.stringify(preloadedState)).toContain("listNotes");
   });
 
+  it("renders the home note without seeding the full notes list", async () => {
+    const { html, preloadedState } = await renderApp("/", {
+      config,
+      tree,
+      note,
+      homeSlug: "index",
+    });
+
+    expect(html).toContain("This is the vault index");
+    expect(JSON.stringify(preloadedState)).not.toContain("listNotes");
+  });
+
   it("renders a note page with title and body", async () => {
     const { html, preloadedState } = await renderApp("/note/index", {
       config,

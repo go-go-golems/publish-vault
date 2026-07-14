@@ -209,17 +209,22 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [
-  react(),
-  tailwindcss(),
-  jsxLocPlugin(),
-  vitePluginManusRuntime(),
-  vitePluginManusDebugCollector(),
-  vitePluginStorageProxy(),
-];
-
-export default defineConfig(({ isSsrBuild }) => ({
-  plugins,
+export default defineConfig(({ command, isSsrBuild }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    // These plugins only support local authoring and debugging. Excluding them
+    // from `vite build` avoids JSX location/runtime instrumentation in the
+    // production client bundle.
+    ...(command === "serve"
+      ? [
+          jsxLocPlugin(),
+          vitePluginManusRuntime(),
+          vitePluginManusDebugCollector(),
+          vitePluginStorageProxy(),
+        ]
+      : []),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(WEB_ROOT, "src"),

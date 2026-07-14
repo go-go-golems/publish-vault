@@ -54,11 +54,14 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
   // Build slug set for broken-link detection
   const slugSet = useMemo(() => buildSlugSet(allSlugs), [allSlugs]);
 
-  // Resolve wiki links in HTML
-  const resolvedHtml = useMemo(
-    () => resolveWikiLinks(note.html, slugSet),
-    [note.html, slugSet]
-  );
+  // SSR has no DOMParser, while the browser's resolver normalizes HTML. Start
+  // with the raw server HTML so hydration sees identical markup, then resolve
+  // wiki links in an effect after hydration has completed.
+  const [resolvedHtml, setResolvedHtml] = useState(note.html);
+
+  useEffect(() => {
+    setResolvedHtml(resolveWikiLinks(note.html, slugSet));
+  }, [note.html, slugSet]);
 
   // Intercept wiki-link clicks for SPA navigation
   const handleClick = useCallback(
@@ -269,28 +272,36 @@ export const NoteRenderer: React.FC<NoteRendererProps> = ({
     });
   }, [resolvedHtml]);
 
-  // Heading permalinks — inject # link after each heading
+  // Heading permalinks — inject # link after each heading. Defer the DOM
+  // enhancement until hydration has completed; the SSR markup intentionally
+  // contains only the raw note HTML.
   useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
+    const timer = window.setTimeout(() => {
+      const el = contentRef.current;
+      if (!el) return;
 
-    const headings = el.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6");
-    headings.forEach(heading => {
-      if (heading.querySelector(".heading-anchor")) return;
-      const id = heading.id;
-      if (!id) return;
-      const anchor = document.createElement("a");
-      anchor.className = "heading-anchor";
-      anchor.href = `#${id}`;
-      anchor.title = "Link to this section";
-      anchor.textContent = "#";
-      anchor.addEventListener("click", e => {
-        e.preventDefault();
-        window.location.hash = id;
-        heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      const headings = el.querySelectorAll<HTMLElement>(
+        "h1, h2, h3, h4, h5, h6"
+      );
+      headings.forEach(heading => {
+        if (heading.querySelector(".heading-anchor")) return;
+        const id = heading.id;
+        if (!id) return;
+        const anchor = document.createElement("a");
+        anchor.className = "heading-anchor";
+        anchor.href = `#${id}`;
+        anchor.title = "Link to this section";
+        anchor.textContent = "#";
+        anchor.addEventListener("click", e => {
+          e.preventDefault();
+          window.location.hash = id;
+          heading.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        heading.appendChild(anchor);
       });
-      heading.appendChild(anchor);
-    });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [resolvedHtml]);
 
   const rawMarkdownUrl = useMemo(() => {

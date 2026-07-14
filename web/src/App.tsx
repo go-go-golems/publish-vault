@@ -20,6 +20,8 @@ import {
 
 export interface AppRoutesProps {
   NotePageComponent: ComponentType<NotePageProps>;
+  initialHomeSlug?: string;
+  suspendNotePage?: boolean;
 }
 
 export function NotePageFallback() {
@@ -31,7 +33,11 @@ export function NotePageFallback() {
   );
 }
 
-export function AppRoutes({ NotePageComponent }: AppRoutesProps) {
+export function AppRoutes({
+  NotePageComponent,
+  initialHomeSlug,
+  suspendNotePage = false,
+}: AppRoutesProps) {
   const { data: config } = useGetConfigQuery();
   const location = useLocation();
 
@@ -46,29 +52,46 @@ export function AppRoutes({ NotePageComponent }: AppRoutesProps) {
       config?.pageTitle || config?.vaultName || "Retro Obsidian Publish";
   }, [config?.pageTitle, config?.vaultName, location.pathname]);
 
+  const routes = (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <HomeRedirect
+            NotePageComponent={NotePageComponent}
+            initialHomeSlug={initialHomeSlug}
+          />
+        }
+      />
+      <Route
+        path="/note/*"
+        element={<NoteRoute NotePageComponent={NotePageComponent} />}
+      />
+      <Route path="/search" element={<SearchRoute />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+
   return (
     <VaultLayout vaultName={config?.vaultName}>
-      <Suspense fallback={<NotePageFallback />}>
-        <Routes>
-          <Route
-            path="/"
-            element={<HomeRedirect NotePageComponent={NotePageComponent} />}
-          />
-          <Route
-            path="/note/*"
-            element={<NoteRoute NotePageComponent={NotePageComponent} />}
-          />
-          <Route path="/search" element={<SearchRoute />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Suspense>
+      {suspendNotePage ? (
+        <Suspense fallback={<NotePageFallback />}>{routes}</Suspense>
+      ) : (
+        routes
+      )}
     </VaultLayout>
   );
 }
 
-function HomeRedirect({ NotePageComponent }: AppRoutesProps) {
-  const { data: notes, isLoading, isError } = useListNotesQuery();
-  const homeSlug = chooseHomeSlug(notes ?? []);
+function HomeRedirect({ NotePageComponent, initialHomeSlug }: AppRoutesProps) {
+  const {
+    data: notes,
+    isLoading,
+    isError,
+  } = useListNotesQuery(undefined, {
+    skip: Boolean(initialHomeSlug),
+  });
+  const homeSlug = initialHomeSlug ?? chooseHomeSlug(notes ?? []);
 
   if (isLoading) {
     return (
@@ -179,11 +202,19 @@ function NotFoundPage() {
   );
 }
 
-export default function App({ NotePageComponent }: AppRoutesProps) {
+export default function App({
+  NotePageComponent,
+  initialHomeSlug,
+  suspendNotePage,
+}: AppRoutesProps) {
   return (
     <Provider store={store}>
       <BrowserRouter>
-        <AppRoutes NotePageComponent={NotePageComponent} />
+        <AppRoutes
+          NotePageComponent={NotePageComponent}
+          initialHomeSlug={initialHomeSlug}
+          suspendNotePage={suspendNotePage}
+        />
       </BrowserRouter>
     </Provider>
   );
