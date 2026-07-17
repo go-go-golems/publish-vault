@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -34,6 +35,7 @@ type Settings struct {
 	SSRURL              string `glazed:"ssr-url"`
 	Favicon             string `glazed:"favicon"`
 	SearchIndexPath     string `glazed:"search-index-path"`
+	PagesDir            string `glazed:"pages-dir"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -99,6 +101,10 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Optional base directory for per-snapshot persistent bleve indexes. When empty, search stays in memory."),
 			),
+			fields.New("pages-dir", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Directory of widget.dsl page scripts served at /api/widget/*. Defaults to <vault>/.publish/pages; widget routes stay disabled when the directory does not exist."),
+			),
 		),
 		cmds.WithSections(commandSettingsSection),
 	)}
@@ -129,5 +135,9 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if settings.ReloadTokenEnv != "" {
 		reloadToken, _ = os.LookupEnv(settings.ReloadTokenEnv)
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath})
+	pagesDir := settings.PagesDir
+	if pagesDir == "" {
+		pagesDir = filepath.Join(settings.Vault, ".publish", "pages")
+	}
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir})
 }

@@ -22,6 +22,7 @@ import (
 	"retro-obsidian-publish/internal/api"
 	"retro-obsidian-publish/internal/watcher"
 	web "retro-obsidian-publish/internal/web"
+	"retro-obsidian-publish/internal/widgethost"
 )
 
 // Config holds the runtime settings for the Retro Obsidian Publish server.
@@ -37,6 +38,7 @@ type Config struct {
 	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
 	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
 	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
+	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -100,6 +102,15 @@ func Run(ctx context.Context, cfg Config) error {
 	h := api.NewWithProvider(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle})
 	h.Register(r)
 	r.HandleFunc("/api/healthz", healthHandler(state)).Methods("GET")
+	if cfg.PagesDir != "" {
+		if info, err := os.Stat(cfg.PagesDir); err != nil || !info.IsDir() {
+			log.Printf("Widget pages dir %q not found; widget routes disabled", cfg.PagesDir)
+		} else {
+			host := widgethost.New(state, api.PublicConfig{VaultName: vaultName, PageTitle: pageTitle}, cfg.PagesDir)
+			host.RegisterRoutes(r)
+			log.Printf("Widget pages enabled from %s (/api/widget/pages)", cfg.PagesDir)
+		}
+	}
 	r.PathPrefix("/vault-assets/").Handler(assetHandler(state)).Methods("GET", "HEAD")
 	if cfg.ReloadToken != "" || cfg.ReloadAllowLoopback {
 		r.HandleFunc("/api/admin/reload", reloadHandler(state, cfg.ReloadToken, cfg.ReloadAllowLoopback, stopWatcherBeforeReload)).Methods("POST")

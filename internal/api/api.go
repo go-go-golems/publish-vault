@@ -99,9 +99,8 @@ type NoteListItem struct {
 	Path    string   `json:"path"`
 }
 
-// listNotes returns all notes as a list.
-func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
-	v, _ := h.provider.Snapshot()
+// NoteList returns the sorted list representation served by /api/notes.
+func NoteList(v *vault.Vault) []NoteListItem {
 	notes := v.AllNotes()
 	items := make([]NoteListItem, 0, len(notes))
 	for _, n := range notes {
@@ -118,7 +117,13 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(items, func(i, j int) bool {
 		return strings.ToLower(items[i].Title) < strings.ToLower(items[j].Title)
 	})
-	jsonResponse(w, items)
+	return items
+}
+
+// listNotes returns all notes as a list.
+func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
+	v, _ := h.provider.Snapshot()
+	jsonResponse(w, NoteList(v))
 }
 
 // getNote returns a single note by slug.
@@ -186,10 +191,9 @@ type TagCount struct {
 	Count int    `json:"count"`
 }
 
-// listTags returns all tags with their note counts.
-func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
+// TagCounts returns tag counts sorted by count, as served by /api/tags.
+func TagCounts(v *vault.Vault) []TagCount {
 	counts := map[string]int{}
-	v, _ := h.provider.Snapshot()
 	for _, n := range v.AllNotes() {
 		for _, t := range n.Tags {
 			counts[t]++
@@ -202,7 +206,13 @@ func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(tags, func(i, j int) bool {
 		return tags[i].Count > tags[j].Count
 	})
-	jsonResponse(w, tags)
+	return tags
+}
+
+// listTags returns all tags with their note counts.
+func (h *Handler) listTags(w http.ResponseWriter, r *http.Request) {
+	v, _ := h.provider.Snapshot()
+	jsonResponse(w, TagCounts(v))
 }
 
 // jsonResponse writes v as JSON with proper content-type.
