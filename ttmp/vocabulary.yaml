@@ -109,6 +109,16 @@ topics:
       description: Frontend and backend performance optimization
     - slug: vite
       description: Vite build tooling and configuration
+    - slug: api
+      description: HTTP or programmatic API design and contracts
+    - slug: xgoja
+      description: xgoja-generated Go/JavaScript runtime and server integration
+    - slug: widget-dsl
+      description: 'Widget DSL: intent-level UI authoring, widget IR, and renderer targets'
+    - slug: design-system
+      description: 'React design system organization: atoms/molecules/organisms, tokens, IR renderer'
+    - slug: goja
+      description: goja/go-go-goja embedded JavaScript runtime and native modules
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
