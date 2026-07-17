@@ -103,6 +103,27 @@ export const vaultApi = createApi({
           }
     ),
 
+    // ── Raw markdown source of a note ───────────────────────────
+    getNoteRaw: builder.query<string, string>(
+      IS_STATIC
+        ? {
+            queryFn: async (slug): Promise<{ data: string } | { error: FetchBaseQueryError }> => {
+              const s = await getStatic();
+              const note = s.staticGetNote(slug);
+              if (note?.rawMarkdown === undefined) return notFound();
+              return ok(note.rawMarkdown);
+            },
+            providesTags: (_r: unknown, _e: unknown, slug: string) => [{ type: "Note" as const, id: `${slug}/raw` }],
+          }
+        : {
+            query: (slug: string) => ({
+              url: `/api/notes/${slug}/raw`,
+              responseHandler: (response: Response) => response.text(),
+            }),
+            providesTags: (_r: unknown, _e: unknown, slug: string) => [{ type: "Note" as const, id: `${slug}/raw` }],
+          }
+    ),
+
     // ── File tree ───────────────────────────────────────────────
     getTree: builder.query<FileNode, void>(
       IS_STATIC
@@ -153,6 +174,7 @@ export const {
   useGetConfigQuery,
   useListNotesQuery,
   useGetNoteQuery,
+  useGetNoteRawQuery,
   useGetTreeQuery,
   useSearchQuery,
   useListTagsQuery,

@@ -1,0 +1,337 @@
+/* Retro UI chrome: window frames, buttons, menubar, tree, tags, search,
+ * badges, dividers, animations, resize handles, lightbox. Application
+ * shell skin — note content styling lives in prose.css. */
+
+@layer components {
+  /* ── Retro Window Chrome ── */
+  .retro-window {
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+    box-shadow: 2px 2px 0 var(--color-ink);
+  }
+
+  .retro-window-title {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 3px 8px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+
+  /* Title bar stripes (classic Mac drag lines) */
+  .retro-titlebar-stripes {
+    flex: 1;
+    height: 8px;
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0px,
+      transparent 1px,
+      var(--color-paper) 1px,
+      var(--color-paper) 3px
+    );
+    opacity: 0.3;
+  }
+
+  /* ── Inset / Sunken Panel ── */
+  .retro-inset {
+    border: 1px solid var(--color-ink);
+    box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.3);
+    background: var(--color-paper);
+  }
+
+  /* ── Raised Button ── */
+  .retro-btn {
+    border: 1px solid var(--color-ink);
+    background: var(--color-panel);
+    box-shadow: 1px 1px 0 var(--color-ink);
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    transition:
+      box-shadow 80ms,
+      transform 80ms;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .retro-btn:hover {
+    background: var(--color-chrome);
+  }
+  .retro-btn:active {
+    box-shadow: none;
+    transform: translate(1px, 1px);
+  }
+  /* Anchor tags styled as retro-btn should not use global link hover */
+  a.retro-btn,
+  a.retro-btn:hover {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn:hover {
+    background: var(--color-chrome);
+  }
+  .retro-btn-flat {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-ink);
+    color: var(--color-ink);
+    font-size: 11px;
+    padding: 0 5px;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    background: transparent;
+    transition:
+      background 80ms,
+      color 80ms;
+    user-select: none;
+    gap: 3px;
+  }
+  .retro-btn-flat:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  a.retro-btn-flat {
+    text-decoration: none;
+    color: var(--color-ink);
+  }
+  a.retro-btn-flat:hover {
+    color: var(--color-paper);
+  }
+
+  .retro-btn-primary {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    box-shadow: 1px 1px 0 #555;
+  }
+  .retro-btn-primary:hover {
+    background: #333;
+    color: var(--color-paper);
+  }
+
+  /* ── Hatch pattern (inactive/disabled areas) ── */
+  .retro-hatch {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.06) 2px,
+      rgba(0, 0, 0, 0.06) 4px
+    );
+  }
+
+  /* ── Menu Bar ── */
+  .retro-menubar {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-bottom: 1px solid var(--color-ink);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    height: 28px;
+    gap: 0;
+    user-select: none;
+  }
+
+  .retro-menubar-item {
+    padding: 0 10px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .retro-menubar-item:hover {
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+
+  .retro-menubar-separator {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.25);
+    margin: 0 4px;
+  }
+
+  /* ── Sidebar tree item ── */
+  .retro-tree-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+  .retro-tree-item:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .retro-tree-item.active {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-weight: 700;
+  }
+
+  /* ── Tag pill ── */
+  .retro-tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-tag);
+    color: var(--color-tag);
+    font-size: 11px;
+    padding: 0 5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    text-decoration: none;
+    background: transparent;
+  }
+  .retro-tag:hover {
+    background: var(--color-tag);
+    color: #fff;
+  }
+
+  /* ── Search input ── */
+  .retro-search {
+    border: 1px solid var(--color-ink);
+    background: var(--color-paper);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    width: 100%;
+    outline: none;
+    box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.15);
+  }
+  .retro-search:focus {
+    outline: 2px solid var(--color-active);
+    outline-offset: -1px;
+  }
+
+  /* ── Scrollable area ── */
+  .retro-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* ── Divider ── */
+  .retro-divider {
+    border: none;
+    border-top: 1px solid var(--color-ink);
+    margin: 0;
+  }
+
+  /* ── Badge ── */
+  .retro-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-ink);
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── Animations ── */
+  @keyframes retro-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+  .retro-cursor::after {
+    content: "▋";
+    animation: retro-blink 1s step-end infinite;
+    color: var(--color-ink);
+  }
+
+  @keyframes retro-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .retro-fade-in {
+    animation: retro-fade-in 120ms ease-out forwards;
+  }
+
+  /* ── Resizable handle (retro) ── */
+  .retro-resize-handle {
+    background: var(--color-ink) !important;
+    width: 2px !important;
+    transition: width 0.1s;
+  }
+  .retro-resize-handle:hover,
+  .retro-resize-handle[data-resize-handle-active] {
+    width: 4px !important;
+    background: var(--color-link) !important;
+  }
+  .retro-resize-handle > div {
+    /* Grip dots */
+    background: var(--color-paper) !important;
+    border: 1px solid var(--color-ink) !important;
+    border-radius: 0 !important;
+  }
+
+  /* ── Mobile Responsive Overrides (<768px) ── */
+  @media (max-width: 767px) {
+    /* Larger tap targets for tree items */
+    .retro-tree-item {
+      padding: 6px 12px;
+      font-size: 13px;
+      min-height: 36px;
+    }
+
+    /* Search input larger on mobile */
+    .retro-search {
+      padding: 8px 10px;
+      font-size: 16px; /* prevents iOS zoom on focus */
+    }
+  }
+}
+
+/* ── Lightbox modal ── */
+.lightbox-content img {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  border: none;
+}
+.lightbox-content .mermaid-display svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Lightbox close button — white on dark overlay */
+[data-slot="dialog-content"]:has(.lightbox-content) [data-slot="dialog-close"] {
+  color: #fff;
+  opacity: 0.8;
+}
+[data-slot="dialog-content"]:has(.lightbox-content)
+  [data-slot="dialog-close"]:hover {
+  opacity: 1;
+}

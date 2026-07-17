@@ -1,0 +1,383 @@
+/* Note-content skin: rendered markdown prose, wiki links, embeds, callouts,
+ * heading anchors, highlight.js and mermaid overrides. */
+
+@layer components {
+  /* ── Wiki link ── */
+  a.wiki-link {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-style: normal;
+  }
+  a.wiki-link:hover {
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
+  a.wiki-link.broken {
+    color: var(--color-destructive-accent);
+    text-decoration: underline dotted;
+  }
+
+  /* ── Note content prose ── */
+  .note-column-width {
+    width: 100%;
+    max-width: 50rem;
+  }
+  .note-prose {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-ink);
+    width: 100%;
+    max-width: 50rem;
+  }
+  .note-prose h1 {
+    font-size: 1.5rem;
+    margin: 0 0 0.6em;
+    border-bottom: 1px solid var(--color-ink);
+    padding-bottom: 4px;
+  }
+  .note-prose h2 {
+    font-size: 1.25rem;
+    margin: 1.4em 0 0.4em;
+    border-bottom: 1px dotted var(--color-chrome);
+    padding-bottom: 2px;
+  }
+  .note-prose h3 {
+    font-size: 1.05rem;
+    margin: 1em 0 0.3em;
+  }
+  .note-prose h4 {
+    font-size: 0.95rem;
+    margin: 0.8em 0 0.2em;
+    font-style: italic;
+  }
+  .note-prose p {
+    margin: 0 0 0.8em;
+  }
+  .note-prose ul,
+  .note-prose ol {
+    margin: 0 0 0.8em 1.4em;
+    list-style: revert;
+  }
+  .note-prose li {
+    margin: 0.2em 0;
+  }
+  .note-prose blockquote {
+    border-left: 3px solid var(--color-ink);
+    margin: 0.8em 0;
+    padding: 4px 12px;
+    background: var(--color-panel);
+    font-style: italic;
+  }
+  .note-prose pre {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 0.8em 0;
+    border: 1px solid var(--color-ink);
+    position: relative;
+  }
+  .note-prose code {
+    background: var(--color-panel);
+    border: 1px solid var(--color-chrome);
+    padding: 1px 4px;
+    font-size: 12px;
+  }
+  .note-prose pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--color-paper);
+  }
+  .note-prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+    font-size: 12px;
+  }
+  .note-prose th,
+  .note-prose td {
+    border: 1px solid var(--color-ink);
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .note-prose th {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-weight: 700;
+  }
+  .note-prose tr:nth-child(even) td {
+    background: var(--color-panel);
+  }
+  .note-prose hr {
+    border: none;
+    border-top: 1px solid var(--color-ink);
+    margin: 1.2em 0;
+  }
+  .note-prose img {
+    max-width: 100%;
+    border: 1px solid var(--color-ink);
+    cursor: zoom-in;
+  }
+  .note-prose img:hover {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+    transition: outline 0.15s;
+  }
+  .note-prose a {
+    color: var(--color-link);
+  }
+  .note-prose a:hover {
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
+
+  /* ── Copy code button ── */
+  .copy-code-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border: 1px solid var(--color-ink);
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .note-prose pre:hover .copy-code-btn,
+  .copy-code-btn:focus {
+    opacity: 1;
+  }
+
+  /* ── Wiki embeds ── */
+  .wiki-embed-content {
+    border: 1px solid var(--color-ink);
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .wiki-embed-broken {
+    color: var(--color-destructive-accent);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px 8px;
+  }
+
+  /* ── Heading permalinks ── */
+  .note-prose h1,
+  .note-prose h2,
+  .note-prose h3,
+  .note-prose h4,
+  .note-prose h5,
+  .note-prose h6 {
+    position: relative;
+  }
+  .heading-anchor {
+    position: absolute;
+    right: 0;
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--color-muted-foreground);
+    text-decoration: none;
+    transition:
+      color 0.15s,
+      background 0.15s;
+    padding-left: 0;
+  }
+  .heading-anchor:hover {
+    color: var(--color-link);
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+  }
+  .heading-anchor:focus {
+    outline: 2px solid var(--color-active);
+    outline-offset: -1px;
+  }
+
+  /* ── Callouts (admonitions) ── */
+  .callout {
+    border: 1px solid var(--color-ink);
+    margin: 0.8em 0;
+    background: var(--color-panel);
+  }
+  .callout-title {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 8px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .callout-icon {
+    font-style: normal;
+    font-size: 12px;
+  }
+  .callout-body {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .callout-body p {
+    margin: 0.4em 0;
+  }
+  .callout-summary {
+    border-color: #005500;
+  }
+  .callout-summary .callout-title {
+    background: #005500;
+  }
+  .callout-warning {
+    border-color: #cc7700;
+  }
+  .callout-warning .callout-title {
+    background: #cc7700;
+  }
+  .callout-important {
+    border-color: #cc0000;
+  }
+  .callout-important .callout-title {
+    background: #cc0000;
+  }
+  .callout-tip {
+    border-color: #0055cc;
+  }
+  .callout-tip .callout-title {
+    background: #0055cc;
+  }
+  .callout-note {
+    border-color: var(--color-ink);
+  }
+  .callout-info {
+    border-color: #555;
+  }
+  .callout-info .callout-title {
+    background: #555;
+  }
+
+  /* ── Collapsible callouts ── */
+  .callout-collapsible .callout-title {
+    cursor: pointer;
+  }
+  .callout-collapsible .callout-title:hover {
+    opacity: 0.85;
+  }
+  .callout-toggle {
+    font-size: 10px;
+    display: inline-block;
+    transition: transform 0.15s;
+  }
+  .callout-collapsible .callout-title:hover .callout-toggle {
+    transform: translateX(1px);
+  }
+
+  /* ── Highlight.js retro overrides ── */
+  .hljs {
+    background: var(--color-ink) !important;
+    color: var(--color-paper) !important;
+  }
+  .hljs-keyword,
+  .hljs-selector-tag {
+    color: #aaddff;
+    font-weight: bold;
+  }
+  .hljs-string,
+  .hljs-attr,
+  .hljs-template-variable {
+    color: #aaffaa;
+  }
+  .hljs-comment,
+  .hljs-doctag {
+    color: #888;
+    font-style: italic;
+  }
+  .hljs-number,
+  .hljs-literal {
+    color: #ffddaa;
+  }
+  .hljs-title,
+  .hljs-name,
+  .hljs-function {
+    color: #ffaaaa;
+  }
+  .hljs-type,
+  .hljs-built_in {
+    color: #ddaaff;
+  }
+  .hljs-variable,
+  .hljs-params {
+    color: #faf8f4;
+  }
+  .hljs-meta {
+    color: #aaa;
+  }
+  .hljs-symbol,
+  .hljs-bullet {
+    color: #ffddaa;
+  }
+  .hljs-addition {
+    color: #aaffaa;
+    background: rgba(0, 255, 0, 0.05);
+  }
+  .hljs-deletion {
+    color: #ffaaaa;
+    background: rgba(255, 0, 0, 0.05);
+  }
+  .hljs-link {
+    color: #aaddff;
+    text-decoration: underline;
+  }
+
+  /* ── Mermaid SVG retro styling ── */
+  .mermaid-svg {
+    cursor: zoom-in;
+  }
+  .mermaid-svg:hover {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+    transition: outline 0.15s;
+  }
+  .mermaid-svg svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid-svg .node rect,
+  .mermaid-svg .node circle,
+  .mermaid-svg .node polygon {
+    stroke: var(--color-ink) !important;
+    stroke-width: 1px !important;
+  }
+  .mermaid-svg .edgePath .path {
+    stroke: var(--color-ink) !important;
+    stroke-width: 1px !important;
+  }
+  .mermaid-svg .edgeLabel {
+    font-size: 11px !important;
+    font-family: system-ui, Chicago, sans-serif !important;
+  }
+
+  /* ── Mobile Responsive Overrides (<768px) ── */
+  @media (max-width: 767px) {
+    .note-prose {
+      padding: 0 4px;
+    }
+    .note-prose pre {
+      font-size: 11px;
+      padding: 8px;
+    }
+    .note-prose table {
+      font-size: 11px;
+      display: block;
+      overflow-x: auto;
+    }
+  }
+}

@@ -5,7 +5,7 @@
 import React from "react";
 import { clsx } from "clsx";
 import { BacklinkItem } from "../../molecules/BacklinkItem/BacklinkItem";
-import { Divider } from "../../atoms/Divider/Divider";
+import { Divider } from "../../foundation/Divider/Divider";
 import { Badge } from "../../atoms/Badge/Badge";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
