@@ -11,6 +11,7 @@ import { store } from "./store/store";
 import { VaultLayout } from "./components/pages/VaultLayout/VaultLayout";
 import type { NotePageProps } from "./components/pages/NotePage/NotePage";
 import { SearchPage } from "./components/pages/SearchPage/SearchPage";
+import { WidgetPage } from "./components/pages/WidgetPage/WidgetPage";
 import { Icon } from "./components/atoms/Icon/Icon";
 import {
   useListNotesQuery,
@@ -45,6 +46,7 @@ export function AppRoutes({
     if (
       location.pathname === "/" ||
       location.pathname.startsWith("/note/") ||
+      location.pathname.startsWith("/w/") ||
       location.pathname === "/search"
     )
       return;
@@ -68,6 +70,7 @@ export function AppRoutes({
         element={<NoteRoute NotePageComponent={NotePageComponent} />}
       />
       <Route path="/search" element={<SearchRoute />} />
+      <Route path="/w/:pageId" element={<WidgetRoute />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
@@ -186,6 +189,11 @@ function NoteRoute({ NotePageComponent }: AppRoutesProps) {
 
 function SearchRoute() {
   return <SearchPage />;
+}
+
+function WidgetRoute() {
+  const pageId = useParams().pageId ?? "";
+  return <WidgetPage pageId={pageId} />;
 }
 
 function NotFoundPage() {
