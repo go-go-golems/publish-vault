@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { clsx } from "clsx";
 import { Icon } from "../../atoms/Icon/Icon";
 import { Tag } from "../../atoms/Tag/Tag";
-import { Divider } from "../../atoms/Divider/Divider";
+import { Divider } from "../../foundation/Divider/Divider";
 
 const EXCLUDED_KEYS = new Set(["title", "tags"]);
 

@@ -97,6 +97,10 @@ function parseRoute(pathname) {
     const slug = pathname.replace(/^\/note\//, "");
     return { type: "note", slug };
   }
+  if (pathname.startsWith("/w/")) {
+    const pageId = decodeURIComponent(pathname.replace(/^\/w\//, ""));
+    if (pageId) return { type: "widget", pageId };
+  }
   return { type: "home" };
 }
 
@@ -210,10 +214,18 @@ app.get("*", async (req, res) => {
     // Never seed it into RTK Query's serialized SSR cache: note pages fetch it
     // lazily for backlinks/wiki links, while the home route receives its chosen
     // slug separately and can hydrate directly into that note.
-    const [config, notes, tree] = await Promise.all([
+    // Widget pages need the query string forwarded so page scripts can read
+    // request.query (e.g. /w/reader?slug=foo), mirroring the client fetch.
+    const search = url.includes("?") ? url.slice(url.indexOf("?")) : "";
+    const [config, notes, tree, widgetPage] = await Promise.all([
       fetchAPI("/api/config"),
       route.type === "home" ? fetchAPI("/api/notes") : null,
       fetchAPI("/api/tree"),
+      route.type === "widget"
+        ? fetchAPI(
+            `/api/widget/pages/${encodeURIComponent(route.pageId)}${search}`
+          )
+        : null,
     ]);
 
     // 2. Pre-fetch route-specific data
@@ -232,6 +244,13 @@ app.get("*", async (req, res) => {
       return;
     }
 
+    // Same for widget pages: the API 404s when the page script does not exist
+    // (or widget pages are disabled), and crawlers should see that as a 404.
+    if (route.type === "widget" && !widgetPage) {
+      res.status(404).type("text").send("Widget page not found");
+      return;
+    }
+
     // 3. Render React to HTML
     const { html, preloadedState } = await renderApp(url, {
       config,
@@ -245,9 +264,16 @@ app.get("*", async (req, res) => {
     // 4. Determine page title and description
     const vaultName = config?.vaultName || "Vault";
     const siteTitle = config?.pageTitle || vaultName;
-    const title = note?.title ? `${note.title} — ${siteTitle}` : siteTitle;
+    const title = note?.title
+      ? `${note.title} — ${siteTitle}`
+      : widgetPage?.title
+        ? `${widgetPage.title} — ${siteTitle}`
+        : siteTitle;
     const description =
       note?.excerpt ||
+      (widgetPage
+        ? `${widgetPage.title || route.pageId} — a script-composed widget page in ${vaultName}.`
+        : null) ||
       (notes?.length
         ? `${vaultName} is a read-only published Obsidian vault with ${notes.length} notes, backlinks, search, and markdown mirrors for agents.`
         : `${vaultName} is a read-only published Obsidian vault with markdown mirrors and agent-readable indexes.`);
@@ -276,6 +302,10 @@ app.get("*", async (req, res) => {
       noscriptContent = `
   <h1>${note.title.replace(/</g, "&lt;")}</h1>
   <p>${(note.excerpt || description).replace(/</g, "&lt;")}</p>`;
+    } else if (widgetPage) {
+      noscriptContent = `
+  <h1>${String(widgetPage.title || route.pageId).replace(/</g, "&lt;")}</h1>
+  <p>This is a script-composed widget page that requires JavaScript. <a href="/">Back to the vault index</a>.</p>`;
     } else {
       noscriptContent = `
   <h1>${vaultName}</h1>
@@ -319,6 +349,13 @@ app.get("*", async (req, res) => {
         position: 2,
         name: note.title,
         item: `${BASE_URL}/note/${route.slug}`,
+      });
+    } else if (route.type === "widget" && widgetPage) {
+      breadcrumbItems.push({
+        "@type": "ListItem",
+        position: 2,
+        name: widgetPage.title || route.pageId,
+        item: `${BASE_URL}${canonicalPath}`,
       });
     }
     const breadcrumbLd = {

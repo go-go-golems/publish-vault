@@ -1,0 +1,123 @@
+{
+  "id": "reader",
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "kind": "component",
+            "props": {
+              "segments": [
+                {
+                  "label": "Index"
+                }
+              ]
+            },
+            "type": "BreadcrumbBar"
+          },
+          {
+            "kind": "component",
+            "props": {
+              "frontmatter": {
+                "tags": [
+                  "home"
+                ],
+                "title": "Index"
+              },
+              "modTime": "REDACTED",
+              "tags": [
+                "home"
+              ]
+            },
+            "type": "FrontmatterPanel"
+          },
+          {
+            "kind": "component",
+            "props": {
+              "anchors": true,
+              "embeds": true,
+              "highlight": true,
+              "html": "\u003ch1 id=\"index\"\u003eIndex\u003c/h1\u003e\n\u003cp\u003eHello.\u003c/p\u003e\n",
+              "mermaid": true,
+              "slug": "index"
+            },
+            "type": "NoteHtml"
+          }
+        ],
+        "kind": "component",
+        "props": {
+          "density": "flush",
+          "label": "Index",
+          "level": 1,
+          "rule": true
+        },
+        "type": "SectionBlock"
+      },
+      {
+        "children": [
+          {
+            "kind": "component",
+            "props": {
+              "entries": [],
+              "onSelect": {
+                "kind": "navigate",
+                "to": "/note/${slug}"
+              }
+            },
+            "type": "BacklinksPanel"
+          }
+        ],
+        "kind": "component",
+        "props": {
+          "density": "flush",
+          "label": "Linked mentions",
+          "level": 1,
+          "rule": true
+        },
+        "type": "SectionBlock"
+      }
+    ],
+    "kind": "component",
+    "props": {
+      "gap": "lg"
+    },
+    "type": "Stack"
+  },
+  "schemaVersion": "0.1.0",
+  "shell": {
+    "content": {
+      "maxWidth": "wide",
+      "padding": "md",
+      "scroll": "page"
+    },
+    "kind": "app",
+    "navigation": {
+      "activeItemId": "reader",
+      "ariaLabel": "Primary",
+      "placement": "sidebar",
+      "sections": [
+        {
+          "id": "pages",
+          "items": [
+            {
+              "action": {
+                "kind": "navigate",
+                "to": "/w/reader"
+              },
+              "id": "reader",
+              "label": {
+                "kind": "text",
+                "text": "Reader"
+              }
+            }
+          ],
+          "label": {
+            "kind": "text",
+            "text": "Pages"
+          }
+        }
+      ]
+    }
+  },
+  "title": "Index"
+}

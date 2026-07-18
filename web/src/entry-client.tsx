@@ -6,7 +6,7 @@
 // first client render matches the server render.
 
 import React, { lazy, type ComponentType } from "react";
-import { hydrateRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { Provider } from "react-redux";
 import { makeStore } from "./store/store";
@@ -58,8 +58,7 @@ async function hydrate() {
     NotePageComponent = (await loadNotePage()).NotePage;
   }
 
-  hydrateRoot(
-    root,
+  const app = (
     <React.StrictMode>
       <Provider store={store}>
         <BrowserRouter>
@@ -72,6 +71,18 @@ async function hydrate() {
       </Provider>
     </React.StrictMode>
   );
+
+  // Hydrate only when the server actually rendered into #root (SSR sidecar
+  // mode). Without SSR the container is empty; hydrating it makes React 19
+  // report a mismatch (#418) and run a recovery render that can replace DOM
+  // nodes AFTER the note-enhancement effects mutated them — which is how
+  // heading anchors/copy buttons intermittently vanished (hash navigation
+  // made the bad interleaving reliable). createRoot renders exactly once.
+  if (root.hasChildNodes()) {
+    hydrateRoot(root, app);
+  } else {
+    createRoot(root).render(app);
+  }
 }
 
 void hydrate();

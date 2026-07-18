@@ -1,0 +1,46 @@
+/*
+ * Compatibility bridge: --rag-* → --pv-*
+ *
+ * Widget/design-system components ported from
+ * rag-evaluation-system (packages/rag-evaluation-site) style themselves with
+ * --rag-* tokens in their CSS modules. Mapping those tokens onto the
+ * publish-vault retro palette here means ported components pick up the
+ * Retro System 1 look without touching their stylesheets — the same
+ * pattern rag-evaluation-site uses for its legacy --mac-* tokens.
+ *
+ * Every --rag-* variable consumed by a ported component's CSS must have an
+ * entry here (layout knobs like --rag-tile-min are excluded: components
+ * declare their own var(..., fallback) defaults for those).
+ */
+
+:root {
+  --rag-font-sans:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  --rag-font-mono: "Monaco", "Courier New", "Lucida Console", monospace;
+
+  --rag-color-bg: var(--pv-paper);
+  --rag-color-surface: var(--pv-paper);
+  --rag-color-surface-muted: var(--pv-panel);
+  --rag-color-text: var(--pv-ink);
+  --rag-color-text-muted: var(--pv-ink-muted);
+  --rag-color-border: var(--pv-chrome);
+  --rag-color-border-strong: var(--pv-ink);
+  --rag-color-accent: var(--pv-link);
+  --rag-color-success: var(--pv-tag);
+  --rag-color-warning: var(--pv-warning);
+  --rag-color-danger: var(--pv-destructive);
+
+  /* Font-role composites (weight size/line-height family) */
+  --rag-font-role-body: 400 12px / 1.45 var(--rag-font-sans);
+  --rag-font-role-compact: 400 11px / 1.4 var(--rag-font-sans);
+  --rag-font-role-metadata: 400 11px / 1.35 var(--rag-font-mono);
+  --rag-font-role-label: 700 11px / 1.2 var(--rag-font-mono);
+  --rag-font-role-panel-heading: 700 12px / 1.55 var(--rag-font-mono);
+  --rag-font-role-metric: 700 12px / 1.25 var(--rag-font-mono);
+  --rag-font-role-code: 400 11px / 1.45 var(--rag-font-mono);
+  --rag-font-role-display: 700 22px / 1.15 var(--rag-font-sans);
+  --rag-font-role-heading: 700 16px / 1.25 var(--rag-font-sans);
+  --rag-font-role-readable-body: 400 13px / 1.55 var(--rag-font-sans);
+}

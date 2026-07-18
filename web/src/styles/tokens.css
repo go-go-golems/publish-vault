@@ -1,0 +1,77 @@
+/*
+ * DESIGN TOKENS — Retro System 1 (Macintosh 1984)
+ * =====================================================
+ * Movement: Early Macintosh / Susan Kare pixel aesthetic
+ * Core Principles:
+ *   1. Monochrome foundation — near-black ink on white paper
+ *   2. System-ui bitmap-inspired typography
+ *   3. Hard 1px borders, no border-radius (square windows)
+ *   4. Subtle colour accents ONLY for interactive/functional UI elements
+ *      (links = deep blue, active = deep blue, destructive = deep red)
+ *
+ * --pv-* is the canonical token namespace. The Tailwind @theme block maps
+ * them onto --color-* names so existing `var(--color-*)` arbitrary values
+ * and generated utilities keep working.
+ */
+
+:root {
+  /* Canonical publish-vault retro palette */
+  --pv-ink: #1a1a1a;
+  --pv-paper: #ffffff;
+  --pv-ink-muted: #696966;
+  --pv-link: #0000cc;
+  --pv-link-visited: #551a8b;
+  --pv-selection-bg: #1a1a1a;
+  --pv-selection-fg: #ffffff;
+  --pv-panel: #f4f4f1;
+  --pv-panel-dark: #e5e5e1;
+  --pv-panel-muted: #e1e1dd;
+  --pv-chrome: #ecece8;
+  --pv-active: #0000cc;
+  --pv-destructive: #cc0000;
+  --pv-warning: #cc7700;
+  --pv-tag: #005500;
+
+  /* Shadcn-compatible tokens consumed by ui/dialog + ui/resizable and base styles */
+  --background: var(--pv-paper);
+  --foreground: var(--pv-ink);
+  --muted: var(--pv-panel-muted);
+  --muted-foreground: var(--pv-ink-muted);
+  --accent: var(--pv-link);
+  --accent-foreground: var(--pv-paper);
+  --border: var(--pv-ink);
+  --ring: var(--pv-active);
+}
+
+@theme inline {
+  /* Radius — zero for retro square look */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius: 0px;
+
+  /* Color mappings (utilities: bg-background, text-muted-foreground, ...) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  /* Retro-specific tokens (used as var(--color-*) arbitrary values) */
+  --color-ink: var(--pv-ink);
+  --color-paper: var(--pv-paper);
+  --color-link: var(--pv-link);
+  --color-link-visited: var(--pv-link-visited);
+  --color-selection-bg: var(--pv-selection-bg);
+  --color-selection-fg: var(--pv-selection-fg);
+  --color-panel: var(--pv-panel);
+  --color-panel-dark: var(--pv-panel-dark);
+  --color-chrome: var(--pv-chrome);
+  --color-active: var(--pv-active);
+  --color-destructive-accent: var(--pv-destructive);
+  --color-tag: var(--pv-tag);
+}

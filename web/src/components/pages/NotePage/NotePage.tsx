@@ -6,15 +6,11 @@
  */
 import React, { useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { NoteRenderer } from "../../organisms/NoteRenderer/NoteRenderer";
+import { NoteView } from "../../organisms/NoteView/NoteView";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "../../ui/resizable";
+import { SplitPane } from "../../layout/SplitPane/SplitPane";
 import {
   useGetConfigQuery,
   useGetNoteQuery,
@@ -67,11 +63,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   }, [config?.pageTitle, config?.vaultName, note]);
 
   const { data: allNotes } = useListNotesQuery();
-
-  const allSlugs = useMemo(
-    () => allNotes?.map((n) => n.slug) ?? [],
-    [allNotes]
-  );
 
   // Build backlink entries from note backlinks + allNotes index
   const backlinkEntries = useMemo(() => {
@@ -142,24 +133,20 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     </div>
   );
 
-  // ── Desktop: resizable panel group with right panel ──
+  // ── Desktop: resizable split with right panel ──
   const desktopLayout = rightPanelOpen ? (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
-      <ResizablePanel defaultSize={75} minSize={40} order={1}>
+    <SplitPane
+      main={
         <ScrollArea className="h-full p-6">
-          <NoteRenderer
+          <NoteView
             note={note}
-            allSlugs={allSlugs}
             onNavigate={handleNavigate}
             onTagClick={handleTagClick}
             className="max-w-5xl"
           />
         </ScrollArea>
-      </ResizablePanel>
-
-      <ResizableHandle withHandle className="retro-resize-handle" />
-
-      <ResizablePanel defaultSize={25} minSize={12} maxSize={40} order={2}>
+      }
+      side={
         <aside className="h-full border-l border-[var(--color-ink)] flex flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
             <BacklinksPanel
@@ -169,14 +156,13 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
             />
           </div>
         </aside>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+      }
+    />
   ) : (
     <div className="flex h-full">
       <ScrollArea className="flex-1 p-6">
-        <NoteRenderer
+        <NoteView
           note={note}
-          allSlugs={allSlugs}
           onNavigate={handleNavigate}
           onTagClick={handleTagClick}
           className="max-w-5xl"
@@ -188,9 +174,8 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   // ── Mobile: full-width note with inline backlinks, no right panel ──
   const mobileLayout = (
     <ScrollArea className="h-full p-4">
-      <NoteRenderer
+      <NoteView
         note={note}
-        allSlugs={allSlugs}
         onNavigate={handleNavigate}
         onTagClick={handleTagClick}
         className="max-w-5xl"

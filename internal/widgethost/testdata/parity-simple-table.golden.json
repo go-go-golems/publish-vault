@@ -1,0 +1,92 @@
+{
+	"id": "simple-table",
+	"root": {
+		"children": [
+			{
+				"children": [
+					{
+						"children": [
+							{
+								"kind": "component",
+								"props": {
+									"columns": [
+										{
+											"cell": {
+												"field": "id",
+												"kind": "caption",
+												"tone": "muted"
+											},
+											"header": "ID",
+											"id": "id"
+										},
+										{
+											"cell": {
+												"field": "title",
+												"kind": "field"
+											},
+											"header": "Title",
+											"id": "title"
+										},
+										{
+											"cell": {
+												"field": "turns",
+												"kind": "number"
+											},
+											"header": "Turns",
+											"id": "turns"
+										},
+										{
+											"cell": {
+												"field": "status",
+												"kind": "status"
+											},
+											"header": "Status",
+											"id": "status"
+										}
+									],
+									"getRowKey": "id",
+									"rows": [
+										{
+											"id": "sess-intro",
+											"status": "ready",
+											"title": "Intro to context windows",
+											"turns": 12
+										},
+										{
+											"id": "sess-debug",
+											"status": "review",
+											"title": "Debugging retrieval",
+											"turns": 28
+										}
+									]
+								},
+								"type": "DataTable"
+							}
+						],
+						"kind": "component",
+						"props": {
+							"gap": "md"
+						},
+						"type": "Stack"
+					}
+				],
+				"kind": "component",
+				"props": {
+					"caption": "A data.collection table emitted by widget.dsl v3.",
+					"density": "flush",
+					"label": "Sessions",
+					"level": 1,
+					"rule": true
+				},
+				"type": "SectionBlock"
+			}
+		],
+		"kind": "component",
+		"props": {
+			"gap": "lg"
+		},
+		"type": "Stack"
+	},
+	"schemaVersion": "0.1.0",
+	"title": "Simple table"
+}
