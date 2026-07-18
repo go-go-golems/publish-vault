@@ -14,7 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/spf13/cobra"
 
-	appserver "github.com/go-go-golems/publish-vault/internal/server"
+	appserver "github.com/go-go-golems/publish-vault/pkg/server"
 )
 
 // Command serves the API and optionally the bundled web app.
