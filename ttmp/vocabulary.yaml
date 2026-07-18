@@ -119,6 +119,8 @@ topics:
       description: 'React design system organization: atoms/molecules/organisms, tokens, IR renderer'
     - slug: goja
       description: goja/go-go-goja embedded JavaScript runtime and native modules
+    - slug: architecture
+      description: System architecture, module layout, and framework design decisions
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
