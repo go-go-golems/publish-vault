@@ -16,11 +16,11 @@ RelatedFiles:
       Note: LOGCOPTER_FLAGS strip-prefix and packages list change with the rename/promotion
     - Path: repo://cmd/retro-obsidian-publish/commands/serve/serve.go
       Note: Reference wiring of server.Config for downstream apps
-    - Path: repo://internal/api/api.go
+    - Path: repo://pkg/api/api.go
       Note: SnapshotProvider seam and shared types; promotes to pkg/api
-    - Path: repo://internal/server/server.go
+    - Path: repo://pkg/server/server.go
       Note: Config+Run entrypoint that downstream apps will call; promotes to pkg/server
-    - Path: repo://internal/web/embed.go
+    - Path: repo://pkg/web/embed.go
       Note: go:embed of built SPA behind embed tag; core of the frontend-delivery decision D4
 ExternalSources: []
 Summary: 'Turn publish-vault from a standalone binary (module retro-obsidian-publish) into an importable Go framework at github.com/go-go-golems/publish-vault: module rename, internal->pkg promotion, embedded-frontend strategy for downstream consumers, and release automation. Written as an intern-level guide.'
