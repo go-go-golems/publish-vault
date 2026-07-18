@@ -14,6 +14,7 @@ import { useWidgetPage } from "../../../hooks/useWidgetPage";
 import { resolvePageShell } from "../../../widgets/shell";
 import { useSidebarOverride } from "../../../widgets/sidebarSlot";
 import {
+  confirmWidgetAction,
   dispatchWidgetAction,
   structuredNavigationTarget,
   type WidgetActionContext,
@@ -58,13 +59,17 @@ export const WidgetPage: React.FC<WidgetPageProps> = ({ pageId }) => {
   const handleAction = useCallback(
     (action: ActionSpec, context: WidgetActionContext) => {
       if (action.kind === "navigate") {
+        // The dispatcher's confirm gate is bypassed when a handler takes over,
+        // so honor action.confirm here before routing.
+        if (!confirmWidgetAction(action, context)) return;
         navigate(structuredNavigationTarget(action, context), {
           replace: action.replace ?? false,
         });
         return;
       }
       // Delegate everything else (server/copy/download/event/overlay) to the
-      // default dispatcher — called WITHOUT onAction to avoid recursion.
+      // default dispatcher — called WITHOUT onAction to avoid recursion; it
+      // runs its own confirm gate.
       dispatchWidgetAction(action, context);
     },
     [navigate]
