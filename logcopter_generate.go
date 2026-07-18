@@ -1,0 +1,3 @@
+package publishvault
+
+//go:generate go tool logcopter-gen -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix retro-obsidian-publish ./cmd/... ./internal/...
