@@ -114,14 +114,16 @@ devctl-example:
 devctl-parc:
 	devctl up --profile go-go-parc
 
+# Validate the svu output before tagging: a bare `git tag` (empty argument)
+# would just list tags and exit 0, silently skipping the release tag.
 tag-major:
-	git tag $(shell svu major)
+	@tag="$$(svu major)" && test -n "$$tag" && git tag "$$tag" && echo "Tagged $$tag"
 
 tag-minor:
-	git tag $(shell svu minor)
+	@tag="$$(svu minor)" && test -n "$$tag" && git tag "$$tag" && echo "Tagged $$tag"
 
 tag-patch:
-	git tag $(shell svu patch)
+	@tag="$$(svu patch)" && test -n "$$tag" && git tag "$$tag" && echo "Tagged $$tag"
 
 bump-go-go-golems:
 	@deps="$$(awk '/^require[[:space:]]+github\.com\/go-go-golems\// { print $$2 } /^[[:space:]]*github\.com\/go-go-golems\// { print $$1 }' go.mod | sort -u)"; \
@@ -130,7 +132,7 @@ bump-go-go-golems:
 	else \
 		echo "Bumping go-go-golems dependencies:"; \
 		echo "$$deps"; \
-		for dep in $$deps; do GOWORK=off go get "$${dep}@latest"; done; \
+		for dep in $$deps; do GOWORK=off go get "$${dep}@latest" || exit 1; done; \
 	fi
 
 # Clean build artifacts
