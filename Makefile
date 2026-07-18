@@ -1,4 +1,4 @@
-.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck glazed-lint-build glazed-lint test web-check build ci-check devctl-example devctl-parc
+.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck glazed-lint-build glazed-lint test web-check build ci-check devctl-example devctl-parc tag-major tag-minor tag-patch bump-go-go-golems
 
 GLAZED_LINT_BIN ?= /tmp/glazed-lint
 GLAZED_LINT_PKG ?= github.com/go-go-golems/glazed/cmd/tools/glazed-lint
@@ -96,6 +96,25 @@ devctl-example:
 # Start devctl with the go-go-parc vault profile
 devctl-parc:
 	devctl up --profile go-go-parc
+
+tag-major:
+	git tag $(shell svu major)
+
+tag-minor:
+	git tag $(shell svu minor)
+
+tag-patch:
+	git tag $(shell svu patch)
+
+bump-go-go-golems:
+	@deps="$$(awk '/^require[[:space:]]+github\.com\/go-go-golems\// { print $$2 } /^[[:space:]]*github\.com\/go-go-golems\// { print $$1 }' go.mod | sort -u)"; \
+	if [ -z "$$deps" ]; then \
+		echo "No github.com/go-go-golems dependencies in go.mod"; \
+	else \
+		echo "Bumping go-go-golems dependencies:"; \
+		echo "$$deps"; \
+		for dep in $$deps; do GOWORK=off go get "$${dep}@latest"; done; \
+	fi
 
 # Clean build artifacts
 clean:
