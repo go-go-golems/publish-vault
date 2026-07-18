@@ -23,3 +23,12 @@ Phases 1-5 implemented: module rename (34b2e5d), internal->pkg promotion, downst
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/.github/workflows/release-assets.yml — Tag-with-assets release flow (D4)
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/server/server.go — Public entrypoint with WebFS override
 
+
+## 2026-07-18
+
+PR #13 opened, CI green after Dockerfile COPY pkg fix (8d6d02f); all phases complete
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/Dockerfile — COPY pkg added for builder stage
+

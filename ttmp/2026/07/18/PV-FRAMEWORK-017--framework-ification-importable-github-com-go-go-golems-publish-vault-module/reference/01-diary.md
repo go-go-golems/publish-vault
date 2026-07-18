@@ -293,3 +293,52 @@ release-assets workflow, and documented library usage in the README.
 
 ### Technical details
 - Consumer module and binaries live in the session scratchpad (pv-consumer/).
+
+## Step 5: PR #13 and the predicted Docker break
+
+Opened PR #13. CI failed exactly the way design doc §6 Phase 2 warned about:
+"compiles locally, breaks in Docker". The Dockerfile copies source directories
+individually (`COPY cmd`, `COPY internal`) and the new `pkg/` was never copied,
+so the image build could not resolve `publish-vault/pkg/*`. One-line fix
+(`COPY pkg ./pkg`, commit 8d6d02f); all checks green after.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Commit (code):** 8d6d02f — "fix(docker): copy pkg/ into the builder stage"
+
+### What I did
+- `gh run view --log-failed` on test-build: `no required module provides package
+  github.com/go-go-golems/publish-vault/pkg/server` at Dockerfile:23.
+- Added `COPY pkg ./pkg`; both failing jobs (test-build, release/publish) build
+  the same image and went green together.
+
+### Why
+- Local builds see the working tree; the Docker builder stage sees only what is
+  COPYed. Directory-selective COPY is the one place the promotion was invisible
+  to local verification.
+
+### What worked
+- The Phase-2 embed-path edits themselves were correct; only the source COPY was
+  missing.
+
+### What didn't work
+- My local verification matrix (build/test/lint/gosec/embed binary) cannot catch
+  Dockerfile COPY gaps; only CI's test-build does. Accepted residual risk in the
+  design doc, now realized and fixed.
+
+### What I learned
+- When adding a top-level source directory to a repo with selective-COPY
+  Dockerfiles, grep the Dockerfile for COPY lines as part of the move checklist.
+
+### What warrants a second pair of eyes
+- Nothing further; CI green across all 10 checks.
+
+### What should be done in the future
+- After merge: dispatch release-assets (patch) for v0.1.0; watch the first run
+  (tag-only push assertion).
+
+### Code review instructions
+- PR https://github.com/go-go-golems/publish-vault/pull/13; commits 34b2e5d,
+  ce9d3e3, 130e767, 8d6d02f.
