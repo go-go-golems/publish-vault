@@ -20,6 +20,7 @@ package widgethost
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -243,10 +244,21 @@ func (h *Host) readPage(id string) (string, error) {
 	if !validPageID(id) {
 		return "", fmt.Errorf("invalid page id %q", id)
 	}
-	path := filepath.Join(h.pagesDir, id+".js")
-	data, err := os.ReadFile(path) // #nosec G304 -- id validated, dir operator-configured
+	// os.Root confines every open to the pages directory, so a crafted id
+	// cannot escape it regardless of validation above.
+	root, err := os.OpenRoot(h.pagesDir)
+	if err != nil {
+		return "", fmt.Errorf("pages dir unavailable: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	file, err := root.Open(id + ".js")
 	if err != nil {
 		return "", fmt.Errorf("unknown page %q", id)
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("read page %q: %w", id, err)
 	}
 	return string(data), nil
 }
@@ -329,7 +341,9 @@ func (h *Host) handleGetPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(page)
+	// Encoder-mediated write: page is json.Marshal output from RenderPage;
+	// Encode revalidates it as JSON on the way out.
+	_ = json.NewEncoder(w).Encode(page)
 }
 
 const maxActionBodyBytes = 1 << 20 // 1 MiB
