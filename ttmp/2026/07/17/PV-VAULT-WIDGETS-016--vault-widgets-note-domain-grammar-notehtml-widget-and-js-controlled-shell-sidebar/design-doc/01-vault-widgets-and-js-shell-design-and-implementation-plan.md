@@ -64,10 +64,11 @@ const note = vault.note(request.query.slug || "index");
 const page = widget.page(note.title, (p) =>
   p.id("reader")
    .shell(widget.app.shell((s) =>                        // NEW: rendered, not ignored
-      s.sidebar((nav) =>
-        nav.section("Reading", (sec) =>
-          sec.item("recent", "Recently updated", widget.act.navigate("/w/recent"))
-             .item("tags", "Tags", widget.act.navigate("/w/tags"))))))
+      s.navigation((nav) =>
+        nav.placement("sidebar").active("reader")
+           .section("reading", "Reading", (items) =>
+             items.item("recent", "Recently updated", widget.act.navigate("/w/recent"))
+                  .item("tags", "Tags", widget.act.navigate("/w/tags"))))))
    .section(note.title, (s) =>
       s.view(vw.breadcrumb(note))
        .view(vw.frontmatter(note))
@@ -78,7 +79,7 @@ const page = widget.page(note.title, (p) =>
 
 Notes on the sketch:
 - `vw.*` helpers return plain IR node maps (`{kind:"component", type, props}`) — exactly what `widget.raw.component` produces — so they compose with `.view()`, `use()`, and any v3 builder that accepts nodes.
-- Verify the exact `widget.app.shell` builder surface against `pkg/widgetdsl/v3.go` (`v3AppObject`) before implementing; the sketch's `.sidebar/.section/.item` chain must be replaced by whatever v3 actually exposes (check examples `06-admin-course-cms.js`, `13-course-shell-layout.js`).
+- The shell chain above is the VERIFIED v3 grammar (`pkg/widgetdsl/v3.go` `v3AppShellBuilder`/`v3NavigationBuilder`, confirmed 2026-07-17 during implementation): `shell(s => s.navigation(nav => nav.placement(...).active(...).section(id, label, items => items.item(id, label, action))))`.
 - Copy/download actions need no widgets: `widget.act.copy(...)` / `widget.act.download(...)` on plain buttons.
 
 ## 3. Design
