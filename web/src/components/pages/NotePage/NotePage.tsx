@@ -64,11 +64,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
 
   const { data: allNotes } = useListNotesQuery();
 
-  const allSlugs = useMemo(
-    () => allNotes?.map((n) => n.slug) ?? [],
-    [allNotes]
-  );
-
   // Build backlink entries from note backlinks + allNotes index
   const backlinkEntries = useMemo(() => {
     if (!note || !allNotes) return [];
@@ -145,7 +140,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
         <ScrollArea className="h-full p-6">
           <NoteView
             note={note}
-            allSlugs={allSlugs}
             onNavigate={handleNavigate}
             onTagClick={handleTagClick}
             className="max-w-5xl"
@@ -169,7 +163,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
       <ScrollArea className="flex-1 p-6">
         <NoteView
           note={note}
-          allSlugs={allSlugs}
           onNavigate={handleNavigate}
           onTagClick={handleTagClick}
           className="max-w-5xl"
@@ -183,7 +176,6 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     <ScrollArea className="h-full p-4">
       <NoteView
         note={note}
-        allSlugs={allSlugs}
         onNavigate={handleNavigate}
         onTagClick={handleTagClick}
         className="max-w-5xl"

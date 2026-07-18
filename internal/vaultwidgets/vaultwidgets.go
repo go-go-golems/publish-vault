@@ -53,16 +53,34 @@ func Loader(provider api.SnapshotProvider, _ api.PublicConfig) require.ModuleLoa
 			}
 		}
 
-		mustSet("noteHtml", func(note map[string]any, opts ...map[string]any) map[string]any {
+		// Accepts either a note object (from vault.data.note()) or a slug
+		// string, in which case the note is fetched from the current
+		// snapshot. Unknown slugs throw so page authors fail loudly; guard
+		// with vault.note(slug) for soft behavior.
+		mustSet("noteHtml", func(noteOrSlug goja.Value, opts ...map[string]any) (map[string]any, error) {
 			o := firstOpts(opts)
+			var html, slug string
+			switch v := noteOrSlug.Export().(type) {
+			case string:
+				vaultSnap, _ := provider.Snapshot()
+				target, ok := vaultSnap.GetNote(v)
+				if !ok {
+					return nil, fmt.Errorf("vault.widgets.noteHtml: unknown note %q", v)
+				}
+				html, slug = target.HTML, target.Slug
+			case map[string]any:
+				html, slug = stringField(v, "html"), stringField(v, "slug")
+			default:
+				return nil, fmt.Errorf("vault.widgets.noteHtml: expected note object or slug string, got %T", v)
+			}
 			return node("NoteHtml", map[string]any{
-				"html":      stringField(note, "html"),
-				"slug":      stringField(note, "slug"),
+				"html":      html,
+				"slug":      slug,
 				"embeds":    boolOpt(o, "embeds", true),
 				"anchors":   boolOpt(o, "anchors", true),
 				"highlight": boolOpt(o, "highlight", true),
 				"mermaid":   boolOpt(o, "mermaid", true),
-			})
+			}), nil
 		})
 
 		mustSet("frontmatter", func(note map[string]any, opts ...map[string]any) map[string]any {

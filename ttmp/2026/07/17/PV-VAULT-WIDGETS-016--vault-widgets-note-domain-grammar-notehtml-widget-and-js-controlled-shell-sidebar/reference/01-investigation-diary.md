@@ -141,3 +141,40 @@ there's a bug btw where when you have a link with #... then the anchor links act
 ### Code review instructions
 - `web/src/entry-client.tsx` (conditional hydrate) and `web/src/components/organisms/NoteView/NoteBody.tsx` (memo + load-bearing comment).
 - Repro harnesses in scratchpad (`check-hash*.mjs`, `check-rerender.mjs`) show the verification matrix.
+
+## Step 4: Consolidation — one note-rendering path
+
+Both open decisions from the phase A–D wrap-up are now closed in code. `vw.noteHtml` accepts a slug string as well as a note object (unknown slugs throw so authors fail loudly; the helper resolves via the snapshot provider, closing -016's open question). And NoteView is rewritten on top of NoteHtml: it keeps only the page furniture (breadcrumb, title, NoteActions, FrontmatterPanel) and delegates the body — HTML hosting, wiki-link resolution, enhancement pipeline, click delegation, lightbox — to the same NoteHtml component the widget registry renders. The ~150 duplicated lines are gone; the disappearing-enhancements class of bug now has exactly one owner, and the fix from Step 3 (memoized NoteBody) covers `/note/*` and `/w/*` pages through the same code.
+
+API cleanup that fell out: NoteView's `allSlugs` prop is removed (NoteHtml resolves broken links via its own `useListNotesQuery`, same RTK cache entry NotePage already subscribes to); NotePage and the stories were updated.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 3 — "consolidate. also: there's a bug…")
+
+**Assistant interpretation:** Execute the agreed consolidation now that the bug fix landed.
+
+**Inferred user intent:** One canonical note-rendering path before any further widget work builds on it.
+
+### What I did
+- `internal/vaultwidgets`: noteHtml(slug|note) with typed error paths; +1 test (slug resolution + unknown-slug throw).
+- `NoteView.tsx` rewritten (166→86 lines) delegating to NoteHtml; `allSlugs` prop removed from NoteViewProps/NotePage/stories.
+- Validation: all Go tests; 21 vitest; tsc; client+SSR+storybook builds; `smoke:ssr` PASS (0 console warnings/errors — SSR/hydration parity held through the rewrite); 3-round hash/enhancement matrix still all-green; live go-go-parc e2e (sidebar → `/w/reader?slug=<real note>` renders with anchors, zero errors).
+
+### What worked
+- Doing the bug fix BEFORE the consolidation meant the memoized NoteBody flowed into the unified path automatically — no second fix site.
+
+### What didn't work
+- The reader e2e initially failed on stale fixture expectations ("Zettelkasten" is a vault-example note, not go-go-parc); adjusted the check to click whatever latest-note the sidebar actually lists.
+
+### What warrants a second pair of eyes
+- NoteView no longer receives `allSlugs`; broken-link marking now depends on NoteHtml's own notes subscription. On SSR, that query has no preloaded data on note routes (same as before — the old path's `allSlugs` was empty there too), so behavior is unchanged, but it's worth knowing the equivalence argument.
+- The hash-scroll effect now lives only in NoteHtml (keyed on its `slug` prop); NotePage hash deep-links verified in the matrix.
+
+### What should be done in the future
+- Remaining -016 nicety: `shell: "none"` full-bleed rendering (still renders vault chrome in v1).
+
+### Code review instructions
+- Diff `NoteView.tsx` against its pre-step-4 version (git) — everything removed should exist in `NoteHtml.tsx`.
+- `internal/vaultwidgets/vaultwidgets.go` noteHtml switch; test `TestNoteHtmlAcceptsSlug`.
+- Validate: full suites plus `pnpm smoke:ssr`; open a note with `#heading` and toggle the right panel — enhancements must survive both.

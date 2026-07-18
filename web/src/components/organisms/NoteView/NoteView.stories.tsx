@@ -50,7 +50,6 @@ export const Default: Story = {
 </code></pre>
   `,
     },
-    allSlugs: ["stoicism", "epistemology", "zeno-of-citium"],
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };
@@ -91,7 +90,6 @@ go build -o bin/app ./cmd/app
   vault: /home/user/notes</code></pre>
   `,
     },
-    allSlugs: ["code-examples"],
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };
@@ -124,7 +122,6 @@ export const WithMermaid: Story = {
     S-->>U: JSON response</code></pre>
   `,
     },
-    allSlugs: ["system-architecture"],
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };
@@ -157,7 +154,6 @@ export const WithMermaidAndCode: Story = {
 }</code></pre>
   `,
     },
-    allSlugs: ["full-technical-note"],
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };
@@ -187,7 +183,6 @@ export const WithCallouts: Story = {
     </div>
   `,
     },
-    allSlugs: ["callouts-note"],
     onNavigate: (slug) => console.log("navigate:", slug),
   },
 };

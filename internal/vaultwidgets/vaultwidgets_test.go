@@ -118,6 +118,23 @@ func TestNoteHtmlDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
+func TestNoteHtmlAcceptsSlug(t *testing.T) {
+	vm := newTestVM(t)
+	n := runJSON(t, vm, `
+		const vw = require("vault.widgets");
+		vw.noteHtml("index");
+	`)
+	assertNode(t, n, "NoteHtml")
+	p := props(t, n)
+	if p["slug"] != "index" || p["html"] == "" {
+		t.Fatalf("slug form did not resolve note: %v", p)
+	}
+
+	if _, err := vm.RunString(`require("vault.widgets").noteHtml("does-not-exist")`); err == nil {
+		t.Fatal("expected unknown slug to throw")
+	}
+}
+
 func TestBreadcrumbSegments(t *testing.T) {
 	vm := newTestVM(t)
 	n := runJSON(t, vm, `
