@@ -342,3 +342,20 @@ so the image build could not resolve `publish-vault/pkg/*`. One-line fix
 ### Code review instructions
 - PR https://github.com/go-go-golems/publish-vault/pull/13; commits 34b2e5d,
   ce9d3e3, 130e767, 8d6d02f.
+
+## Step 6: Review fixes — the sed over-match
+
+Codex review of PR #13 flagged that the phase-1 rename sed rewrote string
+literals that were not imports. An audit (`grep '"github.com/go-go-golems/publish-vault'`
+filtered to non-`/pkg/`, non-`/internal/` occurrences) found five collateral
+rewrites: cobra `Use:`, the logging section name, the Dagger pnpm cache-volume
+name, an `os.MkdirTemp` pattern (P1 — path separators are invalid in temp
+patterns, so the Dagger web build would fail at export), and the generated
+AGENTS.md operator command (P2). All restored to `retro-obsidian-publish`
+(commit 47b61d8). The Dockerfile finding was already fixed in 8d6d02f.
+
+**Lesson:** an import-rewrite sed must anchor on import syntax, not on the bare
+string prefix — or be followed by exactly this audit. The audit grep is now the
+checklist item.
+
+**Commit (code):** 47b61d8 — "fix: revert collateral string rewrites from the module-rename sed"
