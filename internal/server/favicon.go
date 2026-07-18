@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	web "retro-obsidian-publish/internal/web"
+	web "github.com/go-go-golems/publish-vault/internal/web"
 )
 
 const (

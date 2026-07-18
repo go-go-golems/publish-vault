@@ -13,7 +13,7 @@ import (
 	"github.com/blevesearch/bleve/v2/mapping"
 	bq "github.com/blevesearch/bleve/v2/search/query"
 
-	"retro-obsidian-publish/internal/vault"
+	"github.com/go-go-golems/publish-vault/internal/vault"
 )
 
 // ErrClosed is returned when callers use an index after Close.

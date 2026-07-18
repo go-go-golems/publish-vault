@@ -119,7 +119,7 @@ func runDagger(ctx context.Context, repoRoot, builderImage, pnpmVersion string) 
 
 	webDir := filepath.Join(repoRoot, "web")
 	source := client.Host().Directory(webDir, dagger.HostDirectoryOpts{Exclude: []string{"dist", "node_modules", ".git"}})
-	pnpmStore := client.CacheVolume("retro-obsidian-publish-pnpm-store")
+	pnpmStore := client.CacheVolume("github.com/go-go-golems/publish-vault-pnpm-store")
 	pathEnv := "/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 	container := client.Container().
@@ -134,7 +134,7 @@ func runDagger(ctx context.Context, repoRoot, builderImage, pnpmVersion string) 
 		WithExec([]string{"pnpm", "install", "--frozen-lockfile", "--prefer-offline"}).
 		WithExec([]string{"pnpm", "run", "build"})
 
-	tmpDir, err := os.MkdirTemp("", "retro-obsidian-publish-web-dist-")
+	tmpDir, err := os.MkdirTemp("", "github.com/go-go-golems/publish-vault-web-dist-")
 	if err != nil {
 		return fmt.Errorf("temp dir: %w", err)
 	}

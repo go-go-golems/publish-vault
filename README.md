@@ -1,6 +1,6 @@
-# Retro Obsidian Publish
+# Publish Vault
 
-Retro Obsidian Publish turns an Obsidian vault into a small self-hosted website. It reads Markdown files from a vault directory, builds an in-memory note index, resolves wiki links, computes backlinks, builds a search index, and serves both a JSON API and a retro monochrome React frontend from one Go process.
+Publish Vault (module `github.com/go-go-golems/publish-vault`, binary `retro-obsidian-publish`) turns an Obsidian vault into a small self-hosted website. It reads Markdown files from a vault directory, builds an in-memory note index, resolves wiki links, computes backlinks, builds a search index, and serves both a JSON API and a retro monochrome React frontend from one Go process.
 
 It is designed for people who want to publish a personal knowledge base without changing how they write notes. Your source of truth remains a normal folder of Markdown files. The application treats that folder as read-only content and derives the website from it.
 
@@ -23,7 +23,7 @@ It is designed for people who want to publish a personal knowledge base without 
 ## Repository layout
 
 ```text
-retro-obsidian-publish/
+publish-vault/
 ├── cmd/                             # Go CLI entrypoint and commands
 ├── internal/                        # Go server, API, parser, vault, search, and web packages
 │   ├── cmd/retro-obsidian-publish/   # CLI entrypoint and commands

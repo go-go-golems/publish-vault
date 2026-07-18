@@ -30,7 +30,7 @@ import (
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/require"
 
-	"retro-obsidian-publish/internal/api"
+	"github.com/go-go-golems/publish-vault/internal/api"
 )
 
 // ModuleName is the require() specifier for the module.

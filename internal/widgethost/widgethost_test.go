@@ -12,9 +12,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"retro-obsidian-publish/internal/api"
-	"retro-obsidian-publish/internal/search"
-	"retro-obsidian-publish/internal/vault"
+	"github.com/go-go-golems/publish-vault/internal/api"
+	"github.com/go-go-golems/publish-vault/internal/search"
+	"github.com/go-go-golems/publish-vault/internal/vault"
 )
 
 type staticProvider struct {

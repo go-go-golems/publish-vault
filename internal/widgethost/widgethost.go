@@ -34,9 +34,9 @@ import (
 	"github.com/go-go-golems/rag-evaluation-system/pkg/widgetdsl"
 	"github.com/gorilla/mux"
 
-	"retro-obsidian-publish/internal/api"
-	"retro-obsidian-publish/internal/vaultdata"
-	"retro-obsidian-publish/internal/vaultwidgets"
+	"github.com/go-go-golems/publish-vault/internal/api"
+	"github.com/go-go-golems/publish-vault/internal/vaultdata"
+	"github.com/go-go-golems/publish-vault/internal/vaultwidgets"
 )
 
 // Host renders widget pages from a script directory against the live vault.

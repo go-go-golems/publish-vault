@@ -19,10 +19,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 
-	"retro-obsidian-publish/internal/api"
-	"retro-obsidian-publish/internal/watcher"
-	web "retro-obsidian-publish/internal/web"
-	"retro-obsidian-publish/internal/widgethost"
+	"github.com/go-go-golems/publish-vault/internal/api"
+	"github.com/go-go-golems/publish-vault/internal/watcher"
+	web "github.com/go-go-golems/publish-vault/internal/web"
+	"github.com/go-go-golems/publish-vault/internal/widgethost"
 )
 
 // Config holds the runtime settings for the Retro Obsidian Publish server.

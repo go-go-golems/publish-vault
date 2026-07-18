@@ -77,7 +77,7 @@ glazed-lint: glazed-lint-build
 
 # logcopter package loggers. Invoked directly (not via go generate ./...)
 # because internal/web/generate.go triggers the Dagger frontend build.
-LOGCOPTER_FLAGS ?= -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix retro-obsidian-publish
+LOGCOPTER_FLAGS ?= -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix github.com/go-go-golems/publish-vault
 LOGCOPTER_PACKAGES ?= ./cmd/... ./internal/...
 
 logcopter-generate:

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"retro-obsidian-publish/internal/api"
+	"github.com/go-go-golems/publish-vault/internal/api"
 )
 
 func newTestRuntimeState(t *testing.T) *RuntimeState {

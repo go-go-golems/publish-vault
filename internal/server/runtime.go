@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"retro-obsidian-publish/internal/search"
-	"retro-obsidian-publish/internal/vault"
+	"github.com/go-go-golems/publish-vault/internal/search"
+	"github.com/go-go-golems/publish-vault/internal/vault"
 )
 
 var oldSnapshotCloseDelay = 30 * time.Second

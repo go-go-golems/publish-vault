@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"retro-obsidian-publish/internal/ignore"
-	"retro-obsidian-publish/internal/parser"
+	"github.com/go-go-golems/publish-vault/internal/ignore"
+	"github.com/go-go-golems/publish-vault/internal/parser"
 )
 
 // ErrIgnored is returned by ReloadNote when the target path is excluded by a

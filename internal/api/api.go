@@ -17,8 +17,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"retro-obsidian-publish/internal/search"
-	"retro-obsidian-publish/internal/vault"
+	"github.com/go-go-golems/publish-vault/internal/search"
+	"github.com/go-go-golems/publish-vault/internal/vault"
 )
 
 // SnapshotProvider returns the currently active vault and search index.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"retro-obsidian-publish/internal/vault"
+	"github.com/go-go-golems/publish-vault/internal/vault"
 )
 
 func TestExtractTagQuery(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	web "retro-obsidian-publish/internal/web"
+	web "github.com/go-go-golems/publish-vault/internal/web"
 )
 
 func TestFaviconHandler_ServesFromVaultRoot(t *testing.T) {
