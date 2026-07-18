@@ -92,3 +92,52 @@ Phase B: six adapters — five over existing components (FrontmatterPanel, Bread
 - Go: `internal/vaultwidgets/vaultwidgets.go`, `internal/widgethost/reader_golden_test.go`.
 - TS: `web/src/widgets/shell.ts` + `sidebarSlot.tsx`, `web/src/components/organisms/NoteHtml/NoteHtml.tsx`, `SectionBlock.widget.tsx` (auto-label rule), `WidgetPage.tsx` (query forwarding).
 - Validate: `GOWORK=off go test ./... -count=1`; `cd web && pnpm check && npx vitest run && pnpm build && pnpm build-storybook`; serve vault-example (no --pages-dir; uses vault-example/.publish/pages) and open `/w/reader`, click sidebar items and wiki links.
+
+## Step 3: Hunt and fix the disappearing-enhancements bug (hash links)
+
+The user reported that opening a note URL with a `#heading` anchor made the injected heading-anchor links disappear. The hunt went through five instrumented browser experiments and ended somewhere much bigger than the report: **any React re-render of the note body silently destroyed every DOM enhancement** (heading anchors, copy buttons, mermaid SVGs, resolved embeds). Toggling the right panel alone dropped half the anchors (88→44). Hash navigation was just the most reproducible trigger because same-document navigations fire popstate, which re-renders the router tree.
+
+Two independent defects compounded:
+
+1. **`entry-client.tsx` called `hydrateRoot` unconditionally.** The local/dogfood server runs without the SSR sidecar, so `#root` is empty; React 19 "hydrates" an empty container, throws error #418, and performs a recovery client render — nondeterministic re-render timing that made the symptom flaky between runs. Fixed: `root.hasChildNodes() ? hydrateRoot(...) : createRoot(root).render(...)`.
+2. **React 19 re-applies `dangerouslySetInnerHTML` on every re-render.** Instrumenting `Element.prototype.innerHTML` with stack traces showed `commitUpdate → updateProperties → setProp` rewriting the note body ~60ms after each hash change — with `resolvedHtml` UNCHANGED and none of the `[resolvedHtml]`-keyed enhancement effects re-running (dev-mode component logging proved both). The `{__html}` prop object is new each render, React rewrites the DOM, and the enhancements are gone with no effect to restore them. Fixed structurally: `NoteBody` is now `memo()`-ized on the `html` string, with a comment stating the memo is load-bearing, not an optimization — the DOM may only be rewritten when the content changes, because that is exactly when the effects re-run.
+
+This bug predates the NoteView refactor (NoteRenderer had the identical structure), and probably explains any historical "sometimes the copy buttons are missing" weirdness.
+
+### Prompt Context
+
+**User prompt (verbatim):** "consolidate. also:
+
+there's a bug btw where when you have a link with #... then the anchor links actually disappear on the page. http://localhost:8080/note/research/playbooks/filter-git-history-big-files#filtering-git-history-for-big-files--how-we-do-it"
+
+**Assistant interpretation:** Two tasks — do the agreed consolidation (NoteView on NoteHtml, vw.noteHtml(slug)), and fix the anchor-disappearance bug; the bug was diagnosed first so the fix lands once in the consolidated component.
+
+**Inferred user intent:** Anchored deep-links are how vault notes get shared; the reading experience must survive them.
+
+### What I did
+- Reproduced with playwright against the live go-go-parc server: fresh-load-with-hash → 0 anchors/0 copy buttons (initially flaky between runs — the #418 recovery render was the randomizer).
+- Narrowed to same-document hash navigation; tracked DOM node identity with markers (nodes survived, children count unchanged, injected elements gone → innerHTML rewrite).
+- Intercepted the `innerHTML` setter with stack capture: React `commitUpdate` writing the normalized html ~60ms after nav.
+- Instrumented NoteView renders/effects on the vite dev server: 8 renders (4 instances × StrictMode double-log), no sync-reset, no resolve-effect, no anchor-effect — proving React rewrote without a state change.
+- Falsified the "hash-specific" framing with the right-panel toggle test (88→44).
+- Fixed both defects; removed instrumentation; validated: tsc, client+SSR builds, 21 vitest, then the 3-round scenario matrix on the prod build (fresh-with-hash / no-hash / same-doc-hash / anchor-click × 3 → 88 anchors & 116 copy buttons in every cell, zero page errors) and the ui-toggle test (88→88).
+
+### What worked
+- The escalation ladder — timeline sampling → DOM identity markers → innerHTML setter interception → dev-server component logging — each step eliminated a whole class of hypotheses; the setter stack trace was the pivot from "which state changed" to "no state changed at all".
+
+### What didn't work
+- Two hours of state-machine reasoning about the two-phase resolvedHtml flow: every hypothesis (sync-reset, slugSet identity churn, RTK refetch, remounts) predicted effect re-runs that the logs disproved. The real cause was below the component layer.
+
+### What was tricky to build
+- The flakiness had TWO causes layered: the false-hydration recovery render made results differ run-to-run, masking the deterministic dangerouslySetInnerHTML rewrite underneath. Fixing only the hydration bug made the failure deterministic (which is what finally exposed cause 2).
+
+### What warrants a second pair of eyes
+- Whether React's rewrite-on-rerender is expected React 19 semantics or a regression worth reporting upstream; either way the memo() is correct and self-documenting.
+- SSR mode is unaffected by the entry-client change (hasChildNodes true → hydrate path identical); the 13 SSR tests and smoke stay the guard.
+
+### What should be done in the future
+- Consolidation (this session, next step) puts NoteBody behind one component so this class of bug has a single owner.
+
+### Code review instructions
+- `web/src/entry-client.tsx` (conditional hydrate) and `web/src/components/organisms/NoteView/NoteBody.tsx` (memo + load-bearing comment).
+- Repro harnesses in scratchpad (`check-hash*.mjs`, `check-rerender.mjs`) show the verification matrix.
