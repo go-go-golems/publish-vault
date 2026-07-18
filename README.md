@@ -114,6 +114,42 @@ The server scans every Markdown file below the vault root, skipping hidden direc
 
 ---
 
+## Using publish-vault as a library
+
+The framework packages live under `pkg/` and are importable as
+`github.com/go-go-golems/publish-vault/pkg/...`. A minimal downstream
+application is four lines of wiring:
+
+```go
+import "github.com/go-go-golems/publish-vault/pkg/server"
+
+err := server.Run(ctx, server.Config{
+    VaultDir:  "./content",       // directory of markdown notes
+    Port:      "8080",
+    VaultName: "my docs",
+    ServeWeb:  true,              // serve the bundled React SPA
+    PagesDir:  "./pages",         // optional: JS widget pages (goja)
+})
+```
+
+Frontend delivery has two modes:
+
+- **Embedded bundle** — build your binary with `-tags embed`. This embeds the
+  SPA from this module's `pkg/web/embed/public`, which is populated in tagged
+  releases by the `release-assets` workflow (main does not carry built assets;
+  depend on a tag, not a commit from main, when you need the embedded SPA).
+  Building against an assets-less version fails with
+  `pattern embed/public: cannot embed directory embed/public: contains no
+  embeddable files`.
+- **Caller-provided bundle** — set `server.Config.WebFS` to your own `fs.FS`
+  (e.g. your application's own `go:embed` of a built bundle) and build without
+  the tag.
+
+Other useful packages: `pkg/vault` (note model + loader), `pkg/search` (bleve
+index), `pkg/api` (JSON API + `SnapshotProvider` seam), `pkg/widgethost`
+(goja widget pages), `pkg/vaultdata` / `pkg/vaultwidgets` (JS modules —
+register your own domain module alongside them following the same pattern).
+
 ## Build a single production binary
 
 The production path builds the React app, copies its static assets into the Go embed directory, and then compiles a Go binary with the `embed` build tag.

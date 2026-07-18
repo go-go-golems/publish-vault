@@ -19,6 +19,13 @@ func NewSPAHandler(opts *SPAOptions) http.Handler {
 	return newSPAHandler(PublicFS, opts)
 }
 
+// NewSPAHandlerFS is NewSPAHandler over a caller-provided filesystem. Downstream
+// applications that embed their own web bundle (instead of building this module
+// with -tags embed) pass it via server.Config.WebFS, which routes here.
+func NewSPAHandlerFS(fsys fs.FS, opts *SPAOptions) http.Handler {
+	return newSPAHandler(fsys, opts)
+}
+
 func newSPAHandler(fsys fs.FS, opts *SPAOptions) http.Handler {
 	apiPrefix := "/api"
 	if opts != nil && opts.APIPrefix != "" {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -39,6 +40,7 @@ type Config struct {
 	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
 	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
 	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
+	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -118,7 +120,11 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Printf("Admin reload endpoint disabled; set RETRO_RELOAD_TOKEN or --reload-token-env, or enable --reload-allow-loopback")
 	}
 	if cfg.ServeWeb {
-		spaHandler := web.NewSPAHandler(&web.SPAOptions{APIPrefix: "/api"})
+		spaOpts := &web.SPAOptions{APIPrefix: "/api"}
+		spaHandler := web.NewSPAHandler(spaOpts)
+		if cfg.WebFS != nil {
+			spaHandler = web.NewSPAHandlerFS(cfg.WebFS, spaOpts)
+		}
 
 		// Favicon handler: serves from CLI override, vault root, or returns 404.
 		// This must be registered before the catch-all to avoid serving index.html.
