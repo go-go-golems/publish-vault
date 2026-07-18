@@ -44,6 +44,12 @@ jobs:
       - name: Build web
         run: make web
 
+      - name: Verify logcopter package loggers
+        run: make logcopter-check
+
+      - name: Run glazed-lint
+        run: make glazed-lint
+
       - name: Test backend and plugin
         run: make test
 

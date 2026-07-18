@@ -1,5 +1,7 @@
-.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck glazed-lint-build glazed-lint test web-check build ci-check devctl-example devctl-parc tag-major tag-minor tag-patch bump-go-go-golems
+.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck golangci-lint-install glazed-lint-build glazed-lint logcopter-generate logcopter-check test web-check build ci-check devctl-example devctl-parc tag-major tag-minor tag-patch bump-go-go-golems
 
+GOLANGCI_LINT_VERSION ?= $(shell cat .golangci-lint-version)
+GOLANGCI_LINT_BIN ?= $(CURDIR)/.bin/golangci-lint
 GLAZED_LINT_BIN ?= /tmp/glazed-lint
 GLAZED_LINT_PKG ?= github.com/go-go-golems/glazed/cmd/tools/glazed-lint
 GLAZED_VERSION ?= $(shell GOWORK=off go list -m -f '{{.Version}}' github.com/go-go-golems/glazed 2>/dev/null)
@@ -33,12 +35,16 @@ test:
 	GOWORK=off go test ./...
 	python3 -m unittest plugins/test_retro_plugin.py
 
-# Run the standard Go linter from the root module using the root config.
-lint:
-	GOWORK=off golangci-lint run -c .golangci.yml -v
+golangci-lint-install:
+	@mkdir -p $(dir $(GOLANGCI_LINT_BIN))
+	@GOBIN=$(dir $(GOLANGCI_LINT_BIN)) GOWORK=off go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-lintmax:
-	GOWORK=off golangci-lint run -c .golangci.yml -v --max-same-issues=100
+# Run the pinned Go linter and glazed-lint from the root module using the root config.
+lint: golangci-lint-install glazed-lint
+	GOWORK=off $(GOLANGCI_LINT_BIN) run -c .golangci.yml -v
+
+lintmax: golangci-lint-install glazed-lint
+	GOWORK=off $(GOLANGCI_LINT_BIN) run -c .golangci.yml -v --max-same-issues=100
 
 fmt-check:
 	GOWORK=off golangci-lint fmt --diff
@@ -69,9 +75,20 @@ glazed-lint-build:
 glazed-lint: glazed-lint-build
 	GOWORK=off $(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./...
 
+# logcopter package loggers. Invoked directly (not via go generate ./...)
+# because internal/web/generate.go triggers the Dagger frontend build.
+LOGCOPTER_FLAGS ?= -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix retro-obsidian-publish
+LOGCOPTER_PACKAGES ?= ./cmd/... ./internal/...
+
+logcopter-generate:
+	GOWORK=off go tool logcopter-gen $(LOGCOPTER_FLAGS) $(LOGCOPTER_PACKAGES)
+
+logcopter-check:
+	GOWORK=off go tool logcopter-gen $(LOGCOPTER_FLAGS) -check $(LOGCOPTER_PACKAGES)
+
 build: backend web
 
-ci-check: fmt-check lint test gosec govulncheck web-check web
+ci-check: fmt-check lint logcopter-check test gosec govulncheck web-check web
 
 # Start backend with example vault (dev)
 backend-dev:
