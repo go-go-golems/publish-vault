@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { defaultWidgetRegistry } from "./defaultRegistry";
 import type { WidgetNode } from "./ir";
 import recentPageFixture from "./__fixtures__/recent-page.json";
+import readerPageFixture from "./__fixtures__/reader-page.json";
 
 function collectComponentTypes(node: unknown, out: Set<string>): void {
   if (Array.isArray(node)) {
@@ -27,9 +28,12 @@ function collectComponentTypes(node: unknown, out: Set<string>): void {
 }
 
 describe("defaultWidgetRegistry", () => {
-  it("covers every component type in the recent-page fixture", () => {
+  it.each([
+    ["recent-page", recentPageFixture],
+    ["reader-page", readerPageFixture],
+  ])("covers every component type in the %s fixture", (_name, fixture) => {
     const types = new Set<string>();
-    collectComponentTypes((recentPageFixture as { root: WidgetNode }).root, types);
+    collectComponentTypes((fixture as { root: WidgetNode }).root, types);
     expect(types.size).toBeGreaterThan(0);
     for (const type of types) {
       expect(defaultWidgetRegistry.has(type), `missing adapter for ${type}`).toBe(true);

@@ -32,6 +32,12 @@ import {
 export interface VaultLayoutProps {
   children: React.ReactNode;
   vaultName?: string;
+  /**
+   * Optional sidebar override. When set (e.g. by a widget page declaring an
+   * app shell with sidebar navigation), it replaces the default vault file
+   * tree in both the desktop panel and the mobile drawer.
+   */
+  sidebar?: React.ReactNode;
 }
 
 function HydrationSafeClock() {
@@ -59,6 +65,7 @@ function HydrationSafeClock() {
 export const VaultLayout: React.FC<VaultLayoutProps> = ({
   children,
   vaultName = "Vault",
+  sidebar,
 }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -198,15 +205,17 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
             className="fixed inset-y-0 left-0 z-40 w-[80vw] max-w-[320px] md:hidden"
             style={{ top: 28 }}
           >
-            <Sidebar
-              tree={tree ?? null}
-              activeSlug={activeSlug ?? undefined}
-              onSelectNote={handleNavigate}
-              onSearch={handleSearch}
-              vaultName={vaultName}
-              isLoading={treeLoading}
-              className="h-full"
-            />
+            {sidebar ?? (
+              <Sidebar
+                tree={tree ?? null}
+                activeSlug={activeSlug ?? undefined}
+                onSelectNote={handleNavigate}
+                onSearch={handleSearch}
+                vaultName={vaultName}
+                isLoading={treeLoading}
+                className="h-full"
+              />
+            )}
           </div>
         )}
 
@@ -220,15 +229,17 @@ export const VaultLayout: React.FC<VaultLayoutProps> = ({
               order={1}
               className="flex flex-col overflow-hidden"
             >
-              <Sidebar
-                tree={tree ?? null}
-                activeSlug={activeSlug ?? undefined}
-                onSelectNote={handleNavigate}
-                onSearch={handleSearch}
-                vaultName={vaultName}
-                isLoading={treeLoading}
-                className="border-r border-[var(--color-ink)] h-full"
-              />
+              {sidebar ?? (
+                <Sidebar
+                  tree={tree ?? null}
+                  activeSlug={activeSlug ?? undefined}
+                  onSelectNote={handleNavigate}
+                  onSearch={handleSearch}
+                  vaultName={vaultName}
+                  isLoading={treeLoading}
+                  className="border-r border-[var(--color-ink)] h-full"
+                />
+              )}
             </ResizablePanel>
 
             <ResizableHandle withHandle className="retro-resize-handle" />

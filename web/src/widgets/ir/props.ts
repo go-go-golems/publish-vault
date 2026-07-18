@@ -73,3 +73,49 @@ export interface DividerWidgetProps {
   label?: string;
   className?: string;
 }
+
+// ── Note-domain widgets (PV-VAULT-WIDGETS-016; emitted by vault.widgets) ──
+
+export interface NoteHtmlWidgetProps {
+  html: string;
+  slug?: string;
+  mermaid?: boolean;
+  highlight?: boolean;
+  embeds?: boolean;
+  anchors?: boolean;
+}
+
+export interface FrontmatterPanelWidgetProps {
+  frontmatter: JsonObject;
+  tags?: string[];
+  modTime?: string;
+  onTagClick?: ActionSpec;
+  className?: string;
+}
+
+export interface BreadcrumbBarWidgetProps {
+  segments: { label: string; slug?: string }[];
+  onSelect?: ActionSpec;
+  className?: string;
+}
+
+export interface BacklinksPanelWidgetProps {
+  entries: { slug: string; title: string; excerpt?: string }[];
+  onSelect?: ActionSpec;
+  className?: string;
+}
+
+export interface TagCloudWidgetProps {
+  tags: (string | { tag: string; count?: number })[];
+  onSelect?: ActionSpec;
+  className?: string;
+}
+
+export interface NoteCardWidgetProps {
+  slug: string;
+  title: string;
+  excerpt?: string;
+  tags?: string[];
+  onSelect?: ActionSpec;
+  className?: string;
+}

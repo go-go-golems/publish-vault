@@ -35,6 +35,7 @@ import (
 
 	"retro-obsidian-publish/internal/api"
 	"retro-obsidian-publish/internal/vaultdata"
+	"retro-obsidian-publish/internal/vaultwidgets"
 )
 
 // Host renders widget pages from a script directory against the live vault.
@@ -233,6 +234,7 @@ func (h *Host) newRuntime() (*goja.Runtime, error) {
 	reg := require.NewRegistry()
 	widgetdsl.Register(reg)
 	vaultdata.Register(reg, h.provider, h.config)
+	vaultwidgets.Register(reg, h.provider, h.config)
 	reg.Enable(vm)
 	return vm, nil
 }

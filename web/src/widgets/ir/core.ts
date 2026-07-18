@@ -27,7 +27,7 @@ export interface ElementNode {
   children?: WidgetNode[];
 }
 
-/** Component types registered in publish-vault's v1 default registry. */
+/** Component types registered in publish-vault's default registry. */
 export type PvWidgetType =
   | "Stack"
   | "Inline"
@@ -38,7 +38,14 @@ export type PvWidgetType =
   | "Text"
   | "Caption"
   | "Divider"
-  | "Tag";
+  | "Tag"
+  // Note-domain widgets (PV-VAULT-WIDGETS-016; emitted by vault.widgets)
+  | "NoteHtml"
+  | "FrontmatterPanel"
+  | "BreadcrumbBar"
+  | "BacklinksPanel"
+  | "TagCloud"
+  | "NoteCard";
 
 export interface ComponentNode {
   kind: "component";

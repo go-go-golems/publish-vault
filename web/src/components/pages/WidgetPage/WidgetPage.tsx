@@ -5,11 +5,14 @@
  * default registry. Navigate actions route through React Router; server
  * actions round-trip to POST /api/widget/actions/{name} and refresh the IR.
  */
-import React, { useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
+import { SidebarNav } from "../../molecules/SidebarNav/SidebarNav";
 import { useWidgetPage } from "../../../hooks/useWidgetPage";
+import { resolvePageShell } from "../../../widgets/shell";
+import { useSidebarOverride } from "../../../widgets/sidebarSlot";
 import {
   dispatchWidgetAction,
   structuredNavigationTarget,
@@ -26,8 +29,11 @@ export interface WidgetPageProps {
 
 export const WidgetPage: React.FC<WidgetPageProps> = ({ pageId }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Forward the route's query string so page scripts can read request.query
+  // (e.g. /w/reader?slug=foo).
   const { page, loading, error, refresh } = useWidgetPage(
-    `/api/widget/pages/${encodeURIComponent(pageId)}`
+    `/api/widget/pages/${encodeURIComponent(pageId)}${location.search}`
   );
   const { data: config } = useGetConfigQuery();
 
@@ -63,6 +69,25 @@ export const WidgetPage: React.FC<WidgetPageProps> = ({ pageId }) => {
     },
     [navigate]
   );
+
+  // JS-declared shell: an app shell with sidebar placement replaces the
+  // vault file tree for the lifetime of this page (kind "none"/"root-owned"
+  // currently renders with vault chrome — v1 limitation, see -016 §3.3).
+  const shell = useMemo(() => resolvePageShell(page?.shell), [page?.shell]);
+  const sidebarElement = useMemo(() => {
+    if (shell.kind !== "app" || shell.navigation.placement !== "sidebar") {
+      return null;
+    }
+    return (
+      <SidebarNav
+        navigation={shell.navigation}
+        onItemSelect={item => {
+          if (item.action) handleAction(item.action, { navItemId: item.id });
+        }}
+      />
+    );
+  }, [shell, handleAction]);
+  useSidebarOverride(sidebarElement);
 
   if (loading && !page) {
     return (

@@ -1,4 +1,10 @@
-import { Suspense, useEffect, type ComponentType } from "react";
+import {
+  Suspense,
+  useEffect,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { Provider } from "react-redux";
 import {
   BrowserRouter,
@@ -12,6 +18,7 @@ import { VaultLayout } from "./components/pages/VaultLayout/VaultLayout";
 import type { NotePageProps } from "./components/pages/NotePage/NotePage";
 import { SearchPage } from "./components/pages/SearchPage/SearchPage";
 import { WidgetPage } from "./components/pages/WidgetPage/WidgetPage";
+import { SidebarSlotProvider } from "./widgets/sidebarSlot";
 import { Icon } from "./components/atoms/Icon/Icon";
 import {
   useListNotesQuery,
@@ -41,6 +48,9 @@ export function AppRoutes({
 }: AppRoutesProps) {
   const { data: config } = useGetConfigQuery();
   const location = useLocation();
+  // Widget pages can declare an app shell whose sidebar replaces the vault
+  // tree (see widgets/sidebarSlot.tsx).
+  const [sidebarOverride, setSidebarOverride] = useState<ReactNode | null>(null);
 
   useEffect(() => {
     if (
@@ -76,13 +86,18 @@ export function AppRoutes({
   );
 
   return (
-    <VaultLayout vaultName={config?.vaultName}>
-      {suspendNotePage ? (
-        <Suspense fallback={<NotePageFallback />}>{routes}</Suspense>
-      ) : (
-        routes
-      )}
-    </VaultLayout>
+    <SidebarSlotProvider value={setSidebarOverride}>
+      <VaultLayout
+        vaultName={config?.vaultName}
+        sidebar={sidebarOverride ?? undefined}
+      >
+        {suspendNotePage ? (
+          <Suspense fallback={<NotePageFallback />}>{routes}</Suspense>
+        ) : (
+          routes
+        )}
+      </VaultLayout>
+    </SidebarSlotProvider>
   );
 }
 
