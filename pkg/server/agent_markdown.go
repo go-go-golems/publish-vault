@@ -115,7 +115,7 @@ func renderAgentsMarkdown(state *RuntimeState, cfg api.PublicConfig, baseURL str
 	b.WriteString("## Installation\n\n")
 	b.WriteString("Readers do not need to install anything to browse this site. Operators run the project as a Go binary with an optional Node.js SSR sidecar.\n\n")
 	b.WriteString("Local operator commands:\n\n```bash\n")
-	b.WriteString("github.com/go-go-golems/publish-vault serve --vault /path/to/vault --port 8080\n")
+	b.WriteString("retro-obsidian-publish serve --vault /path/to/vault --port 8080\n")
 	b.WriteString("devctl up --profile example\n")
 	b.WriteString("```\n\n")
 	b.WriteString("## Configuration\n\n")

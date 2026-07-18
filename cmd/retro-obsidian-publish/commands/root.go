@@ -15,14 +15,14 @@ import (
 // commands/build/web.go.
 func NewRootCommand() (*cobra.Command, error) {
 	rootCmd := &cobra.Command{
-		Use:   "github.com/go-go-golems/publish-vault",
+		Use:   "retro-obsidian-publish",
 		Short: "Publish an Obsidian vault with a retro web UI",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return logging.InitLoggerFromCobra(cmd)
 		},
 	}
 
-	if err := logging.AddLoggingSectionToRootCommand(rootCmd, "github.com/go-go-golems/publish-vault"); err != nil {
+	if err := logging.AddLoggingSectionToRootCommand(rootCmd, "retro-obsidian-publish"); err != nil {
 		return nil, err
 	}
 
