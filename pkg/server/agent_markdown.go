@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-go-golems/publish-vault/internal/parser"
 	"github.com/go-go-golems/publish-vault/pkg/api"
 	"github.com/go-go-golems/publish-vault/pkg/vault"
 )
@@ -241,10 +242,20 @@ func renderNoteMarkdown(state *RuntimeState, cfg api.PublicConfig, baseURL, slug
 		b.WriteString("\n")
 	}
 	b.WriteString("## Content\n\n")
-	b.WriteString("This mirror is derived from the rendered note HTML. Use the canonical HTML page for the fully styled view.\n\n")
-	b.WriteString("```html\n")
-	b.WriteString(strings.TrimSpace(note.HTML))
-	b.WriteString("\n```\n\n")
+	if raw, err := v.ReadRaw(note.Path); err == nil {
+		// The mirror serves the original Markdown source (frontmatter stripped —
+		// the mirror carries its own). Wiki links stay in [[...]] syntax; the
+		// Wiki Links section below lists their targets.
+		b.WriteString(strings.TrimSpace(string(parser.StripFrontmatter(raw))))
+		b.WriteString("\n\n")
+	} else {
+		// Source unavailable (e.g. file removed mid-request): fall back to the
+		// rendered HTML rather than serving an empty mirror.
+		b.WriteString("The Markdown source is unavailable; this fallback is derived from the rendered note HTML.\n\n")
+		b.WriteString("```html\n")
+		b.WriteString(strings.TrimSpace(note.HTML))
+		b.WriteString("\n```\n\n")
+	}
 	if len(note.WikiLinks) > 0 {
 		b.WriteString("## Wiki Links\n\n")
 		for _, wl := range note.WikiLinks {

@@ -150,3 +150,31 @@ func TestAgentPageHandlerMarkdownContentNegotiation(t *testing.T) {
 		t.Fatalf("expected note markdown, got:\n%s", rr.Body.String())
 	}
 }
+
+func TestNoteMirrorServesOriginalMarkdown(t *testing.T) {
+	state := newTestRuntimeState(t)
+	h := newAgentPageHandler(state, api.PublicConfig{VaultName: "test-vault"}, http.NotFoundHandler())
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/note/notes/second.md", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d", rr.Code)
+	}
+	body := rr.Body.String()
+	// The Content section carries the raw Markdown source: original heading
+	// and untouched [[wiki]] syntax — not rendered HTML.
+	if !strings.Contains(body, "# Second Note") {
+		t.Fatalf("mirror missing original markdown heading:\n%s", body)
+	}
+	if !strings.Contains(body, "Links to [[Index]].") {
+		t.Fatalf("mirror missing original wiki-link syntax:\n%s", body)
+	}
+	if strings.Contains(body, "```html") || strings.Contains(body, "<p>") || strings.Contains(body, "<a href") {
+		t.Fatalf("mirror still contains rendered HTML:\n%s", body)
+	}
+	// The note's own frontmatter is stripped; the mirror carries exactly one
+	// frontmatter block (its own).
+	if got := strings.Count(body, "\n---\n"); got > 1 {
+		t.Fatalf("expected a single frontmatter block, got %d separators:\n%s", got+1, body)
+	}
+}
