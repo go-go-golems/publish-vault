@@ -244,21 +244,64 @@ func (v *Vault) buildWikiLinkIndex() {
 }
 
 // indexAsset registers a non-markdown vault file for ![[image.png]] embed
-// resolution. Files are addressable by their full vault-relative path and by
-// bare basename (Obsidian "shortest path" behavior); lookups are
-// case-insensitive. On basename collisions the lexicographically first path
-// wins, keeping resolution deterministic across reloads.
+// resolution. Every path suffix is registered ("pic.png", "project-a/pic.png",
+// "Attachments/project-a/pic.png") because Obsidian's shortest-path link
+// format produces exactly the suffix that disambiguates duplicate basenames —
+// mirroring what buildWikiLinkIndex does for notes. Lookups are
+// case-insensitive; on collisions the lexicographically first path wins,
+// keeping resolution deterministic across reloads.
 func (v *Vault) indexAsset(absPath string) {
-	rel, err := filepath.Rel(v.root, absPath)
+	indexAssetInto(v.assetIndex, v.root, absPath)
+}
+
+func indexAssetInto(index map[string]string, root, absPath string) {
+	rel, err := filepath.Rel(root, absPath)
 	if err != nil {
 		return
 	}
 	relSlash := filepath.ToSlash(rel)
-	base := strings.ToLower(path.Base(relSlash))
-	if existing, ok := v.assetIndex[base]; !ok || relSlash < existing {
-		v.assetIndex[base] = relSlash
+	parts := strings.Split(relSlash, "/")
+	for i := range parts {
+		key := strings.ToLower(strings.Join(parts[i:], "/"))
+		if existing, ok := index[key]; !ok || relSlash < existing {
+			index[key] = relSlash
+		}
 	}
-	v.assetIndex[strings.ToLower(relSlash)] = relSlash
+}
+
+// RefreshAssetIndex rebuilds the asset index from the current filesystem
+// state. The file watcher calls this when non-markdown files change so that
+// ![[image.png]] embeds in subsequently (re)loaded notes resolve against
+// current attachments without a full vault reload. The walk runs without the
+// vault lock (ignore rules are immutable after load); the fresh index is
+// swapped in atomically.
+func (v *Vault) RefreshAssetIndex() {
+	fresh := make(map[string]string)
+	_ = filepath.Walk(v.root, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			if v.ShouldPruneDir(p) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+			return nil
+		}
+		if v.isIgnored(p, false) {
+			return nil
+		}
+		indexAssetInto(fresh, v.root, p)
+		return nil
+	})
+	v.mu.Lock()
+	v.assetIndex = fresh
+	v.mu.Unlock()
 }
 
 // ResolveAssetEmbed maps a ![[...]] embed target (as written in the note,
