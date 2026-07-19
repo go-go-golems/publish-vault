@@ -69,6 +69,7 @@ type Vault struct {
 	mu            sync.RWMutex
 	notes         map[string]*Note  // keyed by slug
 	wikiLinkIndex map[string]string // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
+	assetIndex    map[string]string // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
 	root          string            // absolute path to vault directory
 	ignore        *ignore.Ignore    // compiled .vault-ignore; nil/empty means exclude nothing
 }
@@ -87,6 +88,7 @@ func New(rootDir string) (*Vault, error) {
 	v := &Vault{
 		notes:         make(map[string]*Note),
 		wikiLinkIndex: make(map[string]string),
+		assetIndex:    make(map[string]string),
 		root:          rootDir,
 		ignore:        ig,
 	}
@@ -102,6 +104,7 @@ func (v *Vault) LoadAll() error {
 	defer v.mu.Unlock()
 
 	v.notes = make(map[string]*Note)
+	v.assetIndex = make(map[string]string)
 
 	err := filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -120,6 +123,9 @@ func (v *Vault) LoadAll() error {
 			return nil
 		}
 		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+			if !v.isIgnored(path, false) {
+				v.indexAsset(path)
+			}
 			return nil
 		}
 		if v.isIgnored(path, false) {
@@ -237,6 +243,38 @@ func (v *Vault) buildWikiLinkIndex() {
 	}
 }
 
+// indexAsset registers a non-markdown vault file for ![[image.png]] embed
+// resolution. Files are addressable by their full vault-relative path and by
+// bare basename (Obsidian "shortest path" behavior); lookups are
+// case-insensitive. On basename collisions the lexicographically first path
+// wins, keeping resolution deterministic across reloads.
+func (v *Vault) indexAsset(absPath string) {
+	rel, err := filepath.Rel(v.root, absPath)
+	if err != nil {
+		return
+	}
+	relSlash := filepath.ToSlash(rel)
+	base := strings.ToLower(path.Base(relSlash))
+	if existing, ok := v.assetIndex[base]; !ok || relSlash < existing {
+		v.assetIndex[base] = relSlash
+	}
+	v.assetIndex[strings.ToLower(relSlash)] = relSlash
+}
+
+// ResolveAssetEmbed maps a ![[...]] embed target (as written in the note,
+// e.g. "pic.png" or "Attachments/pic.png") to the vault-relative path of the
+// matching file. Returns ("", false) when no asset matches.
+func (v *Vault) ResolveAssetEmbed(target string) (string, bool) {
+	key := strings.ToLower(filepath.ToSlash(strings.TrimSpace(target)))
+	if key == "" {
+		return "", false
+	}
+	if p, ok := v.assetIndex[key]; ok {
+		return p, true
+	}
+	return "", false
+}
+
 // ResolveWikiLink maps a wiki link target (as written in the note) to the
 // actual vault slug. Returns ("", false) if no match is found.
 func (v *Vault) ResolveWikiLink(target string) (string, bool) {
@@ -266,6 +304,12 @@ func (v *Vault) rebuildHTML() {
 		})
 		note.HTML = parser.RewriteImageSources(note.HTML, func(src string) string {
 			return v.ResolveAssetURL(note.Path, src)
+		})
+		note.HTML = parser.ReplaceWikiEmbedImages(note.HTML, func(target string) string {
+			if p, ok := v.ResolveAssetEmbed(target); ok {
+				return "/vault-assets/" + escapeAssetPath(p)
+			}
+			return ""
 		})
 	}
 }

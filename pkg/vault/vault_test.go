@@ -483,3 +483,35 @@ func folderAndFileNames(n *FileNode) map[string]bool {
 	walk(n)
 	return out
 }
+
+func TestWikiImageEmbedsResolveToAssets(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Projects/Report.md",
+		"# Report\n\n![[shell overview.png]]\n\n![[Attachments/deep/Exact Path.png]]\n\n![[missing.png]]\n")
+	writeVaultTestFile(t, root, "Attachments/Shell Overview.png", "png")
+	writeVaultTestFile(t, root, "Attachments/deep/Exact Path.png", "png")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	note, ok := v.GetNote("projects/report")
+	if !ok {
+		t.Fatal("report note not found")
+	}
+	// Basename lookup is case-insensitive (Obsidian shortest-path behavior).
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/Shell%20Overview.png"`) {
+		t.Fatalf("basename embed not resolved, got: %s", note.HTML)
+	}
+	// Full vault-relative paths resolve too.
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/deep/Exact%20Path.png"`) {
+		t.Fatalf("path embed not resolved, got: %s", note.HTML)
+	}
+	if !strings.Contains(note.HTML, "Image not found: missing.png") {
+		t.Fatalf("missing asset should render broken marker, got: %s", note.HTML)
+	}
+	// Image embeds must not appear as backlink sources or wiki links.
+	if len(note.WikiLinks) != 0 {
+		t.Fatalf("image embeds leaked into WikiLinks: %#v", note.WikiLinks)
+	}
+}
