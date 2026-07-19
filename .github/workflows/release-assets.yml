@@ -1,0 +1,79 @@
+# Release flow for library consumers (PV-FRAMEWORK-017 design doc §5.4).
+#
+# go:embed can only embed files present in the module zip of a tagged version,
+# and the built web bundle is deliberately not committed to main. This workflow
+# builds the frontend, commits it into pkg/web/embed/public in a single release
+# commit, and pushes ONLY the tag pointing at that commit — main stays clean,
+# tagged versions are self-contained for downstream `go build -tags embed`.
+name: release-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "svu bump kind"
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+jobs:
+  tag-with-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: git fetch --force --tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
+      - name: Build web bundle
+        run: pnpm --dir web build
+
+      - name: Copy bundle into embed path
+        run: |
+          rm -rf pkg/web/embed/public
+          cp -r web/dist pkg/web/embed/public
+
+      - name: Verify embedded build compiles
+        run: GOWORK=off go build -tags embed ./cmd/retro-obsidian-publish
+
+      - name: Create release commit and tag
+        run: |
+          set -euo pipefail
+          go install github.com/caarlos0/svu@latest
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f pkg/web/embed/public
+          git commit -m "release: embed web assets"
+          tag="$(svu ${{ inputs.bump }})"
+          test -n "$tag"
+          git tag "$tag"
+          git push origin "$tag"
+          echo "Tagged $tag (release commit is reachable only via the tag; main is untouched)"

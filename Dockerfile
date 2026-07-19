@@ -19,7 +19,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
-COPY --from=web-builder /src/web/dist ./internal/web/embed/public
+COPY pkg ./pkg
+COPY --from=web-builder /src/web/dist ./pkg/web/embed/public
 RUN CGO_ENABLED=1 go build -tags embed -o bin/retro-obsidian-publish ./cmd/retro-obsidian-publish
 
 FROM alpine:3.20

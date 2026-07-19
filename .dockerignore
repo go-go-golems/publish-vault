@@ -10,8 +10,8 @@ web/.manus-logs
 web/public/__manus__/version.json
 
 bin
-internal/web/embed/public/*
-!internal/web/embed/public/.gitkeep
+pkg/web/embed/public/*
+!pkg/web/embed/public/.gitkeep
 
 **/*.log
 .DS_Store

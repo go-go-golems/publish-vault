@@ -1,4 +1,4 @@
-module retro-obsidian-publish
+module github.com/go-go-golems/publish-vault
 
 go 1.26.5
 

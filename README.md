@@ -1,6 +1,6 @@
-# Retro Obsidian Publish
+# Publish Vault
 
-Retro Obsidian Publish turns an Obsidian vault into a small self-hosted website. It reads Markdown files from a vault directory, builds an in-memory note index, resolves wiki links, computes backlinks, builds a search index, and serves both a JSON API and a retro monochrome React frontend from one Go process.
+Publish Vault (module `github.com/go-go-golems/publish-vault`, binary `retro-obsidian-publish`) turns an Obsidian vault into a small self-hosted website. It reads Markdown files from a vault directory, builds an in-memory note index, resolves wiki links, computes backlinks, builds a search index, and serves both a JSON API and a retro monochrome React frontend from one Go process.
 
 It is designed for people who want to publish a personal knowledge base without changing how they write notes. Your source of truth remains a normal folder of Markdown files. The application treats that folder as read-only content and derives the website from it.
 
@@ -23,7 +23,7 @@ It is designed for people who want to publish a personal knowledge base without 
 ## Repository layout
 
 ```text
-retro-obsidian-publish/
+publish-vault/
 ├── cmd/                             # Go CLI entrypoint and commands
 ├── internal/                        # Go server, API, parser, vault, search, and web packages
 │   ├── cmd/retro-obsidian-publish/   # CLI entrypoint and commands
@@ -113,6 +113,42 @@ VAULT_DIR=/path/to/your/obsidian-vault \
 The server scans every Markdown file below the vault root, skipping hidden directories. It does not write to your vault. Local file watching is enabled by default, so edits to Markdown files are picked up while the server is running.
 
 ---
+
+## Using publish-vault as a library
+
+The framework packages live under `pkg/` and are importable as
+`github.com/go-go-golems/publish-vault/pkg/...`. A minimal downstream
+application is four lines of wiring:
+
+```go
+import "github.com/go-go-golems/publish-vault/pkg/server"
+
+err := server.Run(ctx, server.Config{
+    VaultDir:  "./content",       // directory of markdown notes
+    Port:      "8080",
+    VaultName: "my docs",
+    ServeWeb:  true,              // serve the bundled React SPA
+    PagesDir:  "./pages",         // optional: JS widget pages (goja)
+})
+```
+
+Frontend delivery has two modes:
+
+- **Embedded bundle** — build your binary with `-tags embed`. This embeds the
+  SPA from this module's `pkg/web/embed/public`, which is populated in tagged
+  releases by the `release-assets` workflow (main does not carry built assets;
+  depend on a tag, not a commit from main, when you need the embedded SPA).
+  Building against an assets-less version fails with
+  `pattern embed/public: cannot embed directory embed/public: contains no
+  embeddable files`.
+- **Caller-provided bundle** — set `server.Config.WebFS` to your own `fs.FS`
+  (e.g. your application's own `go:embed` of a built bundle) and build without
+  the tag.
+
+Other useful packages: `pkg/vault` (note model + loader), `pkg/search` (bleve
+index), `pkg/api` (JSON API + `SnapshotProvider` seam), `pkg/widgethost`
+(goja widget pages), `pkg/vaultdata` / `pkg/vaultwidgets` (JS modules —
+register your own domain module alongside them following the same pattern).
 
 ## Build a single production binary
 

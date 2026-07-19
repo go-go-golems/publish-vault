@@ -76,9 +76,9 @@ glazed-lint: glazed-lint-build
 	GOWORK=off $(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./...
 
 # logcopter package loggers. Invoked directly (not via go generate ./...)
-# because internal/web/generate.go triggers the Dagger frontend build.
-LOGCOPTER_FLAGS ?= -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix retro-obsidian-publish
-LOGCOPTER_PACKAGES ?= ./cmd/... ./internal/...
+# because pkg/web/generate.go triggers the Dagger frontend build.
+LOGCOPTER_FLAGS ?= -include-main -var zlog -area-prefix go-go-golems.publish-vault -strip-prefix github.com/go-go-golems/publish-vault
+LOGCOPTER_PACKAGES ?= ./cmd/... ./internal/... ./pkg/...
 
 logcopter-generate:
 	GOWORK=off go tool logcopter-gen $(LOGCOPTER_FLAGS) $(LOGCOPTER_PACKAGES)
@@ -137,5 +137,5 @@ bump-go-go-golems:
 
 # Clean build artifacts
 clean:
-	rm -rf web/dist bin internal/web/embed/public
+	rm -rf web/dist bin pkg/web/embed/public
 	go clean
