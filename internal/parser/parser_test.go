@@ -367,3 +367,41 @@ func TestWikiLinkInTableRendersCleanly(t *testing.T) {
 		t.Fatalf("Table date bled into anchor after display replacement: %s", got)
 	}
 }
+
+func TestImageEmbedRendersImgPlaceholder(t *testing.T) {
+	parsed, err := Parse([]byte("# Doc\n\n![[screen shot.png]]\n\n![[diagram.svg|System diagram]]\n\n![[Regular Note]]\n"))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !strings.Contains(parsed.HTML, `<img class="wiki-embed-image" data-asset="screen shot.png" alt="screen shot.png" loading="lazy">`) {
+		t.Fatalf("image embed placeholder missing, got: %s", parsed.HTML)
+	}
+	if !strings.Contains(parsed.HTML, `data-asset="diagram.svg" alt="System diagram"`) {
+		t.Fatalf("alias should become alt text, got: %s", parsed.HTML)
+	}
+	if !strings.Contains(parsed.HTML, `class="wiki-embed" data-target="regular-note"`) {
+		t.Fatalf("note embed should stay a note embed, got: %s", parsed.HTML)
+	}
+	// Image embeds are asset references, not wiki links.
+	for _, l := range parsed.WikiLinks {
+		if strings.HasSuffix(strings.ToLower(l.Target), ".png") || strings.HasSuffix(strings.ToLower(l.Target), ".svg") {
+			t.Fatalf("image embed leaked into WikiLinks: %#v", l)
+		}
+	}
+}
+
+func TestReplaceWikiEmbedImages(t *testing.T) {
+	html := `<img class="wiki-embed-image" data-asset="pic.png" alt="pic.png" loading="lazy"><img class="wiki-embed-image" data-asset="gone.png" alt="gone.png" loading="lazy">`
+	out := ReplaceWikiEmbedImages(html, func(target string) string {
+		if target == "pic.png" {
+			return "/vault-assets/Attachments/pic.png"
+		}
+		return ""
+	})
+	if !strings.Contains(out, `<img class="wiki-embed-image" src="/vault-assets/Attachments/pic.png" alt="pic.png" loading="lazy">`) {
+		t.Fatalf("resolved embed missing src, got: %s", out)
+	}
+	if !strings.Contains(out, `Image not found: gone.png`) {
+		t.Fatalf("unresolved embed should render broken marker, got: %s", out)
+	}
+}

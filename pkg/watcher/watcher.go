@@ -88,6 +88,7 @@ func (vw *VaultWatcher) Close() {
 // loop processes fsnotify events with debouncing.
 func (vw *VaultWatcher) loop() {
 	pending := map[string]fsnotify.Op{}
+	assetsDirty := false
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -101,6 +102,12 @@ func (vw *VaultWatcher) loop() {
 				return
 			}
 			if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
+				// Non-markdown files feed the ![[image.png]] asset index;
+				// refresh it on the next tick so embeds in subsequently
+				// reloaded notes resolve against current attachments.
+				if !vw.vault.IsIgnored(event.Name, false) {
+					assetsDirty = true
+				}
 				continue
 			}
 			// Drop events for paths excluded by .vault-ignore (a file may have
@@ -117,6 +124,10 @@ func (vw *VaultWatcher) loop() {
 			log.Printf("watcher error: %v", err)
 
 		case <-ticker.C:
+			if assetsDirty {
+				assetsDirty = false
+				vw.vault.RefreshAssetIndex()
+			}
 			if len(pending) == 0 {
 				continue
 			}

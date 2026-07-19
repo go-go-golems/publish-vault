@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	stdhtml "html"
+	"path"
 	"regexp"
 	"strings"
 
@@ -37,6 +38,19 @@ type ParsedNote struct {
 
 // wikiLinkRegex matches [[Target]], [[Target|Alias]], [[Target#Heading]], ![[embed]]
 var wikiLinkRegex = regexp.MustCompile(`(!?)\[\[([^\[\]]+)\]\]`)
+
+// imageExtensions are the embed targets rendered as <img> instead of note
+// embeds. Obsidian resolves ![[pic.png]] to an attachment anywhere in the
+// vault; the vault layer fills in the src via ReplaceWikiEmbedImages.
+var imageExtensions = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".svg": true, ".webp": true, ".avif": true, ".bmp": true, ".ico": true,
+}
+
+// isImageTarget reports whether a wiki-embed target names an image file.
+func isImageTarget(target string) bool {
+	return imageExtensions[strings.ToLower(path.Ext(strings.TrimSpace(target)))]
+}
 
 // Parse takes raw Markdown bytes and returns a ParsedNote.
 func Parse(src []byte) (*ParsedNote, error) {
@@ -106,6 +120,11 @@ func extractWikiLinks(src []byte) []WikiLink {
 		isEmbed := string(m[1]) == "!"
 		inner := string(m[2])
 		target, alias, heading := parseWikiLinkInner(inner)
+		// Image embeds are asset references, not note links; keeping them out
+		// of WikiLinks keeps backlinks and the wiki-link index clean.
+		if isEmbed && isImageTarget(target) {
+			continue
+		}
 		key := target + "|" + alias
 		if seen[key] {
 			continue
@@ -191,6 +210,11 @@ func wikiLinkHTML(match []byte) []byte {
 		display = target
 	}
 	if isEmbed {
+		if isImageTarget(target) {
+			// Image embed: rendered as <img>; the vault layer resolves
+			// data-asset to a /vault-assets URL via ReplaceWikiEmbedImages.
+			return []byte(`<img class="wiki-embed-image" data-asset="` + stdhtml.EscapeString(target) + `" alt="` + stdhtml.EscapeString(display) + `" loading="lazy">`)
+		}
 		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
 	}
 	href := "/note/" + slug
@@ -206,6 +230,29 @@ func slugify(s string) string {
 	s = regexp.MustCompile(`[^a-z0-9\-_/]`).ReplaceAllString(s, "-")
 	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
 	return strings.Trim(s, "-")
+}
+
+// wikiEmbedImageRe matches the exact placeholder emitted by wikiLinkHTML for
+// image embeds (attribute order is fixed because we generate the tag).
+var wikiEmbedImageRe = regexp.MustCompile(`<img class="wiki-embed-image" data-asset="([^"]*)" alt="([^"]*)" loading="lazy">`)
+
+// ReplaceWikiEmbedImages resolves ![[image.png]] placeholders in pre-rendered
+// HTML. The resolver maps the raw embed target (as written in the note) to a
+// servable URL, or "" when the asset does not exist in the vault; unresolved
+// embeds render as a visible broken-embed marker instead of an empty image.
+func ReplaceWikiEmbedImages(html string, resolver func(target string) string) string {
+	return wikiEmbedImageRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := wikiEmbedImageRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		target := stdhtml.UnescapeString(sub[1])
+		src := resolver(target)
+		if src == "" {
+			return `<span class="wiki-embed wiki-embed-broken">⚠ Image not found: ` + stdhtml.EscapeString(target) + `</span>`
+		}
+		return `<img class="wiki-embed-image" src="` + stdhtml.EscapeString(src) + `" alt="` + sub[2] + `" loading="lazy">`
+	})
 }
 
 // ReplaceWikiLinksString resolves wiki-link targets in pre-rendered HTML.

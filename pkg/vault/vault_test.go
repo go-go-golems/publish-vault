@@ -483,3 +483,92 @@ func folderAndFileNames(n *FileNode) map[string]bool {
 	walk(n)
 	return out
 }
+
+func TestWikiImageEmbedsResolveToAssets(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Projects/Report.md",
+		"# Report\n\n![[shell overview.png]]\n\n![[Attachments/deep/Exact Path.png]]\n\n![[missing.png]]\n")
+	writeVaultTestFile(t, root, "Attachments/Shell Overview.png", "png")
+	writeVaultTestFile(t, root, "Attachments/deep/Exact Path.png", "png")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	note, ok := v.GetNote("projects/report")
+	if !ok {
+		t.Fatal("report note not found")
+	}
+	// Basename lookup is case-insensitive (Obsidian shortest-path behavior).
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/Shell%20Overview.png"`) {
+		t.Fatalf("basename embed not resolved, got: %s", note.HTML)
+	}
+	// Full vault-relative paths resolve too.
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/deep/Exact%20Path.png"`) {
+		t.Fatalf("path embed not resolved, got: %s", note.HTML)
+	}
+	if !strings.Contains(note.HTML, "Image not found: missing.png") {
+		t.Fatalf("missing asset should render broken marker, got: %s", note.HTML)
+	}
+	// Image embeds must not appear as backlink sources or wiki links.
+	if len(note.WikiLinks) != 0 {
+		t.Fatalf("image embeds leaked into WikiLinks: %#v", note.WikiLinks)
+	}
+}
+
+func TestAssetEmbedResolvesPathSuffixes(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Note.md",
+		"# N\n\n![[project-a/pic.png]]\n\n![[project-b/pic.png]]\n\n![[pic.png]]\n")
+	writeVaultTestFile(t, root, "Attachments/project-a/pic.png", "a")
+	writeVaultTestFile(t, root, "Attachments/project-b/pic.png", "b")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	note, _ := v.GetNote("note")
+	// Obsidian shortest-path targets are suffixes that disambiguate duplicates.
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/project-a/pic.png"`) {
+		t.Fatalf("suffix project-a/pic.png not resolved: %s", note.HTML)
+	}
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/project-b/pic.png"`) {
+		t.Fatalf("suffix project-b/pic.png not resolved: %s", note.HTML)
+	}
+	// Ambiguous bare basename resolves deterministically (lexicographically first).
+	if p, ok := v.ResolveAssetEmbed("pic.png"); !ok || p != "Attachments/project-a/pic.png" {
+		t.Fatalf("ambiguous basename = %q, %v", p, ok)
+	}
+}
+
+func TestRefreshAssetIndexPicksUpNewFiles(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Note.md", "# N\n\n![[late.png]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, ok := v.ResolveAssetEmbed("late.png"); ok {
+		t.Fatal("late.png should not resolve before it exists")
+	}
+	note, _ := v.GetNote("note")
+	if !strings.Contains(note.HTML, "Image not found: late.png") {
+		t.Fatalf("expected broken marker before asset exists: %s", note.HTML)
+	}
+
+	writeVaultTestFile(t, root, "Attachments/late.png", "png")
+	v.RefreshAssetIndex()
+	if p, ok := v.ResolveAssetEmbed("late.png"); !ok || p != "Attachments/late.png" {
+		t.Fatalf("late.png should resolve after refresh, got %q, %v", p, ok)
+	}
+	// A note reload (what the watcher triggers on edit) re-renders with the
+	// refreshed index.
+	if _, err := v.ReloadNote(filepath.Join(root, "Note.md")); err != nil {
+		t.Fatalf("ReloadNote: %v", err)
+	}
+	note, _ = v.GetNote("note")
+	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/late.png"`) {
+		t.Fatalf("reloaded note should resolve the new asset: %s", note.HTML)
+	}
+}
