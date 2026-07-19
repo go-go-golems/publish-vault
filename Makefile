@@ -1,4 +1,4 @@
-.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck golangci-lint-install glazed-lint-build glazed-lint logcopter-generate logcopter-check test web-check build ci-check devctl-example devctl-parc tag-major tag-minor tag-patch bump-go-go-golems
+.PHONY: all backend web frontend storybook dev clean build-web lint lintmax fmt-check docker-lint gosec govulncheck golangci-lint-install glazed-lint-build glazed-lint logcopter-generate logcopter-check test web-check build ci-check devctl-example devctl-parc tag-major tag-minor tag-patch bump-go-go-golems release release-assets
 
 GOLANGCI_LINT_VERSION ?= $(shell cat .golangci-lint-version)
 GOLANGCI_LINT_BIN ?= $(CURDIR)/.bin/golangci-lint
@@ -124,6 +124,23 @@ tag-minor:
 
 tag-patch:
 	@tag="$$(svu patch)" && test -n "$$tag" && git tag "$$tag" && echo "Tagged $$tag"
+
+# Push tags and warm the Go module proxy for the current version.
+# NOTE: local tags do NOT contain the built web bundle; library consumers that
+# build with -tags embed need a tag minted by `make release-assets` instead.
+release:
+	git push origin --tags
+	GOWORK=off GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/publish-vault@$(shell svu current)
+
+# The release flow for library consumers (PV-FRAMEWORK-017 §5.4): dispatch the
+# release-assets workflow, which builds the SPA, commits it into
+# pkg/web/embed/public in a release commit, and pushes only the tag.
+# Usage: make release-assets [BUMP=patch|minor|major]
+BUMP ?= patch
+
+release-assets:
+	gh workflow run release-assets -f bump=$(BUMP)
+	@echo "Dispatched release-assets (bump=$(BUMP)); watch with: gh run list --workflow release-assets --limit 3"
 
 bump-go-go-golems:
 	@deps="$$(awk '/^require[[:space:]]+github\.com\/go-go-golems\// { print $$2 } /^[[:space:]]*github\.com\/go-go-golems\// { print $$1 }' go.mod | sort -u)"; \
