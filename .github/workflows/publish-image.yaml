@@ -9,6 +9,7 @@ on:
       - go.sum
       - cmd/**
       - internal/**
+      - pkg/**
       - web/**
       - deploy/gitops-targets.json
   push:
@@ -21,6 +22,7 @@ on:
       - go.sum
       - cmd/**
       - internal/**
+      - pkg/**
       - web/**
       - deploy/gitops-targets.json
   workflow_dispatch:
