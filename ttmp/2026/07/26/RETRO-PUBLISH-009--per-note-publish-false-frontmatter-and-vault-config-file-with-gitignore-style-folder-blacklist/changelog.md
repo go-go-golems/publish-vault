@@ -40,3 +40,12 @@ Phase 3: serve --config flag + VaultConfig threaded through server.Config -> Run
 
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/cmd/retro-obsidian-publish/commands/serve/serve.go — --config flag, vaultconfig.Load nil-safe default to <vault>/.publish/config.yaml
 
+
+## 2026-07-26
+
+Phase 4: added vault-example/.publish/config.yaml + Draft Note (publish:false); updated README (Per-note publish flag, config blacklist section, --config flag); ran full validation: go test, gofmt, golangci-lint (0 issues), go build -tags embed, two end-to-end smoke tests (publish:false exclusion + Secrets/** config blacklist). All 16 tasks done.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/vault-example/.publish/config.yaml — Example config demonstrating full ** gitignore semantics
+

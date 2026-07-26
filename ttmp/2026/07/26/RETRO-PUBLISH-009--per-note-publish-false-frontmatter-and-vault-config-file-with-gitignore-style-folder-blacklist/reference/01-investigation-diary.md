@@ -267,3 +267,62 @@ The config must travel from the CLI flag to the single choke point (`vault.New`)
 ### Technical details
 - Config default path: `filepath.Join(settings.Vault, vaultconfig.DefaultConfigPath)` = `<vault>/.publish/config.yaml`.
 - Bad config: logged, empty `vaultconfig.Config{}` used (matches `.vault-ignore` tolerant handling).
+
+## Step 5: Examples, README, and full validation (Phase 4)
+
+This step added the example config + publish:false note, documented both features in the README, and ran the full validation checklist including end-to-end smoke tests against a running server.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Finish Phase 4 — add example artifacts, update README, run the full validation checklist and smoke-test the running server.
+
+**Inferred user intent:** The feature is documented, demonstrable on the example vault, and verified end-to-end with curl against a live server.
+
+### What I did
+- Added `vault-example/.publish/config.yaml` with documented `ignore` patterns (`Secrets/**`, `**/node_modules/`, `*.draft.md`, negation).
+- Added `vault-example/Draft Note (Not Published).md` with `publish: false` frontmatter.
+- Updated README: added "Per-note `publish` flag" subsection under Frontmatter (opt-out only, case-insensitive, broken-embed marker, watch-mode incremental); added "Excluding paths with the config file" section documenting full `**` semantics and excluded-if-either composition; added `--config` to the server-flags table.
+- Checked off all 16 tasks in tasks.md.
+- Ran validation:
+  - `GOWORK=off go test ./...` — all packages pass.
+  - `GOWORK=off gofmt -l .` — clean.
+  - `golangci-lint run -c .golangci.yml ./...` — 0 issues.
+  - `GOWORK=off go build -tags embed -o /tmp/retro-obsidian-publish ./cmd/retro-obsidian-publish` — succeeds (78MB binary).
+  - Smoke test 1 (vault-example with publish:false note): `serve --port 8099 --watch=false`; `/api/healthz` reports `notes:5`; `/api/notes` omits the draft note; `/api/notes/draft-note-not-published` returns 404; `/api/notes/draft-note-not-published/raw` returns 404; `/api/notes/index/raw` returns 200; `/api/tree` omits the draft note.
+  - Smoke test 2 (fresh vault with `Secrets/**` config blacklist): `serve --port 8098`; `/api/healthz` reports `notes:2` (not 4 — both Secrets files excluded); `/api/notes` lists only `index` and `notes/public`; `secrets/secret` and `secrets/sub/deep` both 404 — confirming full `**` directory-traversal semantics work end-to-end.
+
+### Why
+The validation checklist is the completion contract. Smoke tests against a running server are the only way to confirm the wiring from `--config` flag → `vaultconfig.Load` → `vault.WithConfig` → `IsExcluded` actually excludes notes from the live API, beyond the unit tests.
+
+### What worked
+- The publish:false note was excluded on the first smoke run (5 notes, not 6). The config blacklist on the fresh vault excluded both `Secrets/secret.md` and `Secrets/sub/deep.md` (2 notes, not 4), proving the `**` semantics work through the whole stack.
+- golangci-lint passed with 0 issues on the first run; no lint fixes needed.
+
+### What didn't work
+- None. All validation passed on the first attempt after Phase 3.
+
+### What I learned
+- The example vault's "Draft Note (Not Published).md" is hidden by `publish: false` (the `*.draft.md` config pattern does not match its filename, since it has no `.draft.md` extension — this is correct: the publish flag is the mechanism, not the config pattern). The two features are independent and compose: a note can be hidden by either.
+- The watcher (`--watch` default) picks up `publish:false` toggles incrementally, but I tested with `--watch=false` for deterministic curl assertions. The unit test `TestReloadNoteDropsPublishFalse` covers the incremental watcher path.
+
+### What was tricky to build
+- Nothing in Phase 4. The README prose required care to state the excluded-if-either composition and the opt-out-only contract precisely, since those are the two最容易 misunderstood aspects (cross-file negation does not override the other file; `publish: true` does not resurrect an ignored note).
+
+### What warrants a second pair of eyes
+- The README "Excluding paths with the config file" section's composition statement ("excluded when it matches the config blacklist or the .vault-ignore file; a negation in one file cannot re-include a path excluded by the other"). A reviewer should confirm this matches operator mental models.
+- The smoke tests covered publish:false and Secrets/** config blacklist; a reviewer could additionally verify the `!Drafts/Pinned.draft.md` negation end-to-end, though it is covered by unit tests.
+
+### What should be done in the future
+- Re-reading the config file on reload (currently the config is loaded once at startup; reload re-applies the same config). Documented as a deliberate choice consistent with `.vault-ignore`.
+
+### Code review instructions
+- Verify the example artifacts: `vault-example/.publish/config.yaml`, `vault-example/Draft Note (Not Published).md`.
+- Read README "Per-note publish flag" and "Excluding paths with the config file" sections.
+- Reproduce the smoke test: `go build -tags embed -o /tmp/rvp ./cmd/retro-obsidian-publish && /tmp/rvp serve --vault ./vault-example --port 8099 --watch=false --serve-web=false`, then `curl localhost:8099/api/notes | grep slug`.
+
+### Technical details
+- Final commit HEAD: see `git log -1`.
+- All 16 tasks checked off in tasks.md.
+- Validation: `go test ./...` ✓, `gofmt -l .` clean ✓, `golangci-lint` 0 issues ✓, `go build -tags embed` ✓, two smoke tests ✓.

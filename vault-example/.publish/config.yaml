@@ -1,0 +1,28 @@
+# Example vault configuration for Retro Obsidian Publish.
+#
+# This file is a vault-scoped config: it travels with the vault in version
+# control and configures publishing policy for this specific vault. It is
+# distinct from the .vault-ignore file: this `ignore` list uses FULL gitignore
+# semantics (**, negations, nested matches) via a library, so it can express
+# patterns that the legacy .vault-ignore matcher deliberately omits.
+#
+# A missing config file is harmless (everything stays eligible). A malformed
+# file is logged and ignored so publishing is never blocked by a bad config.
+#
+# Excluded-if-either: a path is excluded when it matches this list OR the
+# .vault-ignore file. A negation (!) here cannot re-include a path excluded by
+# .vault-ignore, and vice versa; remove the exclusion from the other file to
+# re-include a path.
+
+ignore:
+  # A whole private folder and everything beneath it (** matches across dirs).
+  - "Secrets/**"
+
+  # node_modules at any depth.
+  - "**/node_modules/"
+
+  # Any draft note, at any depth.
+  - "*.draft.md"
+
+  # ...but keep this one published (last-match-wins negation).
+  - "!Drafts/Pinned.draft.md"

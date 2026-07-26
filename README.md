@@ -387,6 +387,27 @@ RelatedFiles:
 
 The frontend receives `frontmatter` as a JSON object. Tags are also extracted into the top-level `tags` field used by search and tag navigation.
 
+### Per-note `publish` flag
+
+A note can be kept out of the published site by setting `publish: false` in its frontmatter:
+
+```yaml
+---
+title: Draft Note
+publish: false
+---
+```
+
+The note is still parsed, but it is not stored in the published index. It never appears in the note list, the file tree, full-text search, backlinks, or the raw-source endpoint — everywhere `.vault-ignore` already excludes paths.
+
+Publishing is **opt-out only**:
+
+- An absent key (or `publish: true`) leaves the note eligible, subject to `.vault-ignore` and the config blacklist.
+- `publish: true` does **not** resurrect a note excluded by an ignore rule or the config blacklist. Exclusion always wins, to keep the security boundary clear. To publish a file inside an ignored folder, remove the exclusion from the relevant file.
+- The key is case-insensitive (`publish`, `Publish`, `PUBLISH`) and accepts YAML booleans or the strings `"true"`/`"false"`/`"yes"`/`"no"`.
+
+In `--watch` mode, toggling `publish: false` takes effect on the next debounced file reload — no restart needed. A note that links or embeds a hidden note (`![[Hidden]]`) renders a visible `⚠ Note not published` marker instead of an empty embed.
+
 ---
 
 ## Excluding paths with `.vault-ignore`
@@ -421,6 +442,32 @@ Supported syntax:
 - To match a literal `#` or `!` filename, escape it with a backslash (`\#keep.md`, `\!keep.md`).
 
 A missing `.vault-ignore` file is harmless (everything is published). A malformed file is logged and treated as “ignore nothing”, so a bad ignore file never takes the site down. Changes to `.vault-ignore` take effect on the next full reload — in `--watch` mode restart the server, or call the admin reload endpoint (see [Keeping a published vault up to date](#keeping-a-published-vault-up-to-date)) in git-sync deployments.
+
+### Excluding paths with the config file (`.publish/config.yaml`)
+
+The `.vault-ignore` matcher is a documented subset of gitignore: it does **not** support the `**` glob (matching across directory boundaries) or nested ignore files. For vaults that need full gitignore semantics, use the vault config file instead. Create a `.publish/config.yaml` at the vault root (or pass `--config <path>`):
+
+```yaml
+# my-vault/.publish/config.yaml
+ignore:
+  # A whole private folder and everything beneath it (** matches across dirs).
+  - "Secrets/**"
+
+  # node_modules at any depth.
+  - "**/node_modules/"
+
+  # Any draft note, at any depth.
+  - "*.draft.md"
+
+  # ...but keep this one published (last-match-wins negation).
+  - "!Drafts/Pinned.draft.md"
+```
+
+The `ignore` list uses **full gitignore semantics** (including `**`, nested matches, and negations) via a library, so it can express patterns the `.vault-ignore` matcher cannot. Exclusion applies everywhere: the note index, the file tree, full-text search, backlinks, the raw-source endpoint, the `/vault-assets/` handler, and the live file watcher.
+
+The two mechanisms compose with **excluded-if-either** semantics: a path is excluded when it matches the config blacklist **or** the `.vault-ignore` file. A negation (`!`) in one file cannot re-include a path excluded by the other — remove the exclusion from the other file to re-include it. The `.vault-ignore` file keeps working unchanged for backward compatibility; the config blacklist is the recommended, more capable option for new use.
+
+A missing config file is harmless (everything stays eligible). A malformed file is logged and ignored, so a bad config never takes the site down. Changes to the config blacklist take effect on the next full reload — restart the server, or call the admin reload endpoint. (The per-note `publish: false` flag, by contrast, is picked up incrementally by the file watcher — see [Per-note `publish` flag](#per-note-publish-flag).)
 
 ---
 
@@ -486,6 +533,7 @@ Important flags:
 | `--watch` | `true` | Watch Markdown files and update local state as files change. |
 | `--reload-token-env` | `RETRO_RELOAD_TOKEN` | Environment variable containing the reload bearer token. |
 | `--reload-allow-loopback` | `false` | Allow unauthenticated reloads from loopback clients. Useful for same-host automation. |
+| `--config` | `<vault>/.publish/config.yaml` | Path to a vault config file (gitignore-style publish blacklist). A missing file is harmless; a malformed one is logged and ignored. |
 
 ### Environment variables
 
