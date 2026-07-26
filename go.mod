@@ -9,12 +9,15 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-go-golems/glazed v1.3.6
+	github.com/go-go-golems/logcopter v0.1.1
 	github.com/go-go-golems/rag-evaluation-system v0.1.7
 	github.com/gorilla/mux v1.8.1
 	github.com/rs/cors v1.11.1
+	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-meta v1.1.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -72,7 +75,6 @@ require (
 	github.com/dop251/base64dec v0.0.0-20231022112746-c6c9f9a96217 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/go-go-golems/go-go-goja v0.9.6 // indirect
-	github.com/go-go-golems/logcopter v0.1.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -158,7 +160,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 tool github.com/go-go-golems/logcopter/cmd/logcopter-gen
