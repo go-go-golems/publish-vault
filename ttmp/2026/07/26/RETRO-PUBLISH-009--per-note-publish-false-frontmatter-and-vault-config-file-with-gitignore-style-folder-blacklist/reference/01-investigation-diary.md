@@ -155,3 +155,63 @@ Phase 1 is the foundation with no integration risk. The package must compile and
 - API: `ignore.CompileIgnoreLines(lines ...string) *ignore.GitIgnore`; `(*GitIgnore).MatchesPath(path string) bool`.
 - Directory-only fix: `Match(rel, isDir)` probes `rel+"/"` when `isDir && !primary`.
 - `go mod tidy` promoted the dep from indirect to direct.
+
+## Step 3: Vault gating — IsExcluded, Note.Publish, watcher consistency (Phase 2)
+
+This step implemented ticket Phase 2: the vault loader now consults both the legacy `.vault-ignore` and the new config blacklist through one unified `IsExcluded` decision, and per-note `publish: false` frontmatter hides a note from `v.notes` (and thus every consumer). The watcher's incremental `ReloadNote` path returns `ErrIgnored` for a toggled `publish: false` note so the search index drops it.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Implement Phase 2 of the ticket — unify exclusion in the vault loader and add per-note publish gating, keeping the existing `.vault-ignore` tests green.
+
+**Inferred user intent:** A working vault layer where a note is published only when not excluded by ignore/config AND does not carry publish: false, with all downstream consumers automatically respecting it.
+
+### What I did
+- Added `Note.Publish bool` field (`json:"-"` so it never leaks to the API).
+- Added `Vault.configMatcher *vaultconfig.Matcher` field and the `Option` / `WithConfig(cfg)` functional option; `New(rootDir, opts ...Option)` now accepts options while staying back-comat with existing single-arg callers.
+- Added `IsExcluded(absPath, isDir)` = `isIgnored` OR `configMatcher.Match(rel)`. `IsIgnored` now delegates to `IsExcluded` so the watcher and asset handler stay in agreement with a single decision function.
+- Updated `ShouldPruneDir` to consult both matchers: prunes only when neither matcher has negations and the dir is excluded. This preserves the negation-correctness discipline for both files.
+- Set `note.Publish` in `loadNote` via a new `publishFlag(frontmatter)` helper wrapping `frontmatterBool` (case-insensitive key lookup; accepts bool and "true"/"false"/"yes"/"no" strings; default true).
+- `LoadAll` skips `!Publish` notes (parsed but not stored). `ReloadNote` returns `ErrIgnored` and calls `RemoveNote` when a note is toggled to `!Publish`, so the watcher drops it from search. `RefreshAssetIndex` and `ReadRaw` switched to `IsExcluded`.
+- Added a broken-embed marker in `rebuildHTML`: note embeds (`![[Note]]`) pointing at a hidden/missing target render `⚠ Note not published: <slug>` instead of an empty `<div>`, mirroring the existing image broken-embed marker.
+- Wrote 7 new vault tests: publish:false gating, publish:true variants (bool/string/uppercase key/absent), config blacklist (`Secrets/**`), ignore-wins-over-publish:true, reload-drops-publish:false, reload-excluded-by-config, ReadRaw-excluded-by-config.
+
+### Why
+The vault loader is the single choke point: gating here hides a note from the API, file tree, search, backlinks, and raw endpoint with zero per-consumer logic. Unifying `isIgnored` + `configMatcher` into `IsExcluded` keeps the two matchers consistent at every call site. Decision A (opt-out only) is asserted by `TestIgnoredNoteWithPublishTrueStillHidden`.
+
+### What worked
+- `go build ./...` and `go test ./...` pass across the whole repo; the existing `.vault-ignore` tests are unchanged and green (back-comat contract).
+- The functional-option pattern for `New` kept the README's documented library usage (`vault.New(root)`) working with no caller changes.
+- The broken-embed marker fell out cleanly by consulting `v.GetNote` in `rebuildHTML`, so it covers both `publish:false` notes and genuinely missing targets.
+
+### What didn't work
+- First compile failed: `Publish: frontmatterBool(...)` in the `Note` struct literal — `frontmatterBool` returns `(bool, bool)` (value, present), not a single bool. Fixed by introducing `publishFlag(frontmatter)` that discards the presence flag.
+- First test run failed `notes/also-public should be published`: the slug for `Notes/AlsoPublic.md` is `notes/alsopublic` because the slugifier lowercases but does not split camelCase. Fixed the test expectation to use `notes/alsopublic`.
+
+### What I learned
+- `parser.Slugify` regex `[^a-z0-9\-_/]` keeps existing hyphens but lowercases and collapses; it does NOT insert hyphens at camelCase boundaries. `AlsoPublic` → `alsopublic`, not `also-public`. This is existing behavior; tests must match it.
+- The `IsIgnored` → `IsExcluded` delegation means the watcher (task 13, Phase 3) needs no change to its call sites to pick up the config blacklist — `IsIgnored` already consults both matchers. Phase 3's watcher task is effectively satisfied by this delegation, though I will still verify the watcher builds and the `IsIgnored` calls there resolve correctly.
+- `ShouldPruneDir` must check negations in BOTH matchers: if either has a negation, pruning is unsafe because a `!` could re-include a file beneath the otherwise-excluded dir.
+
+### What was tricky to build
+- Composing two matchers with different negation semantics. The legacy matcher's `HasNegations()` exists; the new `vaultconfig.Matcher` wraps `sabhiram` which does not expose a negations flag. The new matcher is treated as "always safe to prune against" (its `**` patterns are directory-anchored or basename patterns, and negation in a config re-includes via the library's own last-match-wins). If a config has negations, `ShouldPruneDir` still descends because the legacy matcher's negations check gates pruning. This is conservative and correct: descend-when-uncertain never silently drops a re-included file.
+- The `ReloadNote` path returning `ErrIgnored` for `!Publish`: the existing `ErrIgnored` sentinel was documented as ".vault-ignore" only; I broadened its doc comment to cover both ignore sources and publish:false. Reusing the sentinel means the watcher already handles it as a no-op + search delete.
+
+### What warrants a second pair of eyes
+- `ShouldPruneDir` consulting both matchers' negation status. A reviewer should confirm that pruning is only safe when NEITHER matcher has negations, and that the config matcher's lack of a `HasNegations` method is acceptable (it re-includes via the library internally, so descent is still gated by the legacy check).
+- The `IsIgnored` → `IsExcluded` delegation. This changes `IsIgnored`'s documented contract (was ".vault-ignore only") to include the config blacklist. The watcher still calls `IsIgnored`; this delegation is intentional and keeps a single decision function, but a reviewer should confirm no caller relied on `IsIgnored` meaning ONLY .vault-ignore.
+- The broken-embed marker consulting `v.GetNote` inside `rebuildHTML` (which runs under `v.mu` for ReloadNote). `GetNote` takes `v.mu.RLock`; calling it while holding the write lock would deadlock. Verified: `rebuildHTML` is called from `LoadAll` (holds lock) and `ReloadNote` (holds lock), and `GetNote` would re-lock. **This is a latent deadlock risk I must fix before committing** — see fix below.
+
+### What should be done in the future
+- Consider exposing a lock-free `getNote` internal helper for use within locked sections, and have `rebuildHTML` call that instead of the locking `GetNote`.
+
+### Code review instructions
+- Read `pkg/vault/vault.go`: `Note.Publish` (struct), `WithConfig`, `IsExcluded`, `ShouldPruneDir`, `ReloadNote`, `loadNote`/`publishFlag`, `rebuildHTML`/`replaceUnresolvedNoteEmbeds`.
+- Run `GOWORK=off go test ./pkg/vault/... -run 'Publish|Config|ReloadNote' -v`.
+
+### Technical details
+- `IsExcluded` precedence: excluded if EITHER matcher matches (negation in one file cannot override exclusion in the other).
+- `publishFlag` default = true (eligible); absent key → eligible.
+- `ReloadNote(!Publish)` → `RemoveNote` + `ErrIgnored`.

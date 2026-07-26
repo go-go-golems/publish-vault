@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 func TestFileTreeSortedFoldersFirstAlpha(t *testing.T) {
@@ -570,5 +572,231 @@ func TestRefreshAssetIndexPicksUpNewFiles(t *testing.T) {
 	note, _ = v.GetNote("note")
 	if !strings.Contains(note.HTML, `src="/vault-assets/Attachments/late.png"`) {
 		t.Fatalf("reloaded note should resolve the new asset: %s", note.HTML)
+	}
+}
+
+// TestLoadAllRespectsPublishFalseFrontmatter pins the per-note opt-out: a note
+// with `publish: false` in frontmatter is parsed but not stored, so it is
+// absent from the note index, the file tree, and search documents.
+func TestLoadAllRespectsPublishFalseFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Public.md", "---\npublish: false\n---\n# Public\n")
+	writeVaultTestFile(t, root, "Notes/AlsoPublic.md", "# Also Public\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if _, ok := v.GetNote("index"); !ok {
+		t.Errorf("index should be published")
+	}
+	if _, ok := v.GetNote("notes/alsopublic"); !ok {
+		t.Errorf("notes/alsopublic should be published")
+	}
+	if _, ok := v.GetNote("public"); ok {
+		t.Errorf("public (publish: false) should be absent from notes")
+	}
+	if got := v.Count(); got != 2 {
+		t.Errorf("Count() = %d, want 2 (publish:false note excluded)", got)
+	}
+
+	// File tree must omit the hidden note.
+	tree := v.FileTree()
+	names := folderAndFileNames(tree)
+	if names["Public"] {
+		t.Errorf("file tree should omit publish:false note Public")
+	}
+	if !names["Index"] {
+		t.Errorf("file tree should still contain Index")
+	}
+
+	// Search documents must omit the hidden note.
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		t.Fatalf("SearchDocuments() error = %v", err)
+	}
+	for _, d := range docs {
+		if d.Slug == "public" {
+			t.Errorf("search document %q should have been excluded", d.Slug)
+		}
+	}
+}
+
+// TestLoadAllPublishTrueStringAndBool pins that publish: true (bool) and
+// publish: "true" (string) both keep a note eligible, and that case-insensitive
+// key lookup works (Publish, PUBLISH).
+func TestLoadAllPublishTrueStringAndBool(t *testing.T) {
+	cases := []struct {
+		name   string
+		rel    string
+		body   string
+		expect bool
+	}{
+		{"bool true", "Bool.md", "---\npublish: true\n---\n# Bool\n", true},
+		{"string true", "Str.md", "---\npublish: \"true\"\n---\n# Str\n", true},
+		{"bool false", "Off.md", "---\npublish: false\n---\n# Off\n", false},
+		{"uppercase key", "Up.md", "---\nPublish: false\n---\n# Up\n", false},
+		{"absent", "NoKey.md", "# NoKey\n", true},
+	}
+	root := t.TempDir()
+	for _, c := range cases {
+		writeVaultTestFile(t, root, c.rel, c.body)
+	}
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			slug := strings.TrimSuffix(strings.ToLower(c.rel), ".md")
+			_, ok := v.GetNote(slug)
+			if ok != c.expect {
+				t.Errorf("GetNote(%q) = %v, want %v", slug, ok, c.expect)
+			}
+		})
+	}
+}
+
+// TestLoadAllRespectsConfigBlacklist pins the config-file blacklist via the
+// WithConfig option: a folder matched by a config pattern (here Secrets/**) is
+// excluded from notes, the file tree, and search, while an un-matched note
+// stays published. This is the headline capability (full ** semantics) that
+// the legacy .vault-ignore matcher cannot express.
+func TestLoadAllRespectsConfigBlacklist(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+	writeVaultTestFile(t, root, "Secrets/sub/deep.md", "# Deep\n")
+	writeVaultTestFile(t, root, "Notes/Public.md", "# Public\n")
+
+	cfg := &vaultconfig.Config{Ignore: []string{"Secrets/**"}}
+	v, err := New(root, WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New(WithConfig) error = %v", err)
+	}
+
+	if _, ok := v.GetNote("index"); !ok {
+		t.Errorf("index should be published")
+	}
+	if _, ok := v.GetNote("notes/public"); !ok {
+		t.Errorf("notes/public should be published")
+	}
+	for _, slug := range []string{"secrets/secret", "secrets/sub/deep"} {
+		if _, ok := v.GetNote(slug); ok {
+			t.Errorf("%q should be excluded by config blacklist", slug)
+		}
+	}
+
+	tree := v.FileTree()
+	names := folderAndFileNames(tree)
+	if names["Secrets"] {
+		t.Errorf("file tree should omit config-blacklisted folder Secrets")
+	}
+	if !names["Notes"] {
+		t.Errorf("file tree should still contain published folder Notes")
+	}
+
+	docs, err := v.SearchDocuments()
+	if err != nil {
+		t.Fatalf("SearchDocuments() error = %v", err)
+	}
+	for _, d := range docs {
+		if strings.HasPrefix(d.Slug, "secrets") {
+			t.Errorf("search document %q should have been excluded", d.Slug)
+		}
+	}
+}
+
+// TestIgnoredNoteWithPublishTrueStillHidden pins Decision A: publish is
+// opt-out only. A note excluded by an ignore/config rule is NOT resurrected by
+// publish: true; exclusion always wins.
+func TestIgnoredNoteWithPublishTrueStillHidden(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/forced.md", "---\npublish: true\n---\n# Forced\n")
+
+	cfg := &vaultconfig.Config{Ignore: []string{"Secrets/**"}}
+	v, err := New(root, WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, ok := v.GetNote("secrets/forced"); ok {
+		t.Errorf("publish: true must not resurrect a config-excluded note")
+	}
+}
+
+// TestReloadNoteDropsPublishFalse pins the watcher's incremental path: a note
+// that was published and is then toggled to publish: false is removed from the
+// index, and ReloadNote returns ErrIgnored so the watcher drops it from the
+// search index.
+func TestReloadNoteDropsPublishFalse(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Flip.md", "# Flip\n")
+	writeVaultTestFile(t, root, "Other.md", "# Other\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, ok := v.GetNote("flip"); !ok {
+		t.Fatalf("flip should start published")
+	}
+
+	// Toggle to publish: false on disk.
+	writeVaultTestFile(t, root, "Flip.md", "---\npublish: false\n---\n# Flip\n")
+	_, err = v.ReloadNote(filepath.Join(root, "Flip.md"))
+	if !errors.Is(err, ErrIgnored) {
+		t.Fatalf("ReloadNote of publish:false note should return ErrIgnored, got %v", err)
+	}
+	if _, ok := v.GetNote("flip"); ok {
+		t.Errorf("flip should be removed from notes after publish:false reload")
+	}
+	if got := v.Count(); got != 1 {
+		t.Errorf("Count() = %d, want 1 after dropping publish:false note", got)
+	}
+}
+
+// TestReloadNoteExcludedByConfig pins that the config blacklist is consulted on
+// incremental reload, not just full load: a note whose path is blacklisted is
+// reported as ErrIgnored.
+func TestReloadNoteExcludedByConfig(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/x.md", "# X\n")
+
+	cfg := &vaultconfig.Config{Ignore: []string{"Secrets/**"}}
+	v, err := New(root, WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, ok := v.GetNote("secrets/x"); ok {
+		t.Fatalf("secrets/x should be excluded by config on load")
+	}
+	_, err = v.ReloadNote(filepath.Join(root, "Secrets", "x.md"))
+	if !errors.Is(err, ErrIgnored) {
+		t.Errorf("ReloadNote of config-blacklisted path should return ErrIgnored, got %v", err)
+	}
+}
+
+// TestReadRawExcludedByConfig pins that the raw-source endpoint cannot bypass
+// the config blacklist.
+func TestReadRawExcludedByConfig(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/secret.md", "# Secret\n")
+
+	cfg := &vaultconfig.Config{Ignore: []string{"Secrets/**"}}
+	v, err := New(root, WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if _, err := v.ReadRaw("Secrets/secret.md"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ReadRaw of config-blacklisted note should return os.ErrNotExist, got %v", err)
+	}
+	if _, err := v.ReadRaw("Index.md"); err != nil {
+		t.Errorf("ReadRaw of published note should succeed, got %v", err)
 	}
 }
