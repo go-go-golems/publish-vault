@@ -215,3 +215,55 @@ The vault loader is the single choke point: gating here hides a note from the AP
 - `IsExcluded` precedence: excluded if EITHER matcher matches (negation in one file cannot override exclusion in the other).
 - `publishFlag` default = true (eligible); absent key → eligible.
 - `ReloadNote(!Publish)` → `RemoveNote` + `ErrIgnored`.
+
+## Step 4: Serve command wiring — --config flag, runtime threading (Phase 3)
+
+This step wired the config file into the serve command and threaded it through the runtime into `vault.New(..., WithConfig)`. Task 13 (watcher uses IsExcluded) was already satisfied by the `IsIgnored`→`IsExcluded` delegation from Phase 2.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Implement Phase 3 — add `--config`, load the config nil-safe, thread `VaultConfig` through `server.Config` → `RuntimeOptions` → `loadSnapshot` → `vault.New`.
+
+**Inferred user intent:** An operator can run `serve` and have `.publish/config.yaml` (or `--config <path>`) drive the config blacklist, with reload re-applying the same config.
+
+### What I did
+- Added `Config` field (glazed flag `config`) to serve `Settings`; default empty → `<vault>/.publish/config.yaml`.
+- Added `--config` Glazed field with help text.
+- In `RunIntoGlazeProcessor`: resolve config path (flag or vault default), `vaultconfig.Load` (nil-safe; logs warning on error, uses empty config so a bad file never blocks startup), pass `VaultConfig` on `appserver.Config`.
+- Added `VaultConfig *vaultconfig.Config` to `server.Config`.
+- Added `vaultConfig` field to `RuntimeState`; threaded `opts.VaultConfig` through `NewRuntimeStateWithOptions` → `loadSnapshot(configuredRoot, searchIndexPath, vaultCfg)` → `vault.New(resolvedRoot, vault.WithConfig(vaultCfg))`.
+- `Reload()` re-passes `s.vaultConfig` to `loadSnapshot`, so a reload re-applies the same config (config-file *contents* changes require a restart, consistent with `.vault-ignore` — documented in the design doc Decision E).
+- Task 13 (watcher → IsExcluded): no watcher source change needed; `watcher.go` calls `v.IsIgnored`, which now delegates to `IsExcluded` and thus consults the config blacklist. Verified the watcher package builds and its tests pass.
+
+### Why
+The config must travel from the CLI flag to the single choke point (`vault.New`) where the matcher is attached. Threading through `RuntimeState` (not just the constructor) ensures `Reload()` re-applies the config on every snapshot rebuild.
+
+### What worked
+- `go build ./...` and `go test ./...` pass across the whole repo; gofmt and go vet clean.
+- The `IsIgnored`→`IsExcluded` delegation from Phase 2 meant the watcher needed zero source changes — a nice consequence of unifying the decision function.
+
+### What didn't work
+- None. The wiring was mechanical once Phase 2 established the `WithConfig` option.
+
+### What I learned
+- Glazed flags are straightforward to add: declare the field in `Settings` with a `glazed:` tag and a matching `fields.New(...)` in the command description; `DecodeSectionInto` populates it automatically.
+- `RuntimeState` stores `vaultConfig` (immutable after load) alongside `searchIndexPath`; both are re-passed to `loadSnapshot` on reload. This mirrors the existing `searchIndexPath` pattern.
+
+### What was tricky to build
+- Nothing significant. The only care was ensuring `Reload()` threads the config, not just the initial `NewRuntimeStateWithOptions`, so a git-sync reload re-applies the blacklist.
+
+### What warrants a second pair of eyes
+- The config is loaded once at serve startup and stored immutably in `RuntimeState`. If an operator edits `.publish/config.yaml` and calls `/api/admin/reload`, the *file is not re-read* — only the vault is reloaded against the *already-loaded* config. This is consistent with `.vault-ignore` (also reload-only, not hot-reloaded) and is documented in the design doc Decision E, but a reviewer should confirm this matches operator expectations. (Re-reading the config file on every reload would require loading it in `loadSnapshot`; the current design deliberately does not, to keep reload cheap and the matcher immutable.)
+
+### What should be done in the future
+- If operators want config-file edits to take effect on reload, `loadSnapshot` could re-read the config file from the resolved root. Out of scope here; documented as a deliberate choice.
+
+### Code review instructions
+- Read `cmd/.../serve/serve.go` (`Config` field, `--config` flag, `vaultconfig.Load`), `pkg/server/server.go` (`VaultConfig` field, `RuntimeOptions` threading), `pkg/server/runtime.go` (`vaultConfig` field, `loadSnapshot` signature, `vault.New(..., WithConfig)`).
+- Run `go build -tags embed ./cmd/retro-obsidian-publish` and `go test ./...`.
+
+### Technical details
+- Config default path: `filepath.Join(settings.Vault, vaultconfig.DefaultConfigPath)` = `<vault>/.publish/config.yaml`.
+- Bad config: logged, empty `vaultconfig.Config{}` used (matches `.vault-ignore` tolerant handling).

@@ -3,6 +3,7 @@ package serve
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	appserver "github.com/go-go-golems/publish-vault/pkg/server"
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 // Command serves the API and optionally the bundled web app.
@@ -36,6 +38,7 @@ type Settings struct {
 	Favicon             string `glazed:"favicon"`
 	SearchIndexPath     string `glazed:"search-index-path"`
 	PagesDir            string `glazed:"pages-dir"`
+	Config              string `glazed:"config"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -105,6 +108,10 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Directory of widget.dsl page scripts served at /api/widget/*. Defaults to <vault>/.publish/pages; widget routes stay disabled when the directory does not exist."),
 			),
+			fields.New("config", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Path to a vault config file (gitignore-style publish blacklist). Defaults to <vault>/.publish/config.yaml. A missing file is harmless; a malformed one is logged and ignored."),
+			),
 		),
 		cmds.WithSections(commandSettingsSection),
 	)}
@@ -139,5 +146,14 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if pagesDir == "" {
 		pagesDir = filepath.Join(settings.Vault, ".publish", "pages")
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir})
+	configPath := settings.Config
+	if configPath == "" {
+		configPath = filepath.Join(settings.Vault, vaultconfig.DefaultConfigPath)
+	}
+	vaultCfg, err := vaultconfig.Load(configPath)
+	if err != nil {
+		log.Printf("warning reading vault config %s: %v; using empty config", configPath, err)
+		vaultCfg = &vaultconfig.Config{}
+	}
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir, VaultConfig: vaultCfg})
 }

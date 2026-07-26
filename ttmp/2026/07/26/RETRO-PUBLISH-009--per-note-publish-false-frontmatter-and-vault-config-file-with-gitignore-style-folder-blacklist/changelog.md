@@ -31,3 +31,12 @@ Phase 2: vault gating. Added Note.Publish, WithConfig option, IsExcluded (config
 
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/vault/vault.go — IsExcluded unifies both matchers; ShouldPruneDir consults negations in both; rebuildHTML uses lock-free note lookup
 
+
+## 2026-07-26
+
+Phase 3: serve --config flag + VaultConfig threaded through server.Config -> RuntimeOptions -> loadSnapshot -> vault.New(WithConfig). Watcher already uses IsExcluded via Phase 2 delegation (task 13 satisfied). All tests green.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/cmd/retro-obsidian-publish/commands/serve/serve.go — --config flag, vaultconfig.Load nil-safe default to <vault>/.publish/config.yaml
+

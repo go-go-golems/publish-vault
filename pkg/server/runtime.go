@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-go-golems/publish-vault/pkg/search"
 	"github.com/go-go-golems/publish-vault/pkg/vault"
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 var oldSnapshotCloseDelay = 30 * time.Second
@@ -19,6 +20,7 @@ var oldSnapshotCloseDelay = 30 * time.Second
 // RuntimeOptions configures how runtime snapshots are loaded.
 type RuntimeOptions struct {
 	SearchIndexPath string
+	VaultConfig     *vaultconfig.Config
 }
 
 // Snapshot is an immutable runtime view of one resolved vault root and its
@@ -40,6 +42,7 @@ type RuntimeState struct {
 	mu              sync.RWMutex
 	configuredRoot  string
 	searchIndexPath string
+	vaultConfig     *vaultconfig.Config
 	snapshot        *Snapshot
 }
 
@@ -51,13 +54,14 @@ func NewRuntimeState(configuredRoot string) (*RuntimeState, error) {
 }
 
 func NewRuntimeStateWithOptions(configuredRoot string, opts RuntimeOptions) (*RuntimeState, error) {
-	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath)
+	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath, opts.VaultConfig)
 	if err != nil {
 		return nil, err
 	}
 	return &RuntimeState{
 		configuredRoot:  configuredRoot,
 		searchIndexPath: opts.SearchIndexPath,
+		vaultConfig:     opts.VaultConfig,
 		snapshot:        snap,
 	}, nil
 }
@@ -93,7 +97,7 @@ func (s *RuntimeState) Reload() error {
 	started := time.Now()
 	configured := s.ConfiguredRoot()
 	logMemoryPhase("reload_start", "configuredRoot", configured)
-	next, err := loadSnapshot(configured, s.searchIndexPath)
+	next, err := loadSnapshot(configured, s.searchIndexPath, s.vaultConfig)
 	if err != nil {
 		logMemoryPhase("reload_failed", "configuredRoot", configured, "error", err.Error())
 		return err
@@ -108,7 +112,7 @@ func (s *RuntimeState) Reload() error {
 	return nil
 }
 
-func loadSnapshot(configuredRoot, searchIndexPath string) (*Snapshot, error) {
+func loadSnapshot(configuredRoot, searchIndexPath string, vaultCfg *vaultconfig.Config) (*Snapshot, error) {
 	started := time.Now()
 	logMemoryPhase("load_start", "configuredRoot", configuredRoot, "persistentSearch", fmt.Sprint(searchIndexPath != ""))
 
@@ -125,7 +129,7 @@ func loadSnapshot(configuredRoot, searchIndexPath string) (*Snapshot, error) {
 	logMemoryPhase("load_resolved_root", "configuredRoot", configuredRoot, "resolvedRoot", resolvedRoot, "revision", revision)
 
 	vaultStarted := time.Now()
-	v, err := vault.New(resolvedRoot)
+	v, err := vault.New(resolvedRoot, vault.WithConfig(vaultCfg))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}

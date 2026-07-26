@@ -21,6 +21,7 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/go-go-golems/publish-vault/pkg/api"
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 	"github.com/go-go-golems/publish-vault/pkg/watcher"
 	web "github.com/go-go-golems/publish-vault/pkg/web"
 	"github.com/go-go-golems/publish-vault/pkg/widgethost"
@@ -36,11 +37,12 @@ type Config struct {
 	Watch               bool
 	ReloadToken         string
 	ReloadAllowLoopback bool
-	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
-	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
-	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
-	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
-	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
+	SSRURL              string              // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
+	FaviconPath         string              // Optional: explicit path to favicon file, overrides vault-root lookup.
+	SearchIndexPath     string              // Optional base directory for per-snapshot persistent bleve indexes.
+	PagesDir            string              // Optional directory of widget.dsl page scripts served at /api/widget/*.
+	VaultConfig         *vaultconfig.Config // Optional vault config (.publish/config.yaml) blacklist + future fields.
+	WebFS               fs.FS               // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -60,7 +62,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
-	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath})
+	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfig: cfg.VaultConfig})
 	if err != nil {
 		return err
 	}
