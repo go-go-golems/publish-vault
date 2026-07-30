@@ -572,6 +572,12 @@ func extractExcerpt(src []byte) string {
 	return plain
 }
 
+// StripFrontmatter removes a leading YAML frontmatter block delimited by ---.
+// The source is returned unchanged when no frontmatter is present.
+func StripFrontmatter(src []byte) []byte {
+	return stripFrontmatter(src)
+}
+
 // stripFrontmatter removes YAML frontmatter delimited by ---.
 func stripFrontmatter(src []byte) []byte {
 	s := strings.TrimSpace(string(src))
