@@ -23,3 +23,12 @@
 - [x] 14. Add `vault-example/.publish/config.yaml` + a `publish: false` note
 - [x] 15. Update README (Frontmatter section, Excluding paths section, flags/env tables)
 - [x] 16. Run full validation checklist (`go test ./...`, `go build -tags embed`, smoke `/api/*`)
+
+## Phase 5 — PR #17 review fixes
+- [x] 17. P1: delete unpublished notes from the search index in `--watch` mode (`ErrUnpublished`, `SlugForPath`)
+- [x] 18. P1: re-read `.publish/config.yaml` per snapshot so admin reload / git-sync flips honour it
+- [x] 19. P2: honour config negations in `ShouldPruneDir` (`Matcher.HasNegations`)
+- [x] 20. P2: render HTML from parser output so broken-embed markers are not permanent
+- [x] 21. P2: strip only complete frontmatter delimiter lines (`StripFrontmatter`)
+- [x] 22. Rebuild HTML in `RemoveNote` so the embed marker returns when a target is unpublished
+- [x] 23. Regression tests for each fix + README updates; re-run validation checklist

@@ -189,3 +189,34 @@ func TestMatcherAnchored(t *testing.T) {
 		{"nested same name NOT matched", "a/Secrets", false, false},
 	})
 }
+
+// TestMatcherHasNegations pins the signal directory pruning depends on: with a
+// "!" pattern present a walk must descend into excluded directories so the
+// re-inclusion can be evaluated.
+func TestMatcherHasNegations(t *testing.T) {
+	tests := []struct {
+		name     string
+		patterns []string
+		want     bool
+	}{
+		{name: "no patterns", patterns: nil, want: false},
+		{name: "plain excludes", patterns: []string{"Secrets/**", "Drafts/"}, want: false},
+		{name: "negation", patterns: []string{"Secrets/**", "!Secrets/Public.md"}, want: true},
+		{name: "indented negation", patterns: []string{"  !Secrets/Public.md  "}, want: true},
+		{name: "commented negation", patterns: []string{"# !Secrets/Public.md"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := NewMatcher(&Config{Ignore: tt.patterns})
+			if err != nil {
+				t.Fatalf("NewMatcher() error = %v", err)
+			}
+			if got := m.HasNegations(); got != tt.want {
+				t.Errorf("HasNegations() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	if (*Matcher)(nil).HasNegations() {
+		t.Errorf("nil Matcher must report no negations")
+	}
+}

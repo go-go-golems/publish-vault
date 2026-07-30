@@ -406,7 +406,7 @@ Publishing is **opt-out only**:
 - `publish: true` does **not** resurrect a note excluded by an ignore rule or the config blacklist. Exclusion always wins, to keep the security boundary clear. To publish a file inside an ignored folder, remove the exclusion from the relevant file.
 - The key is case-insensitive (`publish`, `Publish`, `PUBLISH`) and accepts YAML booleans or the strings `"true"`/`"false"`/`"yes"`/`"no"`.
 
-In `--watch` mode, toggling `publish: false` takes effect on the next debounced file reload — no restart needed. A note that links or embeds a hidden note (`![[Hidden]]`) renders a visible `⚠ Note not published` marker instead of an empty embed.
+In `--watch` mode, toggling `publish: false` takes effect on the next debounced file reload — no restart needed: the note is dropped from the note index and from the full-text search index in the same pass. A note that links or embeds a hidden note (`![[Hidden]]`) renders a visible `⚠ Note not published` marker instead of an empty embed; toggling the target back to published clears the marker on the next reload, without touching the referring note.
 
 ---
 
@@ -467,7 +467,7 @@ The `ignore` list uses **full gitignore semantics** (including `**`, nested matc
 
 The two mechanisms compose with **excluded-if-either** semantics: a path is excluded when it matches the config blacklist **or** the `.vault-ignore` file. A negation (`!`) in one file cannot re-include a path excluded by the other — remove the exclusion from the other file to re-include it. The `.vault-ignore` file keeps working unchanged for backward compatibility; the config blacklist is the recommended, more capable option for new use.
 
-A missing config file is harmless (everything stays eligible). A malformed file is logged and ignored, so a bad config never takes the site down. Changes to the config blacklist take effect on the next full reload — restart the server, or call the admin reload endpoint. (The per-note `publish: false` flag, by contrast, is picked up incrementally by the file watcher — see [Per-note `publish` flag](#per-note-publish-flag).)
+A missing config file is harmless (everything stays eligible). A malformed file is logged and ignored, so a bad config never takes the site down. Changes to the config blacklist take effect on the next full reload — restart the server, or call the admin reload endpoint. The file is re-read on every reload, so a git-sync deployment picks up the config belonging to the revision the vault symlink now points at. (The per-note `publish: false` flag, by contrast, is picked up incrementally by the file watcher — see [Per-note `publish` flag](#per-note-publish-flag).)
 
 ---
 

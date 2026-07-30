@@ -326,3 +326,65 @@ The validation checklist is the completion contract. Smoke tests against a runni
 - Final commit HEAD: see `git log -1`.
 - All 16 tasks checked off in tasks.md.
 - Validation: `go test ./...` ✓, `gofmt -l .` clean ✓, `golangci-lint` 0 issues ✓, `go build -tags embed` ✓, two smoke tests ✓.
+
+## Step 6: PR #17 code-review fixes (Phase 5)
+
+This step addressed the five review findings raised by the automated reviewer on PR #17 (two P1, three P2), plus one adjacent staleness bug found while smoke-testing the fixes.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues: https://github.com/go-go-golems/publish-vault/pull/17"
+
+**Assistant interpretation:** Read the review comments on PR #17, fix each finding in the code, add a regression test per finding, and re-run the validation checklist.
+
+**Inferred user intent:** The PR should merge with the reviewer's findings resolved and pinned by tests, not merely explained away.
+
+### What I did
+
+1. **P1 — search kept serving unpublished notes (`pkg/watcher/watcher.go`, `pkg/vault/vault.go`).** `ReloadNote` returned the generic `ErrIgnored` when a note flipped to `publish: false`, and the watcher's `ErrIgnored` branch returned without deleting the note from the bleve index, so `/api/search` kept returning its title, excerpt, tags, and body. Added `ErrUnpublished`, defined as `fmt.Errorf("%w: ...", ErrIgnored)` so it *wraps* `ErrIgnored` (existing `errors.Is(err, ErrIgnored)` callers and tests keep working). The watcher checks `ErrUnpublished` first and deletes the slug from search. Added `Vault.SlugForPath` so the watcher can address secondary indexes for a note the vault has already dropped, and factored the two search-delete sites into `deleteFromSearch`.
+
+2. **P1 — reload reused the startup config (`pkg/server/runtime.go`, `pkg/server/server.go`, `cmd/.../serve/serve.go`).** `RuntimeState` held a `*vaultconfig.Config` loaded once in the serve command, so `Reload()` rebuilt the vault with a stale blacklist. Replaced it with a `VaultConfigPath string`; `loadSnapshot` now calls `loadVaultConfig(resolvedRoot, path)` per snapshot. An empty path resolves to `<resolvedRoot>/.publish/config.yaml` — resolved root, not configured root, so a git-sync symlink advancing to a new revision picks up *that revision's* config. The serve command no longer loads the file itself; it just passes `--config` through.
+
+3. **P2 — directory pruning ignored config negations (`pkg/vaultconfig/matcher.go`, `pkg/vault/vault.go`).** `ShouldPruneDir` consulted `.vault-ignore` negations only, so `Secrets/**` + `!Secrets/Public.md` pruned `Secrets/` before the negation could be evaluated. Added `Matcher.HasNegations()` (computed from the pattern list at compile time, skipping comments/blanks) and consulted it in `ShouldPruneDir`.
+
+4. **P2 — broken-embed markers were permanent (`pkg/vault/vault.go`).** `rebuildHTML` transformed `note.HTML` in place, so once an embed of an unpublished target was replaced with a `<span>` marker, the placeholder it was rendered from was gone and no later rebuild could resolve it. Added an unexported `Note.sourceHTML` holding the parser output; `rebuildHTML` always renders from it. This makes rebuilds idempotent, not just this one case.
+
+5. **P2 — `StripFrontmatter` cut at the first `---` substring (`internal/parser/parser.go`).** For `title: "before---after"` the Markdown mirror started mid-YAML and served the remaining metadata as note content. Rewrote `stripFrontmatter` to match delimiters as whole lines, mirroring goldmark-meta's `isSeparator` (a non-empty run of dashes, whitespace-trimmed) so this package and the goldmark pipeline agree on where the block ends.
+
+6. **Adjacent bug found while smoke-testing (4).** `RemoveNote` rebuilt the wiki-link index and backlinks but not HTML, so unpublishing (or deleting) a note left referring notes with a resolved `<div class="wiki-embed">` placeholder pointing at a note that no longer exists — the marker never came *back*. Added `rebuildHTML()` to `RemoveNote`.
+
+Also updated the README: the config file is re-read on every reload (including in git-sync deployments), and the `publish: false` toggle drops the note from search and restores/clears the embed marker in both directions.
+
+### Why
+Findings 1, 2, and 6 are correctness bugs in the publication boundary itself — a note the operator marked private stayed searchable, and a reload could publish notes the current config excludes. Those had to be fixed rather than documented. 3 and 4 make documented behaviour (last-match-wins negations, the embed marker) actually hold. 5 could leak frontmatter into a public Markdown mirror.
+
+### What worked
+- Wrapping `ErrIgnored` with `%w` let a new, more specific sentinel land without touching any existing caller or test.
+- Rendering from `sourceHTML` fixed the embed case as a side effect of making rebuilds idempotent, which is the more defensible invariant.
+- Each fix was verified to fail before it: temporarily reverting `ShouldPruneDir`/`rebuildHTML`/the watcher branch made the corresponding new tests fail with the expected messages.
+
+### What didn't work
+- Reverting a fix to check a test fails is fine, but `git checkout <file>` to undo the revert also discards the *uncommitted* fix. It silently reverted the watcher change; caught it because the tool echoed the restored file. Use a scratch copy (`cp file /tmp/... && cp back`) for uncommitted work.
+
+### What I learned
+- goldmark-meta's frontmatter block is delimited by any line of only dashes (`isSeparator`), opened only at line 0, and closed at the next such non-blank line. Matching that exactly is what keeps `StripFrontmatter` and the parsed frontmatter in agreement — the new `TestStripFrontmatterAgreesWithGoldmark` pins the agreement rather than the implementation.
+- The live smoke test caught bug 6, which no unit test and no review comment had flagged: the embed marker resolved correctly in the publish direction but not the unpublish direction.
+
+### What was tricky to build
+- Deciding where the default config path resolves. Using the *resolved* root (post-symlink) is what makes the git-sync case correct; using the configured root would have kept reading the old revision's file.
+- `ErrUnpublished` must be checked before `ErrIgnored` in the watcher, since it wraps it. The ordering is load-bearing and commented as such.
+
+### What warrants a second pair of eyes
+- `RuntimeOptions.VaultConfig` became `VaultConfigPath` — an API change for any embedder constructing `server.Config` directly (in-repo callers all updated).
+- `NewRuntimeState` (no options) now reads `<root>/.publish/config.yaml` if present, where before only the serve command loaded a config. This makes the config travel with the vault for every embedder, which is the intended contract, but it is new behaviour for library users.
+- Whether `RemoveNote` rebuilding all HTML is acceptable cost on every watcher delete (it matches what `ReloadNote` already does per reload).
+
+### Code review instructions
+- `go test ./... -count=1` and `make lint` (0 issues).
+- Reproduce the search fix: serve a vault with `--watch`, `curl "localhost:PORT/api/search?q=<phrase>"`, add `publish: false` to the note, wait ~2s, re-query — expect `[]`.
+- Reproduce the reload fix: serve with `--reload-allow-loopback`, edit `.publish/config.yaml`, `curl -X POST localhost:PORT/api/admin/reload`, then `curl localhost:PORT/api/notes`.
+- Reproduce the embed fix: a note containing `![[Hidden]]` where `Hidden.md` has `publish: false`; toggle the flag both ways and watch `/api/notes/<slug>` HTML switch between the `wiki-embed-broken` span and the `wiki-embed` div.
+
+### Technical details
+- New tests: `pkg/vault` (`...ReportsUnpublished`, `TestSlugForPath`, `TestConfigNegationBelowExcludedDir`, `TestEmbedOfNoteBecomingPublishedResolvesOnReload`), `pkg/watcher` (`...DeletesSearchEntryWhenNoteBecomesUnpublished`), `pkg/server` (`TestReloadRereadsVaultConfig`, `TestReloadFollowsSymlinkToNewRevisionConfig`, `TestExplicitVaultConfigPathIsRereadOnReload`, `TestNoteMirrorStripsFullFrontmatterBlock`), `pkg/vaultconfig` (`TestMatcherHasNegations`), `internal/parser` (`TestStripFrontmatterOnlyMatchesDelimiterLines`, `TestStripFrontmatterAgreesWithGoldmark`).
+- Validation: `go test ./... -count=1` ✓, `go vet ./...` ✓, `make lint` 0 issues ✓, live smoke test on ports 8199/8200 ✓.

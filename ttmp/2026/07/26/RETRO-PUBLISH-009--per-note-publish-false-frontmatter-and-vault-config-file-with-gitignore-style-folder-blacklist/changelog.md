@@ -49,3 +49,14 @@ Phase 4: added vault-example/.publish/config.yaml + Draft Note (publish:false); 
 
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/vault-example/.publish/config.yaml — Example config demonstrating full ** gitignore semantics
 
+
+## 2026-07-30
+
+Phase 5 (PR #17 review fixes): watcher deletes unpublished notes from the search index (new ErrUnpublished wrapping ErrIgnored + Vault.SlugForPath); runtime re-reads .publish/config.yaml per snapshot so admin reload and git-sync symlink flips pick up the current revision's blacklist (RuntimeOptions.VaultConfig -> VaultConfigPath); ShouldPruneDir honours config negations via Matcher.HasNegations; rebuildHTML renders from parser output (Note.sourceHTML) and RemoveNote rebuilds HTML, so the broken-embed marker tracks the target's publish state in both directions; StripFrontmatter matches whole delimiter lines like goldmark-meta instead of the first --- substring. 12 new regression tests; lint clean; verified live.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/internal/parser/parser.go — stripFrontmatter matches whole delimiter lines, mirroring goldmark-meta isSeparator
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/server/runtime.go — Vault config is now loaded per snapshot from the resolved root, so reload honours config changes
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/watcher/watcher.go — ErrUnpublished branch deletes the note from the search index
+

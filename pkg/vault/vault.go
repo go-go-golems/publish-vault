@@ -3,6 +3,7 @@ package vault
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/url"
@@ -25,6 +26,14 @@ import (
 // than an error.
 var ErrIgnored = errors.New("vault: path is excluded by .vault-ignore")
 
+// ErrUnpublished is returned by ReloadNote when the reloaded note carries
+// publish: false. It wraps ErrIgnored so callers that only care about "this
+// path is not part of the published vault" keep working, while callers that
+// must clean up secondary indexes (the file watcher deleting the note from
+// search) can distinguish a note that just became hidden from a path that was
+// never indexed.
+var ErrUnpublished = fmt.Errorf("%w: note frontmatter sets publish: false", ErrIgnored)
+
 // Note represents a single Obsidian note.
 type Note struct {
 	Slug        string                 `json:"slug"`
@@ -38,6 +47,13 @@ type Note struct {
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
 	Publish     bool                   `json:"-"` // false => excluded from publication
+
+	// sourceHTML is the parser output before vault-level link, asset, and embed
+	// resolution. rebuildHTML always renders HTML from it rather than from the
+	// previously rendered HTML, so a resolution that depended on vault state
+	// (e.g. an embed target hidden by publish: false) is re-evaluated instead of
+	// being baked into the note forever.
+	sourceHTML string
 }
 
 // WikiLinkRef is the JSON-serialisable form of parser.WikiLink.
@@ -229,6 +245,7 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
+		sourceHTML:  parsed.HTML,
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
 		Publish:     publishFlag(frontmatter),
@@ -406,9 +423,17 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 // rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs
 // and display text replaced with target note titles.
 // This must be called after buildWikiLinkIndex so links point to actual notes.
+//
+// Rendering always starts from the note's parser output (sourceHTML), never
+// from the previously rendered HTML: every resolution below depends on vault
+// state that changes between reloads, so re-running them over already-rendered
+// HTML would make the first outcome permanent. In particular an embed whose
+// target was hidden or missing would keep its "Note not published" marker after
+// the target became publishable, because the placeholder it was rendered from
+// would be gone.
 func (v *Vault) rebuildHTML() {
 	for _, note := range v.notes {
-		note.HTML = parser.ReplaceWikiLinksString(note.HTML, func(target string) string {
+		note.HTML = parser.ReplaceWikiLinksString(note.sourceOrRenderedHTML(), func(target string) string {
 			if resolved, ok := v.wikiLinkIndex[target]; ok {
 				return resolved
 			}
@@ -439,6 +464,16 @@ func (v *Vault) rebuildHTML() {
 			return ok
 		})
 	}
+}
+
+// sourceOrRenderedHTML returns the parser output a rebuild should render from,
+// falling back to the current HTML for notes constructed without going through
+// loadNote (test fixtures), so a rebuild never blanks such a note.
+func (n *Note) sourceOrRenderedHTML() string {
+	if n.sourceHTML != "" {
+		return n.sourceHTML
+	}
+	return n.HTML
 }
 
 // unresolvedNoteEmbedRe matches the placeholder div emitted by the parser for
@@ -565,8 +600,8 @@ func (v *Vault) buildBacklinks() {
 // by .vault-ignore or the config blacklist, ReloadNote returns ErrIgnored and
 // leaves the index untouched; callers (the file watcher) treat this as a no-op.
 // A note carrying publish: false is likewise not stored: if it was previously
-// published it is removed from the index, and ReloadNote returns ErrIgnored so
-// the watcher drops it from the search index too.
+// published it is removed from the index, and ReloadNote returns ErrUnpublished
+// (which wraps ErrIgnored) so the watcher drops it from the search index too.
 func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	if v.IsExcluded(absPath, false) {
 		return nil, ErrIgnored
@@ -583,7 +618,7 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 		// Was published, now hidden by frontmatter: drop it from the index and
 		// signal the watcher to remove it from secondary indexes.
 		v.RemoveNote(absPath)
-		return nil, ErrIgnored
+		return nil, ErrUnpublished
 	}
 	v.mu.Lock()
 	v.notes[note.Slug] = note
@@ -594,15 +629,29 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	return note, nil
 }
 
+// SlugForPath returns the vault slug an absolute path inside the vault root
+// maps to, whether or not a note with that slug is currently indexed. The file
+// watcher uses it to address secondary indexes (search) for a note that
+// ReloadNote has already dropped from the vault index.
+func (v *Vault) SlugForPath(absPath string) string {
+	relPath, err := filepath.Rel(v.root, absPath)
+	if err != nil {
+		return ""
+	}
+	return pathToSlug(relPath)
+}
+
 // RemoveNote removes a note from the vault index and returns the removed slug so
-// callers can refresh secondary indexes.
+// callers can refresh secondary indexes. Remaining notes are re-rendered so an
+// embed of the removed note (![[Gone]]) falls back to the broken-embed marker
+// instead of keeping a placeholder that no longer resolves to anything.
 func (v *Vault) RemoveNote(absPath string) string {
-	relPath, _ := filepath.Rel(v.root, absPath)
-	slug := pathToSlug(relPath)
+	slug := v.SlugForPath(absPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
+	v.rebuildHTML()
 	v.mu.Unlock()
 	return slug
 }
@@ -655,6 +704,9 @@ func (v *Vault) ShouldPruneDir(absPath string) bool {
 		return false
 	}
 	if v.ignore != nil && !v.ignore.Empty() && v.ignore.HasNegations() {
+		return false
+	}
+	if v.configMatcher.HasNegations() {
 		return false
 	}
 	return v.IsExcluded(absPath, true)

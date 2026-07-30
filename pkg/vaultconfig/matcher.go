@@ -2,6 +2,7 @@ package vaultconfig
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/sabhiram/go-gitignore"
 )
@@ -14,7 +15,8 @@ import (
 // construction, so it is safe to read concurrently without a lock (mirroring the
 // internal ignore.Ignore type).
 type Matcher struct {
-	ig *ignore.GitIgnore
+	ig           *ignore.GitIgnore
+	hasNegations bool
 }
 
 // NewMatcher compiles the config's Ignore patterns. It returns a no-op matcher
@@ -27,7 +29,25 @@ func NewMatcher(cfg *Config) (*Matcher, error) {
 	if cfg == nil || len(cfg.Ignore) == 0 {
 		return &Matcher{}, nil
 	}
-	return &Matcher{ig: ignore.CompileIgnoreLines(cfg.Ignore...)}, nil
+	return &Matcher{
+		ig:           ignore.CompileIgnoreLines(cfg.Ignore...),
+		hasNegations: hasNegations(cfg.Ignore),
+	}, nil
+}
+
+// hasNegations reports whether any pattern re-includes a path with a leading
+// "!". Comments and blank lines are skipped, mirroring the library's parsing.
+func hasNegations(patterns []string) bool {
+	for _, p := range patterns {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "!") {
+			return true
+		}
+	}
+	return false
 }
 
 // Match reports whether relPath (a vault-relative, slash-separated path) is
@@ -67,4 +87,13 @@ func (m *Matcher) Match(relPath string, isDir bool) bool {
 // empty.
 func (m *Matcher) Empty() bool {
 	return m == nil || m.ig == nil
+}
+
+// HasNegations reports whether the compiled patterns contain a "!" negation.
+// Callers that prune whole directories from a filesystem walk must consult this
+// first: with last-match-wins semantics a pattern such as "!Secrets/Public.md"
+// re-includes a file beneath a directory excluded by "Secrets/**", so the walk
+// has to descend and match each file individually instead of pruning.
+func (m *Matcher) HasNegations() bool {
+	return m != nil && m.hasNegations
 }

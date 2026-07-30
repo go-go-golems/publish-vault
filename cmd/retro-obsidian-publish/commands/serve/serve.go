@@ -3,7 +3,6 @@ package serve
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 
 	appserver "github.com/go-go-golems/publish-vault/pkg/server"
-	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 // Command serves the API and optionally the bundled web app.
@@ -146,14 +144,8 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if pagesDir == "" {
 		pagesDir = filepath.Join(settings.Vault, ".publish", "pages")
 	}
-	configPath := settings.Config
-	if configPath == "" {
-		configPath = filepath.Join(settings.Vault, vaultconfig.DefaultConfigPath)
-	}
-	vaultCfg, err := vaultconfig.Load(configPath)
-	if err != nil {
-		log.Printf("warning reading vault config %s: %v; using empty config", configPath, err)
-		vaultCfg = &vaultconfig.Config{}
-	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir, VaultConfig: vaultCfg})
+	// The config file is read by the runtime, once per vault snapshot, so an
+	// admin reload picks up config edits. An empty path defaults to
+	// <resolved vault root>/.publish/config.yaml.
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir, VaultConfigPath: settings.Config})
 }

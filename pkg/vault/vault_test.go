@@ -800,3 +800,129 @@ func TestReadRawExcludedByConfig(t *testing.T) {
 		t.Errorf("ReadRaw of published note should succeed, got %v", err)
 	}
 }
+
+// TestReloadNoteDropsPublishFalseReportsUnpublished pins that the publish:false
+// reload path is distinguishable from a plain ignore: the watcher needs to tell
+// "this note just became hidden" (delete it from search) apart from "this path
+// was never indexed" (no-op).
+func TestReloadNoteDropsPublishFalseReportsUnpublished(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Flip.md", "# Flip\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	writeVaultTestFile(t, root, "Flip.md", "---\npublish: false\n---\n# Flip\n")
+	_, err = v.ReloadNote(filepath.Join(root, "Flip.md"))
+	if !errors.Is(err, ErrUnpublished) {
+		t.Fatalf("ReloadNote of publish:false note = %v, want ErrUnpublished", err)
+	}
+	if !errors.Is(err, ErrIgnored) {
+		t.Errorf("ErrUnpublished must wrap ErrIgnored so ignore-only callers keep working")
+	}
+	// A path excluded by config, by contrast, is only ErrIgnored: nothing was
+	// ever indexed for it, so there is nothing to clean up.
+	writeVaultTestFile(t, root, "Secrets/x.md", "# X\n")
+	cfgVault, err := New(root, WithConfig(&vaultconfig.Config{Ignore: []string{"Secrets/**"}}))
+	if err != nil {
+		t.Fatalf("New(WithConfig) error = %v", err)
+	}
+	_, err = cfgVault.ReloadNote(filepath.Join(root, "Secrets", "x.md"))
+	if errors.Is(err, ErrUnpublished) {
+		t.Errorf("ReloadNote of config-excluded path = %v, want plain ErrIgnored", err)
+	}
+	if !errors.Is(err, ErrIgnored) {
+		t.Errorf("ReloadNote of config-excluded path = %v, want ErrIgnored", err)
+	}
+}
+
+// TestSlugForPath pins the slug the watcher addresses secondary indexes with
+// for a note the vault has already dropped.
+func TestSlugForPath(t *testing.T) {
+	root := t.TempDir()
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if got := v.SlugForPath(filepath.Join(root, "Notes", "My Note.md")); got != "notes/my-note" {
+		t.Errorf("SlugForPath = %q, want notes/my-note", got)
+	}
+}
+
+// TestConfigNegationBelowExcludedDir pins last-match-wins config negations
+// beneath an excluded directory: the walk must descend into Secrets/ instead of
+// pruning it, otherwise "!Secrets/Public.md" can never be evaluated.
+func TestConfigNegationBelowExcludedDir(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Index.md", "# Index\n")
+	writeVaultTestFile(t, root, "Secrets/Public.md", "# Public\n")
+	writeVaultTestFile(t, root, "Secrets/Private.md", "# Private\n")
+	writeVaultTestFile(t, root, "Secrets/diagram.png", "not really a png")
+
+	cfg := &vaultconfig.Config{Ignore: []string{"Secrets/**", "!Secrets/Public.md"}}
+	v, err := New(root, WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if v.ShouldPruneDir(filepath.Join(root, "Secrets")) {
+		t.Errorf("ShouldPruneDir(Secrets) = true; a config negation below it must keep the walk descending")
+	}
+	if _, ok := v.GetNote("secrets/public"); !ok {
+		t.Errorf("secrets/public should be re-included by the negation")
+	}
+	if _, ok := v.GetNote("secrets/private"); ok {
+		t.Errorf("secrets/private should stay excluded")
+	}
+}
+
+// TestEmbedOfNoteBecomingPublishedResolvesOnReload pins that the broken-embed
+// marker is not permanent: rebuilding renders from the parser output, so an
+// embed whose target was hidden by publish: false resolves once the target is
+// published, without touching the referring note.
+func TestEmbedOfNoteBecomingPublishedResolvesOnReload(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Host.md", "# Host\n\n![[Target]]\n")
+	writeVaultTestFile(t, root, "Target.md", "---\npublish: false\n---\n# Target\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	host, ok := v.GetNote("host")
+	if !ok {
+		t.Fatal("host note missing")
+	}
+	if !strings.Contains(host.HTML, "wiki-embed-broken") {
+		t.Fatalf("embed of unpublished target should render a broken marker, got %q", host.HTML)
+	}
+
+	// Publish the target; only the target is reloaded, as the watcher would do.
+	writeVaultTestFile(t, root, "Target.md", "# Target\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); err != nil {
+		t.Fatalf("ReloadNote(Target) error = %v", err)
+	}
+	host, ok = v.GetNote("host")
+	if !ok {
+		t.Fatal("host note missing after reload")
+	}
+	if strings.Contains(host.HTML, "wiki-embed-broken") {
+		t.Errorf("embed should resolve once the target is published, got %q", host.HTML)
+	}
+	if !strings.Contains(host.HTML, `data-target="target"`) {
+		t.Errorf("embed placeholder should survive the rebuild, got %q", host.HTML)
+	}
+
+	// ...and the marker comes back when the target is hidden again.
+	writeVaultTestFile(t, root, "Target.md", "---\npublish: false\n---\n# Target\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); !errors.Is(err, ErrUnpublished) {
+		t.Fatalf("ReloadNote(Target) = %v, want ErrUnpublished", err)
+	}
+	host, ok = v.GetNote("host")
+	if !ok {
+		t.Fatal("host note missing after unpublish")
+	}
+	if !strings.Contains(host.HTML, "wiki-embed-broken") {
+		t.Errorf("embed should show the broken marker again once the target is hidden, got %q", host.HTML)
+	}
+}
