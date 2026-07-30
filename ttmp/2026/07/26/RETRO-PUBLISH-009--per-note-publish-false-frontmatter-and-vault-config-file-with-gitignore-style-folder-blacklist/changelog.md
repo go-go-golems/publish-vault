@@ -60,3 +60,13 @@ Phase 5 (PR #17 review fixes): watcher deletes unpublished notes from the search
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/server/runtime.go — Vault config is now loaded per snapshot from the resolved root, so reload honours config changes
 - /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/pkg/watcher/watcher.go — ErrUnpublished branch deletes the note from the search index
 
+
+## 2026-07-30
+
+Phase 5b (PR #17 follow-up): stripFrontmatter now recognises a closing --- delimiter on the final line of a file with no trailing newline, which otherwise made StripFrontmatter return the whole source and publish the note's frontmatter in the /note/<slug>.md Content section. Bumped three indirect deps with call-reachable advisories to clear the Go Vulnerability Check job: golang.org/x/text v0.39.0 (GO-2026-5970), github.com/xuri/excelize/v2 v2.11.0 (GO-2026-5960), go.opentelemetry.io/otel v1.42.0 (GO-2026-5158). govulncheck clean; tests and lint unchanged.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/go.mod — x/text, excelize, and otel bumped to versions fixing call-reachable advisories
+- /home/manuel/workspaces/2026-06-22/goja-publish-vault/publish-vault/internal/parser/parser.go — Delimiter test moved above the incomplete-line break so frontmatter closing at EOF is stripped
+

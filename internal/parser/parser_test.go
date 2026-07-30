@@ -440,6 +440,21 @@ func TestStripFrontmatterOnlyMatchesDelimiterLines(t *testing.T) {
 			src:  "---\ntitle: x\n---\nBody\n",
 			want: "Body\n",
 		},
+		{
+			name: "closing delimiter at EOF without a trailing newline",
+			src:  "---\ntitle: x\ninternal: secret\n---",
+			want: "",
+		},
+		{
+			name: "closing delimiter at EOF with a carriage return",
+			src:  "---\r\ntitle: x\r\n---\r",
+			want: "",
+		},
+		{
+			name: "body at EOF without a trailing newline",
+			src:  "---\ntitle: x\n---\nBody",
+			want: "Body",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

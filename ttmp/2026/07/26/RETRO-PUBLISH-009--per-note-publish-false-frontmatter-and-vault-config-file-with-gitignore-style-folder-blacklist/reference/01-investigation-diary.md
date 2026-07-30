@@ -388,3 +388,49 @@ Findings 1, 2, and 6 are correctness bugs in the publication boundary itself —
 ### Technical details
 - New tests: `pkg/vault` (`...ReportsUnpublished`, `TestSlugForPath`, `TestConfigNegationBelowExcludedDir`, `TestEmbedOfNoteBecomingPublishedResolvesOnReload`), `pkg/watcher` (`...DeletesSearchEntryWhenNoteBecomesUnpublished`), `pkg/server` (`TestReloadRereadsVaultConfig`, `TestReloadFollowsSymlinkToNewRevisionConfig`, `TestExplicitVaultConfigPathIsRereadOnReload`, `TestNoteMirrorStripsFullFrontmatterBlock`), `pkg/vaultconfig` (`TestMatcherHasNegations`), `internal/parser` (`TestStripFrontmatterOnlyMatchesDelimiterLines`, `TestStripFrontmatterAgreesWithGoldmark`).
 - Validation: `go test ./... -count=1` ✓, `go vet ./...` ✓, `make lint` 0 issues ✓, live smoke test on ports 8199/8200 ✓.
+
+## Step 7: Second review round + dependency-scanning CI failure (Phase 5b)
+
+This step handled the follow-up review comment on the Phase 5 frontmatter rewrite and the one red CI check on PR #17.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review comment and the failing d https://github.com/go-go-golems/publish-vault/actions/runs/30585876808/job/91016958948?pr=17"
+
+**Assistant interpretation:** Fix the new P2 review comment on `internal/parser/parser.go` and make the failing "Go Vulnerability Check" job pass.
+
+**Inferred user intent:** PR #17 should be green and free of open review findings.
+
+### What I did
+
+1. **P2 — closing frontmatter delimiter at EOF (`internal/parser/parser.go`).** The Phase 5 rewrite scanned for the closing delimiter with `splitLine`, which reports `ok == false` for a final line with no trailing newline. The loop broke on `!ok` *before* testing that line, so a note ending in `---` with no trailing newline (`"---\ntitle: x\ninternal: secret\n---"`) fell through to "no frontmatter found" and `StripFrontmatter` returned the whole source — publishing the frontmatter, custom fields included, as the Content section of `/note/<slug>.md`. Moved the delimiter test above the `!ok` break so the final unterminated line is still considered. Added three table cases: closing delimiter at EOF, the same with a trailing `\r`, and a body at EOF with no newline.
+
+2. **CI — Go Vulnerability Check (3 vulnerable modules).** govulncheck reported call-reachable vulnerabilities in three indirect dependencies: `golang.org/x/text` v0.37.0 (GO-2026-5970, infinite loop on invalid input, reached via `http.Server.Shutdown`), `github.com/xuri/excelize/v2` v2.10.0 (GO-2026-5960, unbounded row-index allocation, reached via glazed's excel formatter through `cobra.Command.Execute`), and `go.opentelemetry.io/otel` v1.41.0 (GO-2026-5158, uncapped baggage header, reached via `dagger.Connect` in the build-web command). Bumped all three to their fixed versions with `go get` + `go mod tidy`; the otel and x/* families moved together.
+
+### Why
+The parser bug is the same class as the finding it came from — leaking frontmatter into a public Markdown mirror — just on a different input shape. The dependency failures are pre-existing drift rather than anything this PR introduced (all three are indirect), but the check gates the PR and the fix is a version bump.
+
+### What worked
+- `govulncheck ./...` locally reproduced CI exactly, and reported "No vulnerabilities found" after the bumps. The 2 remaining advisories are in required-but-uncalled modules, which the tool does not fail on.
+- No source changes were needed for any of the three bumps; `go build ./...`, the full test suite, and `make lint` all passed unchanged afterwards.
+
+### What didn't work
+- Nothing. Both fixes were first-attempt.
+
+### What I learned
+- `splitLine`'s `ok` flag means "this line was newline-terminated", not "this line exists". Any loop over it has to decide whether a final unterminated line is still meaningful content — here it is, because YAML frontmatter may legally close at EOF. The ordering of the delimiter test and the `!ok` break is the whole fix.
+- govulncheck's exit code 3 means "call-reachable vulnerabilities found"; the module-level advisories it also prints are informational and do not affect the exit code.
+
+### What was tricky to build
+- Nothing structurally. The subtlety is that the failing input (`---` at EOF, no trailing newline) is rare enough that no existing fixture had it, which is why the Phase 5 tests missed it.
+
+### What warrants a second pair of eyes
+- The dependency bumps pull in a fairly wide `golang.org/x/*` update (crypto, net, sys, term, tools, mod, sync) as a side effect of `x/text`. Nothing in this repo calls those directly, and CI covers build/test/lint, but a reviewer may want to confirm the release job still produces working binaries.
+
+### Code review instructions
+- `go test ./internal/parser/ -run TestStripFrontmatter -v` — the three new EOF cases.
+- `make govulncheck` — expect "No vulnerabilities found".
+- `git diff go.mod` — three intended bumps (`golang.org/x/text` v0.39.0, `github.com/xuri/excelize/v2` v2.11.0, `go.opentelemetry.io/otel` v1.42.0) plus their transitive families.
+
+### Technical details
+- Validation: `go test ./... -count=1` ✓, `make lint` 0 issues ✓, `govulncheck ./...` clean ✓.

@@ -32,3 +32,5 @@
 - [x] 21. P2: strip only complete frontmatter delimiter lines (`StripFrontmatter`)
 - [x] 22. Rebuild HTML in `RemoveNote` so the embed marker returns when a target is unpublished
 - [x] 23. Regression tests for each fix + README updates; re-run validation checklist
+- [x] P2: handle a closing frontmatter delimiter at EOF without a trailing newline <!-- t:apxt -->
+- [x] CI: bump x/text, excelize, otel to clear govulncheck findings <!-- t:awpp -->

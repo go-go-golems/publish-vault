@@ -594,11 +594,15 @@ func stripFrontmatter(src []byte) []byte {
 	}
 	for rest != "" {
 		line, next, ok := splitLine(rest)
-		if !ok {
-			break
-		}
+		// The closing delimiter counts even as the last line of a file with no
+		// trailing newline ("---\ntitle: x\n---"), so test the line before
+		// giving up on an incomplete one — otherwise the whole source, its
+		// frontmatter included, would be returned as note body.
 		if isFrontmatterDelimiter(line) {
 			return []byte(next)
+		}
+		if !ok {
+			break
 		}
 		rest = next
 	}
