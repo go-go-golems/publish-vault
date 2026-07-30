@@ -375,3 +375,116 @@ func writeVaultFile(t *testing.T, root, rel, body string) {
 		t.Fatal(err)
 	}
 }
+
+// TestReloadRereadsVaultConfig pins that the publish blacklist is read per
+// snapshot, not once at startup: editing .publish/config.yaml and reloading
+// must hide newly excluded notes and restore newly allowed ones.
+func TestReloadRereadsVaultConfig(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+	writeVaultNote(t, root, "Secrets/Plan.md", "# Plan\n")
+	writeVaultFile(t, root, ".publish/config.yaml", "ignore:\n  - Secrets/**\n")
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	v, _ := state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); ok {
+		t.Fatalf("secrets/plan should be excluded by the initial config")
+	}
+
+	// Drop the exclusion: a reload must re-read the file and publish the note.
+	writeVaultFile(t, root, ".publish/config.yaml", "ignore: []\n")
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	v, _ = state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); !ok {
+		t.Errorf("secrets/plan should be published after the exclusion was removed")
+	}
+
+	// Add a new exclusion: a reload must hide the previously published note.
+	writeVaultFile(t, root, ".publish/config.yaml", "ignore:\n  - Index.md\n")
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	v, _ = state.Snapshot()
+	if _, ok := v.GetNote("index"); ok {
+		t.Errorf("index should be hidden after the config excluded it")
+	}
+}
+
+// TestReloadFollowsSymlinkToNewRevisionConfig pins that when the config path is
+// left at its default, each snapshot reads the config belonging to the revision
+// the git-sync symlink currently points at.
+func TestReloadFollowsSymlinkToNewRevisionConfig(t *testing.T) {
+	root := t.TempDir()
+	worktree1 := filepath.Join(root, "wt1")
+	worktree2 := filepath.Join(root, "wt2")
+	link := filepath.Join(root, "current")
+	for _, wt := range []string{worktree1, worktree2} {
+		writeVaultNote(t, wt, "Secrets/Plan.md", "# Plan\n")
+	}
+	writeVaultFile(t, worktree1, ".publish/config.yaml", "ignore: []\n")
+	writeVaultFile(t, worktree2, ".publish/config.yaml", "ignore:\n  - Secrets/**\n")
+	if err := os.Symlink(worktree1, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	state, err := NewRuntimeState(link)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	v, _ := state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); !ok {
+		t.Fatalf("secrets/plan should be published in the first revision")
+	}
+
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("remove link: %v", err)
+	}
+	if err := os.Symlink(worktree2, link); err != nil {
+		t.Fatalf("symlink new: %v", err)
+	}
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	v, _ = state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); ok {
+		t.Errorf("secrets/plan should be excluded by the new revision's config")
+	}
+}
+
+// TestExplicitVaultConfigPathIsRereadOnReload pins that an explicitly
+// configured config path (--config) is also re-read per snapshot.
+func TestExplicitVaultConfigPathIsRereadOnReload(t *testing.T) {
+	root := t.TempDir()
+	vaultDir := filepath.Join(root, "vault")
+	writeVaultNote(t, vaultDir, "Index.md", "# Index\n")
+	writeVaultNote(t, vaultDir, "Secrets/Plan.md", "# Plan\n")
+	configPath := filepath.Join(root, "publish.yaml")
+	if err := os.WriteFile(configPath, []byte("ignore: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := NewRuntimeStateWithOptions(vaultDir, RuntimeOptions{VaultConfigPath: configPath})
+	if err != nil {
+		t.Fatalf("NewRuntimeStateWithOptions() error = %v", err)
+	}
+	v, _ := state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); !ok {
+		t.Fatalf("secrets/plan should be published with an empty config")
+	}
+
+	if err := os.WriteFile(configPath, []byte("ignore:\n  - Secrets/**\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	v, _ = state.Snapshot()
+	if _, ok := v.GetNote("secrets/plan"); ok {
+		t.Errorf("secrets/plan should be excluded after the explicit config gained the pattern")
+	}
+}

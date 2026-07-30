@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-go-golems/publish-vault/pkg/search"
 	"github.com/go-go-golems/publish-vault/pkg/vault"
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 var oldSnapshotCloseDelay = 30 * time.Second
@@ -19,6 +20,11 @@ var oldSnapshotCloseDelay = 30 * time.Second
 // RuntimeOptions configures how runtime snapshots are loaded.
 type RuntimeOptions struct {
 	SearchIndexPath string
+	// VaultConfigPath is the vault config file (publish blacklist) to read. An
+	// empty value means <resolvedRoot>/.publish/config.yaml. The file is read
+	// again for every snapshot, so a reload picks up edits to the config and a
+	// git-sync symlink advancing to a revision with different exclusions.
+	VaultConfigPath string
 }
 
 // Snapshot is an immutable runtime view of one resolved vault root and its
@@ -40,6 +46,7 @@ type RuntimeState struct {
 	mu              sync.RWMutex
 	configuredRoot  string
 	searchIndexPath string
+	vaultConfigPath string
 	snapshot        *Snapshot
 }
 
@@ -51,13 +58,14 @@ func NewRuntimeState(configuredRoot string) (*RuntimeState, error) {
 }
 
 func NewRuntimeStateWithOptions(configuredRoot string, opts RuntimeOptions) (*RuntimeState, error) {
-	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath)
+	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath, opts.VaultConfigPath)
 	if err != nil {
 		return nil, err
 	}
 	return &RuntimeState{
 		configuredRoot:  configuredRoot,
 		searchIndexPath: opts.SearchIndexPath,
+		vaultConfigPath: opts.VaultConfigPath,
 		snapshot:        snap,
 	}, nil
 }
@@ -93,7 +101,7 @@ func (s *RuntimeState) Reload() error {
 	started := time.Now()
 	configured := s.ConfiguredRoot()
 	logMemoryPhase("reload_start", "configuredRoot", configured)
-	next, err := loadSnapshot(configured, s.searchIndexPath)
+	next, err := loadSnapshot(configured, s.searchIndexPath, s.vaultConfigPath)
 	if err != nil {
 		logMemoryPhase("reload_failed", "configuredRoot", configured, "error", err.Error())
 		return err
@@ -108,7 +116,7 @@ func (s *RuntimeState) Reload() error {
 	return nil
 }
 
-func loadSnapshot(configuredRoot, searchIndexPath string) (*Snapshot, error) {
+func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string) (*Snapshot, error) {
 	started := time.Now()
 	logMemoryPhase("load_start", "configuredRoot", configuredRoot, "persistentSearch", fmt.Sprint(searchIndexPath != ""))
 
@@ -124,8 +132,14 @@ func loadSnapshot(configuredRoot, searchIndexPath string) (*Snapshot, error) {
 	revision := snapshotRevision(resolvedRoot, time.Now())
 	logMemoryPhase("load_resolved_root", "configuredRoot", configuredRoot, "resolvedRoot", resolvedRoot, "revision", revision)
 
+	// Read the vault config per snapshot rather than once at startup, so an
+	// admin reload picks up edits to the blacklist and, when the path defaults
+	// to the vault root, the config belonging to the revision a git-sync
+	// symlink now points at.
+	vaultCfg := loadVaultConfig(resolvedRoot, vaultConfigPath)
+
 	vaultStarted := time.Now()
-	v, err := vault.New(resolvedRoot)
+	v, err := vault.New(resolvedRoot, vault.WithConfig(vaultCfg))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
@@ -147,6 +161,23 @@ func loadSnapshot(configuredRoot, searchIndexPath string) (*Snapshot, error) {
 		IndexDir:     indexDir,
 		BuiltAt:      time.Now(),
 	}, nil
+}
+
+// loadVaultConfig reads the publish blacklist for one snapshot. An empty
+// configPath resolves to <resolvedRoot>/.publish/config.yaml so the config
+// travels with the vault revision. A missing file yields an empty config; a
+// malformed one is logged and treated as empty so a bad config cannot block
+// publishing (and, on reload, cannot take the running server down).
+func loadVaultConfig(resolvedRoot, configPath string) *vaultconfig.Config {
+	if configPath == "" {
+		configPath = filepath.Join(resolvedRoot, vaultconfig.DefaultConfigPath)
+	}
+	cfg, err := vaultconfig.Load(configPath)
+	if err != nil {
+		log.Printf("warning reading vault config %s: %v; using empty config", configPath, err)
+		return &vaultconfig.Config{}
+	}
+	return cfg
 }
 
 func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search.Index, string, error) {

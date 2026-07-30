@@ -579,16 +579,56 @@ func StripFrontmatter(src []byte) []byte {
 }
 
 // stripFrontmatter removes YAML frontmatter delimited by ---.
+//
+// Delimiters are matched as whole lines, mirroring goldmark-meta (the extension
+// that actually parses the frontmatter): the block opens only when the very
+// first line consists of dashes, and closes at the next such line. Matching a
+// bare "---" substring instead would cut valid frontmatter short — a scalar
+// such as `title: "before---after"` would end the block mid-document and leak
+// the remaining YAML into the body.
 func stripFrontmatter(src []byte) []byte {
-	s := strings.TrimSpace(string(src))
-	if !strings.HasPrefix(s, "---") {
+	s := string(src)
+	line, rest, ok := splitLine(s)
+	if !ok || !isFrontmatterDelimiter(line) {
 		return src
 	}
-	end := strings.Index(s[3:], "---")
-	if end < 0 {
-		return src
+	for rest != "" {
+		line, next, ok := splitLine(rest)
+		// The closing delimiter counts even as the last line of a file with no
+		// trailing newline ("---\ntitle: x\n---"), so test the line before
+		// giving up on an incomplete one — otherwise the whole source, its
+		// frontmatter included, would be returned as note body.
+		if isFrontmatterDelimiter(line) {
+			return []byte(next)
+		}
+		if !ok {
+			break
+		}
+		rest = next
 	}
-	return []byte(s[end+6:])
+	return src
+}
+
+// splitLine returns the first line of s (without its line break), the
+// remainder, and whether s contained a complete line at all.
+func splitLine(s string) (string, string, bool) {
+	i := strings.IndexByte(s, '\n')
+	if i < 0 {
+		return s, "", false
+	}
+	return strings.TrimSuffix(s[:i], "\r"), s[i+1:], true
+}
+
+// isFrontmatterDelimiter reports whether a line delimits a frontmatter block:
+// a non-empty run of dashes, optionally surrounded by whitespace. This matches
+// goldmark-meta's isSeparator, so this package and the goldmark pipeline agree
+// on where the frontmatter block ends.
+func isFrontmatterDelimiter(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	return strings.Trim(trimmed, "-") == ""
 }
 
 // stripMarkdown removes common Markdown syntax for plain-text excerpt.

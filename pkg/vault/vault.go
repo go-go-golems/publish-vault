@@ -3,12 +3,14 @@ package vault
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -16,12 +18,21 @@ import (
 
 	"github.com/go-go-golems/publish-vault/internal/ignore"
 	"github.com/go-go-golems/publish-vault/internal/parser"
+	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
 // ErrIgnored is returned by ReloadNote when the target path is excluded by a
 // .vault-ignore file. Callers (the file watcher) treat it as a no-op rather
 // than an error.
 var ErrIgnored = errors.New("vault: path is excluded by .vault-ignore")
+
+// ErrUnpublished is returned by ReloadNote when the reloaded note carries
+// publish: false. It wraps ErrIgnored so callers that only care about "this
+// path is not part of the published vault" keep working, while callers that
+// must clean up secondary indexes (the file watcher deleting the note from
+// search) can distinguish a note that just became hidden from a path that was
+// never indexed.
+var ErrUnpublished = fmt.Errorf("%w: note frontmatter sets publish: false", ErrIgnored)
 
 // Note represents a single Obsidian note.
 type Note struct {
@@ -35,6 +46,14 @@ type Note struct {
 	WikiLinks   []WikiLinkRef          `json:"wikiLinks"`
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
+	Publish     bool                   `json:"-"` // false => excluded from publication
+
+	// sourceHTML is the parser output before vault-level link, asset, and embed
+	// resolution. rebuildHTML always renders HTML from it rather than from the
+	// previously rendered HTML, so a resolution that depended on vault state
+	// (e.g. an embed target hidden by publish: false) is re-evaluated instead of
+	// being baked into the note forever.
+	sourceHTML string
 }
 
 // WikiLinkRef is the JSON-serialisable form of parser.WikiLink.
@@ -67,19 +86,40 @@ type SearchDocument struct {
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
 	mu            sync.RWMutex
-	notes         map[string]*Note  // keyed by slug
-	wikiLinkIndex map[string]string // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
-	assetIndex    map[string]string // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
-	root          string            // absolute path to vault directory
-	ignore        *ignore.Ignore    // compiled .vault-ignore; nil/empty means exclude nothing
+	notes         map[string]*Note     // keyed by slug
+	wikiLinkIndex map[string]string    // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
+	assetIndex    map[string]string    // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
+	root          string               // absolute path to vault directory
+	ignore        *ignore.Ignore       // compiled .vault-ignore; nil/empty means exclude nothing
+	configMatcher *vaultconfig.Matcher // compiled .publish/config.yaml blacklist; nil/empty means exclude nothing
+}
+
+// Option configures a Vault.
+type Option func(*Vault)
+
+// WithConfig attaches a vault config (blacklist matcher) to the vault. When
+// set, the loader excludes paths matched by the config blacklist in addition
+// to .vault-ignore. The matcher is treated as immutable after construction
+// (same lifecycle as ignore), so it is safe to read concurrently without a
+// lock. A nil or compile-failed config is logged and ignored.
+func WithConfig(cfg *vaultconfig.Config) Option {
+	return func(v *Vault) {
+		m, err := vaultconfig.NewMatcher(cfg)
+		if err != nil {
+			log.Printf("vault: warning compiling config blacklist: %v; ignoring no paths", err)
+			return
+		}
+		v.configMatcher = m
+	}
 }
 
 // New creates a Vault and loads all notes from rootDir. If <rootDir>/.vault-ignore
 // exists it is read and used to exclude directories and files from the index, the
 // file tree, search, backlinks, and the raw-source endpoint. A missing ignore
 // file is harmless; a malformed one is logged and treated as "ignore nothing" so
-// publishing is not blocked by a bad ignore file.
-func New(rootDir string) (*Vault, error) {
+// publishing is not blocked by a bad ignore file. Options may attach a vault
+// config (WithConfig) whose blacklist is applied in addition to .vault-ignore.
+func New(rootDir string, opts ...Option) (*Vault, error) {
 	ig, err := ignore.Load(rootDir)
 	if err != nil {
 		log.Printf("vault: warning reading %s: %v; ignoring no paths", ignore.IgnoreFile, err)
@@ -91,6 +131,9 @@ func New(rootDir string) (*Vault, error) {
 		assetIndex:    make(map[string]string),
 		root:          rootDir,
 		ignore:        ig,
+	}
+	for _, opt := range opts {
+		opt(v)
 	}
 	if err := v.LoadAll(); err != nil {
 		return nil, err
@@ -115,7 +158,7 @@ func (v *Vault) LoadAll() error {
 			if strings.HasPrefix(info.Name(), ".") {
 				return filepath.SkipDir
 			}
-			// Prune ignored directories only when no negation patterns exist;
+			// Prune excluded directories only when no negation patterns exist;
 			// otherwise descend so a "!" can re-include a file beneath them.
 			if v.ShouldPruneDir(path) {
 				return filepath.SkipDir
@@ -123,17 +166,23 @@ func (v *Vault) LoadAll() error {
 			return nil
 		}
 		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
-			if !v.isIgnored(path, false) {
+			if !v.IsExcluded(path, false) {
 				v.indexAsset(path)
 			}
 			return nil
 		}
-		if v.isIgnored(path, false) {
+		if v.IsExcluded(path, false) {
 			return nil
 		}
 		note, err := v.loadNote(path, info)
 		if err != nil {
 			return nil // skip unparseable notes
+		}
+		// A note carrying publish: false is parsed but not stored, so it is
+		// absent from every consumer that reads v.notes (API, file tree,
+		// search, backlinks, raw endpoint).
+		if !note.Publish {
+			return nil
 		}
 		v.notes[note.Slug] = note
 		return nil
@@ -196,9 +245,52 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
 		HTML:        parsed.HTML,
+		sourceHTML:  parsed.HTML,
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
+		Publish:     publishFlag(frontmatter),
 	}, nil
+}
+
+// publishFlag reads the "publish" frontmatter key case-insensitively and returns
+// the publication eligibility of a note. The default is true (eligible, subject
+// to ignore/config exclusion); publish is opt-out only: an absent key means
+// eligible, and publish: true never overrides an ignore or config exclusion.
+func publishFlag(fm map[string]interface{}) bool {
+	v, _ := frontmatterBool(fm, "publish", true)
+	return v
+}
+
+// frontmatterBool looks up a boolean frontmatter key case-insensitively. It
+// accepts YAML booleans and the strings "true"/"false" (goldmark-meta may
+// surface scalars as strings depending on YAML quoting). It returns
+// (value, true) when the key is present and (defaultValue, false) when absent.
+func frontmatterBool(fm map[string]interface{}, key string, defaultValue bool) (bool, bool) {
+	if fm == nil {
+		return defaultValue, false
+	}
+	lowerKey := strings.ToLower(key)
+	for k, v := range fm {
+		if strings.ToLower(k) != lowerKey {
+			continue
+		}
+		switch val := v.(type) {
+		case bool:
+			return val, true
+		case string:
+			s := strings.TrimSpace(strings.ToLower(val))
+			switch s {
+			case "true", "yes":
+				return true, true
+			case "false", "no":
+				return false, true
+			}
+			return defaultValue, true
+		default:
+			return defaultValue, true
+		}
+	}
+	return defaultValue, false
 }
 
 // buildWikiLinkIndex creates a lookup from short slugified wiki targets to full
@@ -293,7 +385,7 @@ func (v *Vault) RefreshAssetIndex() {
 		if strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
 			return nil
 		}
-		if v.isIgnored(p, false) {
+		if v.IsExcluded(p, false) {
 			return nil
 		}
 		indexAssetInto(fresh, v.root, p)
@@ -331,9 +423,17 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 // rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs
 // and display text replaced with target note titles.
 // This must be called after buildWikiLinkIndex so links point to actual notes.
+//
+// Rendering always starts from the note's parser output (sourceHTML), never
+// from the previously rendered HTML: every resolution below depends on vault
+// state that changes between reloads, so re-running them over already-rendered
+// HTML would make the first outcome permanent. In particular an embed whose
+// target was hidden or missing would keep its "Note not published" marker after
+// the target became publishable, because the placeholder it was rendered from
+// would be gone.
 func (v *Vault) rebuildHTML() {
 	for _, note := range v.notes {
-		note.HTML = parser.ReplaceWikiLinksString(note.HTML, func(target string) string {
+		note.HTML = parser.ReplaceWikiLinksString(note.sourceOrRenderedHTML(), func(target string) string {
 			if resolved, ok := v.wikiLinkIndex[target]; ok {
 				return resolved
 			}
@@ -354,7 +454,51 @@ func (v *Vault) rebuildHTML() {
 			}
 			return ""
 		})
+		// Render a visible marker for note embeds (![[Note]]) whose target is
+		// not in the index — this covers notes hidden by publish: false as well
+		// as genuinely missing targets, so a hidden note does not render as an
+		// empty embed. Consult v.notes directly (lock-free) because rebuildHTML
+		// runs under v.mu; calling the locking GetNote here would deadlock.
+		note.HTML = replaceUnresolvedNoteEmbeds(note.HTML, func(slug string) bool {
+			_, ok := v.notes[slug]
+			return ok
+		})
 	}
+}
+
+// sourceOrRenderedHTML returns the parser output a rebuild should render from,
+// falling back to the current HTML for notes constructed without going through
+// loadNote (test fixtures), so a rebuild never blanks such a note.
+func (n *Note) sourceOrRenderedHTML() string {
+	if n.sourceHTML != "" {
+		return n.sourceHTML
+	}
+	return n.HTML
+}
+
+// unresolvedNoteEmbedRe matches the placeholder div emitted by the parser for
+// a note embed (![[Note]]): <div class="wiki-embed" data-target="..." ...>.
+var unresolvedNoteEmbedRe = regexp.MustCompile(`<div class="wiki-embed" data-target="([^"]*)"([^>]*)></div>`)
+
+// replaceUnresolvedNoteEmbeds replaces note-embed placeholders whose target
+// slug is not a published note with a visible broken-embed marker. The isPublished
+// callback reports whether a slug is in the index; callers that already hold
+// v.mu must pass a lock-free lookup to avoid deadlock.
+func replaceUnresolvedNoteEmbeds(html string, isPublished func(slug string) bool) string {
+	return unresolvedNoteEmbedRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := unresolvedNoteEmbedRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		target := sub[1]
+		if target == "" {
+			return match
+		}
+		if isPublished(target) {
+			return match
+		}
+		return `<span class="wiki-embed wiki-embed-broken">⚠ Note not published: ` + target + `</span>`
+	})
 }
 
 // ResolveAssetURL maps a Markdown image src to a public /vault-assets URL. Relative
@@ -453,10 +597,13 @@ func (v *Vault) buildBacklinks() {
 
 // ReloadNote re-parses a single file, updates the vault index, and returns the
 // updated note so callers can refresh secondary indexes. If absPath is excluded
-// by .vault-ignore, ReloadNote returns ErrIgnored and leaves the index untouched;
-// callers (the file watcher) treat this as a no-op.
+// by .vault-ignore or the config blacklist, ReloadNote returns ErrIgnored and
+// leaves the index untouched; callers (the file watcher) treat this as a no-op.
+// A note carrying publish: false is likewise not stored: if it was previously
+// published it is removed from the index, and ReloadNote returns ErrUnpublished
+// (which wraps ErrIgnored) so the watcher drops it from the search index too.
 func (v *Vault) ReloadNote(absPath string) (*Note, error) {
-	if v.isIgnored(absPath, false) {
+	if v.IsExcluded(absPath, false) {
 		return nil, ErrIgnored
 	}
 	info, err := os.Stat(absPath)
@@ -467,6 +614,12 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !note.Publish {
+		// Was published, now hidden by frontmatter: drop it from the index and
+		// signal the watcher to remove it from secondary indexes.
+		v.RemoveNote(absPath)
+		return nil, ErrUnpublished
+	}
 	v.mu.Lock()
 	v.notes[note.Slug] = note
 	v.buildWikiLinkIndex()
@@ -476,15 +629,29 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	return note, nil
 }
 
+// SlugForPath returns the vault slug an absolute path inside the vault root
+// maps to, whether or not a note with that slug is currently indexed. The file
+// watcher uses it to address secondary indexes (search) for a note that
+// ReloadNote has already dropped from the vault index.
+func (v *Vault) SlugForPath(absPath string) string {
+	relPath, err := filepath.Rel(v.root, absPath)
+	if err != nil {
+		return ""
+	}
+	return pathToSlug(relPath)
+}
+
 // RemoveNote removes a note from the vault index and returns the removed slug so
-// callers can refresh secondary indexes.
+// callers can refresh secondary indexes. Remaining notes are re-rendered so an
+// embed of the removed note (![[Gone]]) falls back to the broken-embed marker
+// instead of keeping a placeholder that no longer resolves to anything.
 func (v *Vault) RemoveNote(absPath string) string {
-	relPath, _ := filepath.Rel(v.root, absPath)
-	slug := pathToSlug(relPath)
+	slug := v.SlugForPath(absPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
+	v.rebuildHTML()
 	v.mu.Unlock()
 	return slug
 }
@@ -494,24 +661,55 @@ func (v *Vault) RemoveNote(absPath string) string {
 // the path is a directory, which affects directory-only patterns. v.ignore and
 // v.root are set once at construction and never mutated, so IsIgnored is safe to
 // call concurrently without a lock (mirroring Root).
+//
+// Prefer IsExcluded, which also accounts for the config blacklist. IsIgnored is
+// retained because the file watcher consults it directly and is updated in a
+// separate phase; it delegates to the unified IsExcluded so both ignore sources
+// remain in agreement.
 func (v *Vault) IsIgnored(absPath string, isDir bool) bool {
-	return v.isIgnored(absPath, isDir)
+	return v.IsExcluded(absPath, isDir)
+}
+
+// IsExcluded reports whether absPath is excluded by EITHER .vault-ignore OR the
+// config blacklist. It is the unified exclusion decision consulted by the loader,
+// the file watcher, and the raw/asset endpoints. isDir indicates whether the
+// path is a directory, which affects directory-only patterns in both matchers.
+// Excluded-if-either semantics means a negation in one file cannot override
+// exclusion in the other (an operator must remove the exclusion from the other
+// file to re-include a path). v.ignore, v.configMatcher, and v.root are set once
+// at construction and never mutated, so IsExcluded is safe to call concurrently
+// without a lock.
+func (v *Vault) IsExcluded(absPath string, isDir bool) bool {
+	if v.isIgnored(absPath, isDir) {
+		return true
+	}
+	if v.configMatcher == nil || v.configMatcher.Empty() {
+		return false
+	}
+	rel, err := filepath.Rel(v.root, absPath)
+	if err != nil {
+		return false
+	}
+	return v.configMatcher.Match(filepath.ToSlash(rel), isDir)
 }
 
 // ShouldPruneDir reports whether a filesystem walk should skip absPath entirely.
-// It returns true only when the directory is ignored AND the ignore file has no
-// negation patterns. When negations exist, a later "!" could re-include a file
-// beneath an otherwise-ignored directory, so pruning the directory would
+// It returns true only when the directory is excluded AND no negation patterns
+// exist in EITHER matcher. When negations exist, a later "!" could re-include a
+// file beneath an otherwise-ignored directory, so pruning the directory would
 // silently drop that file; in that case the walk must descend and match each
 // file individually. This keeps the loader and the matcher consistent.
 func (v *Vault) ShouldPruneDir(absPath string) bool {
-	if v.ignore == nil || v.ignore.Empty() {
+	if (v.ignore == nil || v.ignore.Empty()) && (v.configMatcher == nil || v.configMatcher.Empty()) {
 		return false
 	}
-	if v.ignore.HasNegations() {
+	if v.ignore != nil && !v.ignore.Empty() && v.ignore.HasNegations() {
 		return false
 	}
-	return v.isIgnored(absPath, true)
+	if v.configMatcher.HasNegations() {
+		return false
+	}
+	return v.IsExcluded(absPath, true)
 }
 
 // isIgnored is the lock-free internal matcher used from contexts that may
@@ -656,14 +854,16 @@ func (v *Vault) Root() string {
 
 // ReadRaw reads a Markdown note source from disk on demand. The relPath must be
 // a clean vault-relative Markdown path, normally taken from a Note.Path field.
-// Paths excluded by .vault-ignore return os.ErrNotExist so the raw-source
-// endpoint cannot be used to bypass an ignore.
+// Paths excluded by .vault-ignore OR the config blacklist return os.ErrNotExist
+// so the raw-source endpoint cannot be used to bypass an exclusion. (A note
+// hidden by publish: false is never reachable here because it is absent from
+// v.notes, so GetNote returns not-found before ReadRaw is called.)
 func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
 	cleaned := cleanVaultRelativePath(relPath)
 	if cleaned == "" || !strings.EqualFold(filepath.Ext(cleaned), ".md") {
 		return nil, os.ErrNotExist
 	}
-	if v.isIgnored(filepath.Join(v.root, filepath.FromSlash(cleaned)), false) {
+	if v.IsExcluded(filepath.Join(v.root, filepath.FromSlash(cleaned)), false) {
 		return nil, os.ErrNotExist
 	}
 

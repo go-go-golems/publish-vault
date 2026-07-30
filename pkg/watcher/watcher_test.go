@@ -102,3 +102,49 @@ func TestApplySkipsIgnoredPath(t *testing.T) {
 		t.Errorf("Search(Ignored) = %#v, want no hits (path is ignored)", results)
 	}
 }
+
+// TestApplyDeletesSearchEntryWhenNoteBecomesUnpublished pins that toggling a
+// published note to publish: false removes it from the search index as well as
+// the vault. Without the delete, /api/search keeps returning the hidden note's
+// title, excerpt, tags, and body until a full reload.
+func TestApplyDeletesSearchEntryWhenNoteBecomesUnpublished(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Draft.md")
+	if err := os.WriteFile(notePath, []byte("# Draft\n\nConfidential unique phrase."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New() error = %v", err)
+	}
+	si, err := search.New(v)
+	if err != nil {
+		t.Fatalf("search.New() error = %v", err)
+	}
+	vw := &VaultWatcher{vault: v, search: si}
+
+	results, err := si.Search("Confidential", 10)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search(Confidential) = %#v, want the draft indexed to start with", results)
+	}
+
+	if err := os.WriteFile(notePath, []byte("---\npublish: false\n---\n# Draft\n\nConfidential unique phrase."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vw.apply(notePath, fsnotify.Write)
+
+	if _, ok := v.GetNote("draft"); ok {
+		t.Errorf("publish:false note must be dropped from the vault")
+	}
+	results, err = si.Search("Confidential", 10)
+	if err != nil {
+		t.Fatalf("Search() after unpublish error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Search(Confidential) after unpublish = %#v, want no hits", results)
+	}
+}

@@ -40,6 +40,7 @@ type Config struct {
 	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
 	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
 	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
+	VaultConfigPath     string // Optional vault config file (publish blacklist). Empty = <vault>/.publish/config.yaml. Re-read on every reload.
 	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
@@ -60,7 +61,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
-	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath})
+	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfigPath: cfg.VaultConfigPath})
 	if err != nil {
 		return err
 	}

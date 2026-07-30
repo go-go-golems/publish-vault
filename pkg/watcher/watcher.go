@@ -142,18 +142,21 @@ func (vw *VaultWatcher) loop() {
 func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 	if op&(fsnotify.Remove|fsnotify.Rename) != 0 {
 		log.Printf("vault: removing %s", path)
-		slug := vw.vault.RemoveNote(path)
-		if vw.search != nil {
-			if err := vw.search.Delete(slug); err != nil {
-				log.Printf("search: delete error for %s: %v", slug, err)
-			}
-		}
+		vw.deleteFromSearch(vw.vault.RemoveNote(path))
 		return
 	}
 
 	log.Printf("vault: reloading %s", path)
 	note, err := vw.vault.ReloadNote(path)
 	if err != nil {
+		if errors.Is(err, vault.ErrUnpublished) {
+			// The note now carries publish: false. ReloadNote dropped it from the
+			// vault index; drop it from search too, otherwise /api/search keeps
+			// returning its title, excerpt, tags, and body until a full reload.
+			log.Printf("vault: %s is no longer published; removing", path)
+			vw.deleteFromSearch(vw.vault.SlugForPath(path))
+			return
+		}
 		if errors.Is(err, vault.ErrIgnored) {
 			return // path excluded by .vault-ignore; nothing to do
 		}
@@ -169,5 +172,15 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 		if err := vw.search.Index(doc); err != nil {
 			log.Printf("search: index error for %s: %v", note.Slug, err)
 		}
+	}
+}
+
+// deleteFromSearch drops a slug from the search index, if one is attached.
+func (vw *VaultWatcher) deleteFromSearch(slug string) {
+	if vw.search == nil || slug == "" {
+		return
+	}
+	if err := vw.search.Delete(slug); err != nil {
+		log.Printf("search: delete error for %s: %v", slug, err)
 	}
 }

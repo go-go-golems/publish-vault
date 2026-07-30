@@ -178,3 +178,33 @@ func TestNoteMirrorServesOriginalMarkdown(t *testing.T) {
 		t.Fatalf("expected a single frontmatter block, got %d separators:\n%s", got+1, body)
 	}
 }
+
+// TestNoteMirrorStripsFullFrontmatterBlock pins that /note/<slug>.md serves the
+// Markdown body even when the note's frontmatter contains "---" inside a scalar:
+// a substring match would start mid-YAML and publish the remaining metadata as
+// note content.
+func TestNoteMirrorStripsFullFrontmatterBlock(t *testing.T) {
+	root := t.TempDir()
+	body := "---\ntitle: \"before---after\"\ninternal_note: leaked-secret-value\n---\n# Tricky\n\nReal body text.\n"
+	if err := os.WriteFile(filepath.Join(root, "Tricky.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState: %v", err)
+	}
+	h := newAgentPageHandler(state, api.PublicConfig{VaultName: "test-vault"}, http.NotFoundHandler())
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/note/tricky.md", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d", rr.Code)
+	}
+	got := rr.Body.String()
+	if strings.Contains(got, "leaked-secret-value") {
+		t.Errorf("mirror leaked frontmatter into the body:\n%s", got)
+	}
+	if !strings.Contains(got, "# Tricky") || !strings.Contains(got, "Real body text.") {
+		t.Errorf("mirror missing the markdown body:\n%s", got)
+	}
+}

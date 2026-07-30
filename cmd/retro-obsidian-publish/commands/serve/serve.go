@@ -36,6 +36,7 @@ type Settings struct {
 	Favicon             string `glazed:"favicon"`
 	SearchIndexPath     string `glazed:"search-index-path"`
 	PagesDir            string `glazed:"pages-dir"`
+	Config              string `glazed:"config"`
 }
 
 // NewCommand creates the Cobra command for the serve verb.
@@ -105,6 +106,10 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Directory of widget.dsl page scripts served at /api/widget/*. Defaults to <vault>/.publish/pages; widget routes stay disabled when the directory does not exist."),
 			),
+			fields.New("config", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Path to a vault config file (gitignore-style publish blacklist). Defaults to <vault>/.publish/config.yaml. A missing file is harmless; a malformed one is logged and ignored."),
+			),
 		),
 		cmds.WithSections(commandSettingsSection),
 	)}
@@ -139,5 +144,8 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if pagesDir == "" {
 		pagesDir = filepath.Join(settings.Vault, ".publish", "pages")
 	}
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir})
+	// The config file is read by the runtime, once per vault snapshot, so an
+	// admin reload picks up config edits. An empty path defaults to
+	// <resolved vault root>/.publish/config.yaml.
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir, VaultConfigPath: settings.Config})
 }

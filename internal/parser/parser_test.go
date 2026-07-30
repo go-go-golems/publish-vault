@@ -405,3 +405,80 @@ func TestReplaceWikiEmbedImages(t *testing.T) {
 		t.Fatalf("unresolved embed should render broken marker, got: %s", out)
 	}
 }
+
+// TestStripFrontmatterOnlyMatchesDelimiterLines pins that the frontmatter block
+// ends at a "---" line, not at the first "---" substring. A scalar containing
+// dashes must not cut the block short and leak the remaining YAML into the body.
+func TestStripFrontmatterOnlyMatchesDelimiterLines(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "dashes inside a quoted scalar",
+			src:  "---\ntitle: \"before---after\"\ntags: [a]\n---\n# Body\n\nText.\n",
+			want: "# Body\n\nText.\n",
+		},
+		{
+			name: "dashes inside a block scalar",
+			src:  "---\nsummary: |\n  a --- b\npublish: true\n---\nBody line\n",
+			want: "Body line\n",
+		},
+		{
+			name: "no frontmatter leaves a thematic break alone",
+			src:  "# Title\n\n---\n\nAfter the rule.\n",
+			want: "# Title\n\n---\n\nAfter the rule.\n",
+		},
+		{
+			name: "unterminated frontmatter is left untouched",
+			src:  "---\ntitle: x\nno closing delimiter\n",
+			want: "---\ntitle: x\nno closing delimiter\n",
+		},
+		{
+			name: "plain frontmatter",
+			src:  "---\ntitle: x\n---\nBody\n",
+			want: "Body\n",
+		},
+		{
+			name: "closing delimiter at EOF without a trailing newline",
+			src:  "---\ntitle: x\ninternal: secret\n---",
+			want: "",
+		},
+		{
+			name: "closing delimiter at EOF with a carriage return",
+			src:  "---\r\ntitle: x\r\n---\r",
+			want: "",
+		},
+		{
+			name: "body at EOF without a trailing newline",
+			src:  "---\ntitle: x\n---\nBody",
+			want: "Body",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(StripFrontmatter([]byte(tt.src))); got != tt.want {
+				t.Errorf("StripFrontmatter() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStripFrontmatterAgreesWithGoldmark pins that what StripFrontmatter treats
+// as frontmatter is exactly what the goldmark pipeline parsed as frontmatter:
+// the body it returns must not contain any parsed frontmatter key.
+func TestStripFrontmatterAgreesWithGoldmark(t *testing.T) {
+	src := []byte("---\ntitle: \"before---after\"\nsecret: hunter2\n---\n# Body\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if parsed.Title != "before---after" {
+		t.Fatalf("Parse() title = %q, want before---after", parsed.Title)
+	}
+	body := string(StripFrontmatter(src))
+	if strings.Contains(body, "secret") {
+		t.Errorf("StripFrontmatter leaked frontmatter into the body: %q", body)
+	}
+}
