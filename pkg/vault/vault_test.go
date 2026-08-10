@@ -980,3 +980,154 @@ func TestMathPlaceholdersSurviveRebuildHTML(t *testing.T) {
 		t.Errorf("rebuildHTML() is not idempotent over math markup:\nbefore: %s\nafter:  %s", before, note.HTML)
 	}
 }
+
+// writeVaultFiles is a small helper for the PV-SLUG-020 lookup tests.
+func writeVaultFiles(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for rel, content := range files {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestCanonicalSlugResolvesUserTypeableVariants covers the permanent half of
+// PV-SLUG-020: slugify preserves a trailing "/" and a doubled "//", and GetNote
+// is an exact map lookup, so URLs a reader can produce by hand were a hard 404
+// on a note that exists.
+func TestCanonicalSlugResolvesUserTypeableVariants(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFiles(t, root, map[string]string{
+		"Transcripts/2026/Designing RAG/The_Algebra.md": "# Algebra",
+	})
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	const canonical = "transcripts/2026/designing-rag/the_algebra"
+
+	if _, ok := v.GetNote(canonical); !ok {
+		t.Fatalf("GetNote(%q) not found; slugs are %v", canonical, slugsOf(v))
+	}
+
+	for _, variant := range []string{
+		canonical + "/",
+		"/" + canonical,
+		"transcripts/2026//designing-rag/the_algebra",
+		"Transcripts/2026/Designing-RAG/The_Algebra",
+	} {
+		t.Run(variant, func(t *testing.T) {
+			if _, ok := v.GetNote(variant); ok {
+				t.Fatalf("GetNote(%q) unexpectedly matched exactly", variant)
+			}
+			got, ok := v.CanonicalSlug(variant)
+			if !ok {
+				t.Fatalf("CanonicalSlug(%q) found nothing, want %q", variant, canonical)
+			}
+			if got != canonical {
+				t.Errorf("CanonicalSlug(%q) = %q, want %q", variant, got, canonical)
+			}
+		})
+	}
+
+	// The canonical slug itself must never report a redirect, or the API would
+	// 308 a URL to itself and loop.
+	if got, ok := v.CanonicalSlug(canonical); ok {
+		t.Errorf("CanonicalSlug(%q) = (%q, true), want no redirect for the canonical form", canonical, got)
+	}
+	// A genuine miss stays a miss.
+	if got, ok := v.CanonicalSlug("no/such/note"); ok {
+		t.Errorf("CanonicalSlug(no/such/note) = (%q, true), want not found", got)
+	}
+}
+
+func TestNormalizeSlugIsIdempotent(t *testing.T) {
+	for _, in := range []string{
+		"a/b", "a/b/", "/a/b", "a//b", "A/B", "  a/b  ", "///", "",
+		"transcripts/2026/08/09/designing-rag/the_algebra_of_intervention_fields",
+	} {
+		once := normalizeSlug(in)
+		if twice := normalizeSlug(once); twice != once {
+			t.Errorf("normalizeSlug not idempotent for %q: %q -> %q", in, once, twice)
+		}
+	}
+}
+
+// TestAmbiguousNormalizedSlugDoesNotRedirect: when two real notes share a
+// normalized key, guessing which one the reader meant would silently serve the
+// wrong note. A 404 is the correct answer.
+func TestAmbiguousNormalizedSlugDoesNotRedirect(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFiles(t, root, map[string]string{
+		"Alpha/note.md": "# One",
+		"alpha/note.md": "# Two",
+	})
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	// Both files slugify to the same key on a case-insensitive filesystem; on a
+	// case-sensitive one they differ only by case and share a normalized key.
+	if len(v.AllNotes()) < 2 {
+		t.Skip("filesystem folded the two paths into one; nothing to disambiguate")
+	}
+	if got, ok := v.CanonicalSlug("ALPHA/NOTE"); ok {
+		t.Errorf("CanonicalSlug(ALPHA/NOTE) = (%q, true), want no redirect for an ambiguous key", got)
+	}
+}
+
+// TestExcludedNotesRecordTheirReason turns the four silent drops into an
+// answerable question.
+func TestExcludedNotesRecordTheirReason(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFiles(t, root, map[string]string{
+		".vault-ignore": "drafts/\n",
+		"drafts/Hid.md": "# Hidden by ignore",
+		"Private.md":    "---\npublish: false\n---\n\n# Hidden by frontmatter\n",
+		"Привет.md":     "# Non-latin filename",
+		"Published.md":  "# Visible",
+	})
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if _, ok := v.GetNote("published"); !ok {
+		t.Fatalf("published note missing; slugs are %v", slugsOf(v))
+	}
+	// The degenerate slug must not have been stored under the empty key, which
+	// is where every non-Latin filename used to collide.
+	if _, ok := v.GetNote(""); ok {
+		t.Errorf("a note was stored under the empty slug")
+	}
+
+	for path, want := range map[string]ExclusionReason{
+		"drafts/Hid.md": ExcludedByIgnore,
+		"Private.md":    ExcludedByPublish,
+		"Привет.md":     ExcludedByEmptySlug,
+	} {
+		got, ok := v.ExclusionReasonFor(path)
+		if !ok {
+			t.Errorf("ExclusionReasonFor(%q) recorded nothing, want %q", path, want)
+			continue
+		}
+		if got != want {
+			t.Errorf("ExclusionReasonFor(%q) = %q, want %q", path, got, want)
+		}
+	}
+	if _, ok := v.ExclusionReasonFor("Published.md"); ok {
+		t.Errorf("a published note was recorded as excluded")
+	}
+}
+
+func slugsOf(v *Vault) []string {
+	var out []string
+	for _, n := range v.AllNotes() {
+		out = append(out, n.Slug)
+	}
+	return out
+}

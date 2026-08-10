@@ -12,6 +12,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -127,16 +128,40 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 // getNote returns a single note by slug.
+//
+// On an exact miss it tries the normalized index before 404ing: slugs preserve
+// a trailing "/" and a doubled "//", so URLs a reader can produce by hand — a
+// copy-paste that kept the trailing slash, a mixed-case path — used to be a
+// permanent 404 on a note that was one normalization step away. Redirecting
+// rather than serving keeps one canonical URL per note for caches and crawlers.
 func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
 	v, _ := h.provider.Snapshot()
 	note, ok := v.GetNote(slug)
 	if !ok {
+		if canonical, found := v.CanonicalSlug(slug); found {
+			// 308 rather than 301: the method and body must be preserved, and
+			// the redirect is a property of the slug, not of this request.
+			http.Redirect(w, r, "/api/notes/"+canonicalSlugPath(canonical), http.StatusPermanentRedirect)
+			return
+		}
 		http.Error(w, `{"error":"note not found"}`, http.StatusNotFound)
 		return
 	}
 	jsonResponse(w, note)
+}
+
+// canonicalSlugPath escapes a slug for use in a redirect Location while
+// leaving the "/" separators intact — the route is registered as
+// {slug:.*}, so the path segments are part of the slug rather than
+// sub-resources.
+func canonicalSlugPath(slug string) string {
+	parts := strings.Split(slug, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 // getNoteRaw returns the raw markdown source for a note.

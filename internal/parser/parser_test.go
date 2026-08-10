@@ -482,3 +482,43 @@ func TestStripFrontmatterAgreesWithGoldmark(t *testing.T) {
 		t.Errorf("StripFrontmatter leaked frontmatter into the body: %q", body)
 	}
 }
+
+// TestSlugifyTable pins the slug algebra. These outputs are load-bearing: they
+// are the live URLs of every published note, so a change here silently breaks
+// external links. Rows come from PV-SLUG-020 design doc section 3.1.
+func TestSlugifyTable(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"underscores_survive", "The_Algebra_of_Intervention_Fields", "the_algebra_of_intervention_fields"},
+		{"nested_path_survives",
+			"Transcripts/2026/08/09/Designing RAG Abstractions/The_Algebra_of_Intervention_Fields",
+			"transcripts/2026/08/09/designing-rag-abstractions/the_algebra_of_intervention_fields"},
+		{"spaces_to_single_dash", "hello    world", "hello-world"},
+		{"dots_become_dashes", "v1.2.3 release", "v1-2-3-release"},
+		{"ampersand", "Cats & Dogs", "cats-dogs"},
+		{"apostrophe", "Manuel's Notes", "manuel-s-notes"},
+		{"accents_are_mangled", "Café Münster", "caf-m-nster"},
+		{"cyrillic_is_empty", "Привет мир", ""},
+		{"cjk_is_empty", "日本語ノート", ""},
+		{"emoji_dropped", "done ✅ shipped 🚀", "done-shipped"},
+		{"trailing_slash_survives", "a/b/", "a/b/"},
+		{"double_slash_survives", "a//b", "a//b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Slugify(tt.in); got != tt.want {
+				t.Errorf("Slugify(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+
+	// Idempotence is what lets the vault build a normalized fallback index on
+	// top of Slugify without risking a redirect loop.
+	t.Run("idempotent", func(t *testing.T) {
+		for _, tt := range tests {
+			once := Slugify(tt.in)
+			if twice := Slugify(once); twice != once {
+				t.Errorf("Slugify not idempotent for %q: %q -> %q", tt.in, once, twice)
+			}
+		}
+	})
+}

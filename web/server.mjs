@@ -79,15 +79,69 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-// Helper: fetch JSON from the Go API
-async function fetchAPI(path) {
+/**
+ * Fetch JSON from the Go API, reporting *why* it failed.
+ *
+ * This used to return `null` for every failure, which made four different
+ * situations indistinguishable — the note is absent, the backend is
+ * unreachable, the backend returned 5xx, the body did not parse — and the
+ * caller then asserted the first of them by sending `404 Note not found`. A
+ * note that exists but whose backend is restarting was reported to users, to
+ * crawlers, and to caches as a note that does not exist. See PV-SLUG-020.
+ *
+ * Returns { kind, data?, status?, error? } where kind is one of:
+ *   ok | not_found | unreachable | server_error | bad_body
+ */
+async function fetchAPIResult(path) {
+  let res;
   try {
-    const res = await fetch(`${API_BASE}${path}`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+    res = await fetch(`${API_BASE}${path}`);
+  } catch (error) {
+    // Connection refused, DNS failure, timeout, socket hang-up. The backend
+    // may well be mid-restart, so this is retryable — never a 404.
+    return { kind: "unreachable", error };
   }
+  if (res.status === 404) return { kind: "not_found", status: 404 };
+  if (!res.ok) return { kind: "server_error", status: res.status };
+  try {
+    return { kind: "ok", data: await res.json() };
+  } catch (error) {
+    // 2xx with a truncated or non-JSON body: the backend is misbehaving, which
+    // is a gateway error, not a missing document.
+    return { kind: "bad_body", status: res.status, error };
+  }
+}
+
+/** Convenience wrapper for fetches whose failure is not by itself fatal. */
+async function fetchAPI(path) {
+  const result = await fetchAPIResult(path);
+  return result.kind === "ok" ? result.data : null;
+}
+
+/**
+ * Map a non-ok fetch result onto an HTTP response.
+ *
+ * `no-store` matters as much as the status code: a 404 emitted while the
+ * backend was down is cached by CDNs and crawlers as a permanent verdict on a
+ * URL that is in fact fine.
+ */
+function sendUpstreamFailure(res, result, what) {
+  if (result.kind === "unreachable") {
+    console.error(`[ssr] ${what}: backend unreachable:`, result.error?.message);
+    res
+      .status(503)
+      .set("Cache-Control", "no-store")
+      .set("Retry-After", "5")
+      .type("text")
+      .send("Backend unavailable — please retry");
+    return;
+  }
+  console.error(`[ssr] ${what}: backend error (status=${result.status})`);
+  res
+    .status(502)
+    .set("Cache-Control", "no-store")
+    .type("text")
+    .send("Backend error");
 }
 
 // Parse URL path into route type + optional slug.
@@ -217,38 +271,70 @@ app.get("*", async (req, res) => {
     // Widget pages need the query string forwarded so page scripts can read
     // request.query (e.g. /w/reader?slug=foo), mirroring the client fetch.
     const search = url.includes("?") ? url.slice(url.indexOf("?")) : "";
-    const [config, notes, tree, widgetPage] = await Promise.all([
-      fetchAPI("/api/config"),
+    const [configResult, notes, tree, widgetResult] = await Promise.all([
+      fetchAPIResult("/api/config"),
       route.type === "home" ? fetchAPI("/api/notes") : null,
       fetchAPI("/api/tree"),
       route.type === "widget"
-        ? fetchAPI(
+        ? fetchAPIResult(
             `/api/widget/pages/${encodeURIComponent(route.pageId)}${search}`
           )
         : null,
     ]);
 
+    // /api/config is the liveness signal for the whole page: without it there
+    // is no vault name and no page title, and rendering anyway produced a 200
+    // with "<title>undefined</title>" whenever the backend was erroring.
+    if (configResult.kind !== "ok" && configResult.kind !== "not_found") {
+      sendUpstreamFailure(res, configResult, "/api/config");
+      return;
+    }
+    const config = configResult.data ?? null;
+    const widgetPage = widgetResult?.kind === "ok" ? widgetResult.data : null;
+
     // 2. Pre-fetch route-specific data
     let note = null;
     const homeSlug = route.type === "home" ? chooseHomeSlug(notes ?? []) : null;
     if (route.type === "note" && route.slug) {
-      note = await fetchAPI(`/api/notes/${encodeURIComponent(route.slug)}`);
+      const result = await fetchAPIResult(
+        `/api/notes/${encodeURIComponent(route.slug)}`
+      );
+      // Missing note routes should be real 404s. Otherwise crawlers treat
+      // unresolved wiki-link targets as valid pages and expect markdown
+      // mirrors. But *only* a genuine API 404 is a missing note — anything
+      // else is an upstream failure and must stay retryable.
+      if (result.kind === "not_found") {
+        res
+          .status(404)
+          .set("Cache-Control", "no-store")
+          .type("text")
+          .send("Note not found");
+        return;
+      }
+      if (result.kind !== "ok") {
+        sendUpstreamFailure(res, result, `note ${route.slug}`);
+        return;
+      }
+      note = result.data;
     } else if (homeSlug) {
       note = await fetchAPI(`/api/notes/${encodeURIComponent(homeSlug)}`);
     }
 
-    // Missing note routes should be real 404s. Otherwise crawlers treat
-    // unresolved wiki-link targets as valid pages and expect markdown mirrors.
-    if (route.type === "note" && route.slug && !note) {
-      res.status(404).type("text").send("Note not found");
-      return;
-    }
-
     // Same for widget pages: the API 404s when the page script does not exist
     // (or widget pages are disabled), and crawlers should see that as a 404.
-    if (route.type === "widget" && !widgetPage) {
-      res.status(404).type("text").send("Widget page not found");
-      return;
+    if (route.type === "widget" && widgetResult) {
+      if (widgetResult.kind === "not_found") {
+        res
+          .status(404)
+          .set("Cache-Control", "no-store")
+          .type("text")
+          .send("Widget page not found");
+        return;
+      }
+      if (widgetResult.kind !== "ok") {
+        sendUpstreamFailure(res, widgetResult, `widget page ${route.pageId}`);
+        return;
+      }
     }
 
     // 3. Render React to HTML
