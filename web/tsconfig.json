@@ -18,7 +18,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["../shared/*"],
-      "@highlight-languages": ["./src/lib/highlightLanguages.ts"]
+      "@highlight-languages": ["./src/lib/highlightLanguages.ts"],
+      "@mathjax-typeset": ["./src/lib/mathjax.ts"]
     }
   }
 }

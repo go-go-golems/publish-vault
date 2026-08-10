@@ -11,6 +11,7 @@ export const noteHtmlWidget = defineWidget<NoteHtmlWidgetProps>({
     <NoteHtml
       html={props.html}
       slug={props.slug}
+      math={props.math}
       mermaid={props.mermaid}
       highlight={props.highlight}
       embeds={props.embeds}

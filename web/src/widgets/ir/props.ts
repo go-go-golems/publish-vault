@@ -79,6 +79,7 @@ export interface DividerWidgetProps {
 export interface NoteHtmlWidgetProps {
   html: string;
   slug?: string;
+  math?: boolean;
   mermaid?: boolean;
   highlight?: boolean;
   embeds?: boolean;

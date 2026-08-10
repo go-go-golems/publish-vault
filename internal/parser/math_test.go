@@ -269,3 +269,20 @@ func mustParse(t *testing.T, src string) *ParsedNote {
 	}
 	return note
 }
+
+// TestInlineMathDoesNotCloseInsideCodeSpan is a regression test for a bug the
+// vault-example showcase note found: prose reading
+//
+//	costs $30 and $25; a closing `$` may not be preceded by whitespace
+//
+// opened math at $30 and closed it at the backticked $ on the next line — that
+// dollar sign satisfies both the preceding-character and following-character
+// rules — swallowing a sentence and a half of prose into a formula.
+func TestInlineMathDoesNotCloseInsideCodeSpan(t *testing.T) {
+	src := "The hardback costs $30 and the paperback costs\n" +
+		"$25; neither opens math, because a closing `$` may not be preceded\n" +
+		"by whitespace."
+	if spans := ScanMath([]byte(src)); len(spans) != 0 {
+		t.Fatalf("ScanMath found %d spans in currency prose: %+v", len(spans), spans)
+	}
+}

@@ -15,6 +15,7 @@ import { LightboxModal } from "../../atoms/LightboxModal/LightboxModal";
 import { useAppDispatch } from "../../../hooks/redux";
 import { vaultApi, useListNotesQuery } from "../../../store/vaultApi";
 import {
+  enhanceMath,
   enhanceMermaid,
   enhanceCodeBlocks,
   enhanceHeadingAnchors,
@@ -33,6 +34,7 @@ export interface NoteHtmlProps {
   html: string;
   slug?: string;
   /** Enhancement toggles; all default to true. */
+  math?: boolean;
   mermaid?: boolean;
   highlight?: boolean;
   embeds?: boolean;
@@ -43,6 +45,7 @@ export interface NoteHtmlProps {
 export const NoteHtml: React.FC<NoteHtmlProps> = ({
   html,
   slug,
+  math = true,
   mermaid = true,
   highlight = true,
   embeds = true,
@@ -151,6 +154,15 @@ export const NoteHtml: React.FC<NoteHtmlProps> = ({
     return () => el.removeEventListener("click", handleClick);
   }, [handleClick]);
 
+  // Math is independent of the mermaid->highlight ordering (the parser never
+  // emits a .math placeholder inside a code block) but runs first so copy
+  // buttons are never attached around a half-typeset <pre>.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !math) return;
+    return enhanceMath(el);
+  }, [resolvedHtml, math]);
+
   // Ordering constraint: mermaid must consume its blocks before highlight.
   useEffect(() => {
     const el = contentRef.current;
@@ -167,8 +179,12 @@ export const NoteHtml: React.FC<NoteHtmlProps> = ({
   useEffect(() => {
     const el = contentRef.current;
     if (!el || !embeds) return;
-    resolveEmbeds(el, loadNoteHtml);
-  }, [resolvedHtml, embeds, loadNoteHtml]);
+    // Embedded notes arrive after this effect has run, so their math has to be
+    // typeset from the completion callback rather than by the pass above.
+    resolveEmbeds(el, loadNoteHtml, container => {
+      if (math) enhanceMath(container);
+    });
+  }, [resolvedHtml, embeds, loadNoteHtml, math]);
 
   useEffect(() => {
     if (!anchors) return;

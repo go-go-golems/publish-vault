@@ -291,6 +291,13 @@ func scanInlineClose(body []byte, from int) (int, string, bool) {
 		switch body[j] {
 		case '\\':
 			j++ // the loop's j++ skips the escaped byte too
+		case '`':
+			// Code spans are skipped here as well as in the outer scan.
+			// Without this, "costs $30 and $25; a closing `$` may not…" finds
+			// its closer inside the code span — that backticked $ satisfies
+			// both the preceding-character and following-character rules — and
+			// swallows a sentence and a half of prose into a formula.
+			j = skipCodeSpan(body, j) - 1
 		case '\n':
 			if blankLineAt(body, j) {
 				return 0, "", false
@@ -317,8 +324,11 @@ func scanUntil(body []byte, from int, closer string) (int, string, bool) {
 		if bytes.HasPrefix(body[j:], end) {
 			return j + len(end), string(body[from:j]), true
 		}
-		if body[j] == '\\' {
+		switch body[j] {
+		case '\\':
 			j++
+		case '`':
+			j = skipCodeSpan(body, j) - 1
 		}
 	}
 	return 0, "", false
