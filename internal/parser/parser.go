@@ -102,6 +102,12 @@ func Parse(src []byte) (*ParsedNote, error) {
 	// --- Render callouts (admonitions) ---
 	htmlOut = renderCallouts(htmlOut)
 
+	// --- Point [[#Heading]] links at the ids goldmark actually emitted ---
+	// Runs before RestoreMath on purpose: a heading containing math carries the
+	// same placeholders on both sides of the comparison while the math is still
+	// lifted out, so `## $\sigma$ notes` and `[[#$\sigma$ notes]]` still match.
+	htmlOut = resolveSelfHeadingLinks(htmlOut)
+
 	// --- Put math back, last, so no other pass ever sees its markup ---
 	htmlOut = RestoreMath(htmlOut, mathSpans)
 
@@ -134,8 +140,14 @@ func extractWikiLinks(src []byte) []WikiLink {
 		inner := string(m[2])
 		target, alias, heading := parseWikiLinkInner(inner)
 		// Image embeds are asset references, not note links; keeping them out
-		// of WikiLinks keeps backlinks and the wiki-link index clean.
+		// of WikiLinks keeps backlinks and the wiki-link index clean. So is a
+		// [[#Heading]] link, which names an anchor in this very note: it used to
+		// enter the list with an empty Target, where it could only ever fail to
+		// resolve, and showed up as a blank entry in the agent Markdown view.
 		if isEmbed && isImageTarget(target) {
+			continue
+		}
+		if target == "" {
 			continue
 		}
 		key := target + "|" + alias
@@ -254,11 +266,94 @@ func wikiLinkHTML(match []byte) []byte {
 		}
 		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
 	}
+	if target == "" {
+		// [[#Heading]] — a link to a heading in *this* note, not to another
+		// note. It carries no target, so it must not go through the /note/<slug>
+		// path at all: an empty slug produced href="/note/#heading", which sends
+		// the reader to the vault root, and an empty display string, which makes
+		// the link invisible. The real anchor id is only known once goldmark has
+		// rendered the headings, so emit a placeholder for
+		// resolveSelfHeadingLinks to finish.
+		if heading == "" {
+			return match // degenerate [[#]] / [[|x]]: leave the source text alone
+		}
+		if display == "" {
+			display = heading
+		}
+		return []byte(`<a href="#" class="wiki-link wiki-link-self" data-heading="` + stdhtml.EscapeString(heading) + `" data-alias="` + stdhtml.EscapeString(alias) + `">` + stdhtml.EscapeString(display) + `</a>`)
+	}
 	href := "/note/" + slug
 	if heading != "" {
 		href += "#" + slugify(heading)
 	}
 	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-alias="` + alias + `">` + display + `</a>`)
+}
+
+var (
+	// selfHeadingLinkRe matches the placeholder emitted by wikiLinkHTML for a
+	// same-note heading link. Attribute order is fixed because we generate it.
+	selfHeadingLinkRe = regexp.MustCompile(`<a href="#" class="wiki-link wiki-link-self" data-heading="([^"]*)" data-alias="([^"]*)">`)
+	// renderedHeadingRe captures the id and inner markup of every rendered
+	// heading that carries an id.
+	renderedHeadingRe = regexp.MustCompile(`(?s)<h[1-6][^>]*\bid="([^"]*)"[^>]*>(.*?)</h[1-6]>`)
+	htmlTagRe         = regexp.MustCompile(`<[^>]*>`)
+	whitespaceRe      = regexp.MustCompile(`\s+`)
+)
+
+// resolveSelfHeadingLinks points [[#Heading]] links at the heading goldmark
+// actually rendered, instead of at a slug we computed ourselves.
+//
+// This has to be resolution rather than derivation: goldmark's auto heading IDs
+// and slugify disagree (goldmark drops "." and "—" outright where slugify turns
+// them into "-", so "9.2 Kernel K0" becomes "92-kernel-k0" rather than
+// "9-2-kernel-k0"), and goldmark additionally suffixes duplicate headings with
+// "-1", "-2". Reading the ids back out of the rendered HTML is exact by
+// construction and cannot drift when goldmark changes its algorithm.
+//
+// Headings are matched on their text, case-insensitively and with runs of
+// whitespace collapsed, which is how Obsidian matches them; the first heading
+// with that text wins, again matching Obsidian. A target that matches no
+// heading text is tried against the ids themselves, so a link written in the
+// already-slugified form still lands. Anything left over becomes a visibly
+// unresolved link rather than a silent jump to the top of the page.
+func resolveSelfHeadingLinks(htmlIn string) string {
+	if !strings.Contains(htmlIn, `class="wiki-link wiki-link-self"`) {
+		return htmlIn
+	}
+
+	byText := map[string]string{}
+	ids := map[string]bool{}
+	for _, m := range renderedHeadingRe.FindAllStringSubmatch(htmlIn, -1) {
+		id, inner := m[1], m[2]
+		ids[id] = true
+		key := normalizeHeadingKey(stdhtml.UnescapeString(htmlTagRe.ReplaceAllString(inner, "")))
+		if key == "" {
+			continue
+		}
+		if _, exists := byText[key]; !exists {
+			byText[key] = id
+		}
+	}
+
+	return selfHeadingLinkRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
+		sub := selfHeadingLinkRe.FindStringSubmatch(match)
+		heading := stdhtml.UnescapeString(sub[1])
+		id, ok := byText[normalizeHeadingKey(heading)]
+		if !ok && ids[heading] {
+			id = heading
+			ok = true
+		}
+		if !ok {
+			return `<a href="#unresolved-` + stdhtml.EscapeString(slugify(heading)) +
+				`" class="wiki-link wiki-link-self broken" data-heading="` + sub[1] + `" data-alias="` + sub[2] + `">`
+		}
+		return `<a href="#` + stdhtml.EscapeString(id) +
+			`" class="wiki-link wiki-link-self" data-heading="` + sub[1] + `" data-alias="` + sub[2] + `">`
+	})
+}
+
+func normalizeHeadingKey(s string) string {
+	return whitespaceRe.ReplaceAllString(strings.ToLower(strings.TrimSpace(s)), " ")
 }
 
 // slugify converts a note title to a URL-safe slug.

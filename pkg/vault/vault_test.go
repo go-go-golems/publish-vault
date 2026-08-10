@@ -1298,3 +1298,46 @@ func TestWikiLinkWithMarkdownExtensionResolvesToTheSameNote(t *testing.T) {
 		t.Fatalf("backlinks = %#v, want [research/zoo]", thesis.Backlinks)
 	}
 }
+
+// TestSelfHeadingLinksSurviveRebuild guards the [[#Heading]] fix against the
+// vault layer. rebuildHTML re-runs every resolution pass over the parser output
+// on each reload, so a same-note anchor that the parser got right could still be
+// rewritten back into a /note/ link — ReplaceWikiLinksString rewrites hrefs, and
+// ReplaceWikiLinkDisplay rewrites anchor text.
+func TestSelfHeadingLinksSurviveRebuild(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Zoo.md",
+		"# Zoo\n\n"+
+			"- self: [[#9.2 Kernel K0: canonical identity]]\n"+
+			"- other: [[Other]]\n\n"+
+			"## 9.2 Kernel K0: canonical identity\n")
+	writeVaultTestFile(t, root, "Other.md", "# Other\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	zoo, ok := v.GetNote("zoo")
+	if !ok {
+		t.Fatal("zoo note missing")
+	}
+
+	if !strings.Contains(zoo.HTML, `href="#92-kernel-k0-canonical-identity"`) {
+		t.Fatalf("self heading anchor did not survive the vault passes: %s", zoo.HTML)
+	}
+	if !strings.Contains(zoo.HTML, `>9.2 Kernel K0: canonical identity</a>`) {
+		t.Fatalf("self heading link lost its display text: %s", zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, `href="/note/#`) {
+		t.Fatalf("self heading link was routed back through /note/: %s", zoo.HTML)
+	}
+
+	// The ordinary link next to it must still resolve, and the self link must
+	// not have added a phantom edge to the graph.
+	if !strings.Contains(zoo.HTML, `href="/note/other"`) {
+		t.Fatalf("neighbouring note link broke: %s", zoo.HTML)
+	}
+	if len(zoo.WikiLinks) != 1 || zoo.WikiLinks[0].Target != "Other" {
+		t.Fatalf("WikiLinks = %#v, want just the Other link", zoo.WikiLinks)
+	}
+}

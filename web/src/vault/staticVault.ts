@@ -107,11 +107,18 @@ function stripNoteExtension(target: string): string {
 }
 
 /** Display text for a wiki link with no explicit alias: the target as written,
- *  minus the heading and the .md extension. */
+ *  minus the heading and the .md extension.
+ *
+ *  [[#Heading]] has no target at all, so it falls back to the heading — without
+ *  it the anchor renders with empty text and is invisible on the page. It still
+ *  renders as broken here: marked (v18) emits no heading ids, so the static
+ *  build has nothing for a fragment to point at. The Go renderer resolves these
+ *  properly; see resolveSelfHeadingLinks in internal/parser/parser.go. */
 function wikiLinkLabel(inner: string): string {
-  return inner.includes("|")
-    ? inner.split("|")[1].trim()
-    : stripNoteExtension(inner.split("#")[0].split("|")[0].trim());
+  if (inner.includes("|")) return inner.split("|")[1].trim();
+  const beforeHeading = inner.split("#")[0].split("|")[0].trim();
+  if (beforeHeading === "") return inner.split("|")[0].replace(/^#/, "").trim();
+  return stripNoteExtension(beforeHeading);
 }
 
 /** Resolve a wiki-link target to a slug.

@@ -607,3 +607,96 @@ func TestWikiLinkMarkdownExtensionVariants(t *testing.T) {
 		}
 	}
 }
+
+// TestSelfHeadingLinkUsesRenderedHeadingID is the regression test for the
+// [[#Heading]] bug. These links used to render as
+// `<a href="/note/#heading"></a>`: empty text, and a destination pointing at
+// the vault root. They must become same-page anchors carrying the heading as
+// their text — and the fragment must be goldmark's *actual* id, which is not
+// what slugify would produce for any of these headings.
+func TestSelfHeadingLinkUsesRenderedHeadingID(t *testing.T) {
+	src := []byte("# Zoo\n\n" +
+		"1. [[#Pattern 1 — Semantic Identity]]\n" +
+		"2. [[#9.2 Kernel K0: canonical identity]]\n\n" +
+		"## Pattern 1 — Semantic Identity\n\n" +
+		"## 9.2 Kernel K0: canonical identity\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	// The point of resolving against the rendered HTML rather than slugifying:
+	// these two ids differ from Slugify's answer.
+	for _, want := range []string{
+		`href="#pattern-1--semantic-identity"`,
+		`href="#92-kernel-k0-canonical-identity"`,
+		`>Pattern 1 — Semantic Identity</a>`,
+		`>9.2 Kernel K0: canonical identity</a>`,
+	} {
+		if !contains(parsed.HTML, want) {
+			t.Errorf("expected %s in HTML, got: %s", want, parsed.HTML)
+		}
+	}
+	if contains(parsed.HTML, `href="/note/#`) {
+		t.Fatalf("self link still routed through /note/: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, `href="#9-2-kernel-k0-canonical-identity"`) {
+		t.Fatalf("fragment was slugified instead of read back from the heading: %s", parsed.HTML)
+	}
+	// A same-note anchor is not a link to a note, so it must stay out of the
+	// backlink graph.
+	if len(parsed.WikiLinks) != 0 {
+		t.Fatalf("self heading links leaked into WikiLinks: %#v", parsed.WikiLinks)
+	}
+}
+
+// TestSelfHeadingLinkMatchingRules covers how a target is matched against the
+// rendered headings: case- and whitespace-insensitively, first-heading-wins on
+// duplicates (as Obsidian does), with the already-slugified form accepted as a
+// fallback and no match at all rendered visibly broken.
+func TestSelfHeadingLinkMatchingRules(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"- case: [[#SOME   Heading]]\n" +
+		"- id form: [[#some-heading]]\n" +
+		"- alias: [[#Some Heading|call it that]]\n" +
+		"- dupe: [[#Notes]]\n" +
+		"- missing: [[#nowhere]]\n\n" +
+		"## Some Heading\n\n## Notes\n\n## Notes\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got := strings.Count(parsed.HTML, `href="#some-heading"`); got != 3 {
+		t.Errorf("case, id-form and aliased links should all reach #some-heading, got %d: %s", got, parsed.HTML)
+	}
+	if !contains(parsed.HTML, `>call it that</a>`) {
+		t.Errorf("alias should win over the heading text: %s", parsed.HTML)
+	}
+	// goldmark emits "notes" and "notes-1"; the link takes the first.
+	if !contains(parsed.HTML, `href="#notes"`) || contains(parsed.HTML, `href="#notes-1"`) {
+		t.Errorf("duplicate headings: first should win, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `href="#unresolved-nowhere" class="wiki-link wiki-link-self broken"`) {
+		t.Errorf("missing heading should render visibly broken: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `>nowhere</a>`) {
+		t.Errorf("a broken self link must still show its text: %s", parsed.HTML)
+	}
+}
+
+// TestSelfHeadingLinkDegenerateFormsAreLeftAlone pins that a wiki link with
+// neither a target nor a heading is passed through as source text rather than
+// turned into an empty anchor.
+func TestSelfHeadingLinkDegenerateFormsAreLeftAlone(t *testing.T) {
+	parsed, err := Parse([]byte("# T\n\nliteral [[#]] here\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, "[[#]]") {
+		t.Fatalf("degenerate [[#]] should survive as text, got: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, "wiki-link") {
+		t.Fatalf("degenerate [[#]] should not become a link, got: %s", parsed.HTML)
+	}
+}
