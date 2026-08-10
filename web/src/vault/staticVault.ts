@@ -43,9 +43,7 @@ function makeWikiLinkExtension(allSlugs: Set<string>) {
     },
     renderer(token: { inner: string }) {
       const inner = token.inner;
-      const alias = inner.includes("|")
-        ? inner.split("|")[1].trim()
-        : inner.split("#")[0].split("|")[0].trim();
+      const alias = wikiLinkLabel(inner);
       const slug = resolveWikiTarget(inner, allSlugs);
       const isBroken = !allSlugs.has(slug);
       const cls = isBroken ? "wiki-link broken" : "wiki-link";
@@ -97,13 +95,32 @@ function titleToSlug(title: string): string {
   return title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-/]/g, "");
 }
 
+/** Strip a trailing ".md" from a wiki-link target.
+ *  Obsidian treats [[Note]] and [[Note.md]] as the same link, and pathToSlug
+ *  builds every slug without the extension — while titleToSlug *deletes* the dot
+ *  rather than keeping it, so an unstripped "foo.md" would look for "foomd".
+ *  Only ".md" is stripped (the vault globs nothing else), never down to "". */
+function stripNoteExtension(target: string): string {
+  return target.length > 3 && target.slice(-3).toLowerCase() === ".md"
+    ? target.slice(0, -3)
+    : target;
+}
+
+/** Display text for a wiki link with no explicit alias: the target as written,
+ *  minus the heading and the .md extension. */
+function wikiLinkLabel(inner: string): string {
+  return inner.includes("|")
+    ? inner.split("|")[1].trim()
+    : stripNoteExtension(inner.split("#")[0].split("|")[0].trim());
+}
+
 /** Resolve a wiki-link target to a slug.
  *  Handles: bare title, folder/title, title with alias, title with heading. */
 function resolveWikiTarget(raw: string, allSlugs: Set<string>): string {
   // Strip alias: [[Target|Alias]] → "Target"
   const withoutAlias = raw.split("|")[0].trim();
   // Strip heading: [[Target#Heading]] → "Target"
-  const withoutHeading = withoutAlias.split("#")[0].trim();
+  const withoutHeading = stripNoteExtension(withoutAlias.split("#")[0].trim());
 
   // Try exact slug match
   const direct = titleToSlug(withoutHeading);
@@ -136,10 +153,8 @@ function extractWikiLinks(content: string): string[] {
 /** Replace [[wiki links]] with <a> tags in Markdown before rendering.
  *  marked is configured with { gfm: true } which passes raw HTML through. */
 function preprocessWikiLinks(content: string, allSlugs: Set<string>): string {
-  return content.replace(/\[\[([^\]]+)\]\]/g, (_match, inner) => {
-    const alias = inner.includes("|")
-      ? inner.split("|")[1].trim()
-      : inner.split("#")[0].split("|")[0].trim();
+  return content.replace(/\[\[([^\]]+)\]\]/g, (_match, inner: string) => {
+    const alias = wikiLinkLabel(inner);
     const slug = resolveWikiTarget(inner, allSlugs);
     const isBroken = !allSlugs.has(slug);
     const cls = isBroken ? "wiki-link broken" : "wiki-link";
