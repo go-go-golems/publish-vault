@@ -522,3 +522,88 @@ func TestSlugifyTable(t *testing.T) {
 		}
 	})
 }
+
+// TestStripNoteExtension pins the exact boundary of the ".md" strip: only a
+// trailing ".md", case-insensitively, and never at the cost of an empty target.
+func TestStripNoteExtension(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"Note.md", "Note"},
+		{"Note.MD", "Note"},
+		{"Folder/Note.md", "Folder/Note"},
+		{"Note", "Note"},
+		{"Note.md.md", "Note.md"},
+		{"readme.markdown", "readme.markdown"},
+		{"pic.png", "pic.png"},
+		{"md", "md"},
+		{".md", ".md"},
+		{"", ""},
+		{"Notes on foo.md and bar", "Notes on foo.md and bar"},
+	}
+	for _, c := range cases {
+		if got := StripNoteExtension(c.in); got != c.want {
+			t.Errorf("StripNoteExtension(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestWikiLinkTargetDropsMarkdownExtension is the regression test for
+// PV-WIKILINK-021: [[X.md]] must produce the same slug, href and backlink target
+// as [[X]]. Without the strip, "…thesis.md" slugifies to "…thesis-md", which
+// matches no note — or, worse, matches an unrelated note named "… md".
+func TestWikiLinkTargetDropsMarkdownExtension(t *testing.T) {
+	src := []byte("# Zoo\n\n" +
+		"| a | [[Transcripts/2026/08/06/RAG DSL for Retrieval/thesis.md#Identity is an API decision]] |\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(parsed.WikiLinks) != 1 {
+		t.Fatalf("expected 1 wiki link, got %#v", parsed.WikiLinks)
+	}
+	wl := parsed.WikiLinks[0]
+	if want := "Transcripts/2026/08/06/RAG DSL for Retrieval/thesis"; wl.Target != want {
+		t.Errorf("WikiLink.Target = %q, want %q", wl.Target, want)
+	}
+	if want := "Identity is an API decision"; wl.Heading != want {
+		t.Errorf("WikiLink.Heading = %q, want %q", wl.Heading, want)
+	}
+
+	want := `href="/note/transcripts/2026/08/06/rag-dsl-for-retrieval/thesis#identity-is-an-api-decision"`
+	if !contains(parsed.HTML, want) {
+		t.Fatalf("expected %s in HTML, got: %s", want, parsed.HTML)
+	}
+	if contains(parsed.HTML, "thesis-md") {
+		t.Fatalf("extension leaked into the slug: %s", parsed.HTML)
+	}
+}
+
+// TestWikiLinkMarkdownExtensionVariants covers the forms the strip has to keep
+// working alongside: an explicit alias, a note embed, and an image embed whose
+// extension must survive untouched.
+func TestWikiLinkMarkdownExtensionVariants(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"[[Folder/Note.md|Custom Alias]]\n\n" +
+		"![[Folder/Embedded.MD]]\n\n" +
+		"![[Attachments/pic.png]]\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if !contains(parsed.HTML, `data-target="folder/note"`) || !contains(parsed.HTML, `>Custom Alias</a>`) {
+		t.Errorf("aliased .md link mishandled: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `<div class="wiki-embed" data-target="folder/embedded"`) {
+		t.Errorf("note embed did not lose its .MD: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `data-asset="Attachments/pic.png"`) {
+		t.Errorf("image embed target was rewritten: %s", parsed.HTML)
+	}
+
+	for _, wl := range parsed.WikiLinks {
+		if strings.HasSuffix(strings.ToLower(wl.Target), ".md") {
+			t.Errorf("extension survived into WikiLinks: %#v", wl)
+		}
+	}
+}

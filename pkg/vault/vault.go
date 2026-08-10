@@ -481,8 +481,13 @@ func (v *Vault) ResolveAssetEmbed(target string) (string, bool) {
 
 // ResolveWikiLink maps a wiki link target (as written in the note) to the
 // actual vault slug. Returns ("", false) if no match is found.
+//
+// A trailing ".md" is stripped first because the index is keyed on
+// extension-less paths (see buildWikiLinkIndex). The parser already strips it
+// from targets it stores, but this is public API taking a target "as written",
+// so callers passing the raw [[Note.md]] form get the same answer as [[Note]].
 func (v *Vault) ResolveWikiLink(target string) (string, bool) {
-	slug := parser.Slugify(target)
+	slug := parser.Slugify(parser.StripNoteExtension(strings.TrimSpace(target)))
 	if resolved, ok := v.wikiLinkIndex[slug]; ok {
 		return resolved, true
 	}

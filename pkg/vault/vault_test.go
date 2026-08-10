@@ -1245,3 +1245,56 @@ func TestReloadNotePreservesDisambiguatedSlugs(t *testing.T) {
 		}
 	}
 }
+
+// TestWikiLinkWithMarkdownExtensionResolvesToTheSameNote is the end-to-end guard
+// for PV-WIKILINK-021. The vault deliberately also contains a decoy whose own
+// slug is "…/thesis-md" — exactly what an unstripped "[[…/thesis.md]]" target
+// slugifies to — so a regression does not merely leave the link unresolved, it
+// silently points at the decoy. Both link forms must land on the real note.
+func TestWikiLinkWithMarkdownExtensionResolvesToTheSameNote(t *testing.T) {
+	root := t.TempDir()
+	const dir = "Transcripts/2026/08/06/RAG DSL for Retrieval"
+	writeVaultTestFile(t, root, dir+"/thesis.md", "# Doctoral thesis\n\n## Identity is an API decision\n\nbody\n")
+	writeVaultTestFile(t, root, dir+"/thesis md.md", "# Decoy\n\nnot the note you wanted\n")
+	writeVaultTestFile(t, root, "Research/Zoo.md",
+		"# Zoo\n\n"+
+			"- with: [["+dir+"/thesis.md#Identity is an API decision]]\n"+
+			"- without: [["+dir+"/thesis#Identity is an API decision]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	const wantSlug = "transcripts/2026/08/06/rag-dsl-for-retrieval/thesis"
+	for _, target := range []string{dir + "/thesis.md", dir + "/thesis"} {
+		got, ok := v.ResolveWikiLink(target)
+		if !ok || got != wantSlug {
+			t.Errorf("ResolveWikiLink(%q) = %q, %v; want %q, true", target, got, ok, wantSlug)
+		}
+	}
+
+	zoo, ok := v.GetNote("research/zoo")
+	if !ok {
+		t.Fatal("zoo note missing")
+	}
+	wantHref := `href="/note/` + wantSlug + `#identity-is-an-api-decision"`
+	if strings.Count(zoo.HTML, wantHref) != 2 {
+		t.Fatalf("both link forms should render %s, got: %s", wantHref, zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, "thesis-md") {
+		t.Fatalf("link leaked onto the decoy slug: %s", zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, "#unresolved-") {
+		t.Fatalf("link stayed unresolved: %s", zoo.HTML)
+	}
+
+	// The backlink graph is fed from WikiLink.Target, so it has to agree.
+	thesis, ok := v.GetNote(wantSlug)
+	if !ok {
+		t.Fatal("thesis note missing")
+	}
+	if len(thesis.Backlinks) != 1 || thesis.Backlinks[0] != "research/zoo" {
+		t.Fatalf("backlinks = %#v, want [research/zoo]", thesis.Backlinks)
+	}
+}

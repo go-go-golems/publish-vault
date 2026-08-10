@@ -167,8 +167,32 @@ func parseWikiLinkInner(inner string) (string, string, string) {
 		heading = strings.TrimSpace(inner[idx+1:])
 		inner = inner[:idx]
 	}
-	target := strings.TrimSpace(inner)
+	target := StripNoteExtension(strings.TrimSpace(inner))
 	return target, alias, heading
+}
+
+// StripNoteExtension removes a trailing ".md" from a wiki-link target.
+//
+// Obsidian treats [[Note]] and [[Note.md]] as the same link, and emits the
+// second form under the "absolute path in vault" setting. publish-vault derives
+// every slug from an extension-less path (pathToSlug, buildWikiLinkIndex), while
+// slugify maps "." to "-" rather than dropping it — so an unstripped target
+// slugifies to "…-md" and resolves either to nothing or, when the vault happens
+// to hold a note named "… md", to the wrong note with no visible breakage.
+// Stripping here, at the one place every consumer of a target goes through,
+// keeps the two forms interchangeable.
+//
+// Only ".md" is stripped: the vault loads no other extension, so ".markdown" is
+// part of a note's name rather than a suffix. A bare ".md" target is left as-is
+// rather than reduced to the empty string.
+func StripNoteExtension(target string) string {
+	if len(target) <= len(".md") {
+		return target
+	}
+	if !strings.EqualFold(target[len(target)-len(".md"):], ".md") {
+		return target
+	}
+	return target[:len(target)-len(".md")]
 }
 
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
