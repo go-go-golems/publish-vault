@@ -1,0 +1,40 @@
+GOMAXPROCS=8 GOGC="" GOMEMLIMIT=""
+vault=/home/manuel/code/wesen/go-go-golems/go-go-parc
+
+on-disk: mdFiles=1739 mdBytes=59267905 (56.5 MiB)  assetFiles=1970 assetBytes=2271422933 (2166.2 MiB)  walk=24ms
+
+00-baseline                  elapsed=0s         heapAlloc=     0.6 MiB  heapInuse=     1.6 MiB  heapSys=     7.4 MiB  sys=    13.3 MiB  nextGC=     4.0 MiB  numGC=2  maxRSS=    19.7 MiB
+01-vault1-loaded             elapsed=26.106s    heapAlloc=   151.1 MiB  heapInuse=   174.0 MiB  heapSys=   279.5 MiB  sys=   289.9 MiB  nextGC=   302.4 MiB  numGC=213  maxRSS=   301.2 MiB
+02-search1-built             elapsed=1m36.447s  heapAlloc=   166.8 MiB  heapInuse=   195.0 MiB  heapSys=   943.0 MiB  sys=   960.5 MiB  nextGC=   331.7 MiB  numGC=404  maxRSS=   800.3 MiB
+
+== per-note retained field totals (snapshot 1) ==
+notes                 = 1712
+HTML bytes            = 71148435 (67.9 MiB)
+sourceHTML bytes (~)  = 71148435 (67.9 MiB)  [unexported, approximated as == HTML]
+Excerpt bytes         = 346121 (338.0 KiB)
+Title bytes           = 88641
+Path bytes            = 151909
+Slug bytes            = 142507
+WikiLink refs         = 4394
+Backlink entries      = 3450
+Tag entries           = 8295
+HTML / markdown ratio = 1.20x
+
+
+heap profile written to /tmp/claude-1000/-home-manuel-workspaces-2026-08-09-publish-vault-mathjax/bf523fbe-21da-4e70-82cf-09d2f99fadea/scratchpad/snap-persist.heap
+
+== summary ==
+vault only (live heap delta)   = 150.4 MiB
+search only (live heap delta)  = 15.7 MiB
+one snapshot (vault+search)    = 166.2 MiB
+bytes per note (one snapshot)  = 101772
+multiplier vs on-disk markdown = 2.94x
+peak phase                     = 02-search1-built
+peak heapAlloc (live)          = 166.8 MiB
+peak heapSys                   = 943.0 MiB
+peak runtime Sys               = 960.5 MiB
+peak RSS (VmHWM)               = 800.3 MiB
+current RSS (VmRSS)            = 510.4 MiB
+
+NOTE: VmHWM is the number a Kubernetes memory limit is enforced against.
+      A 1536 MiB limit is breached when peak RSS exceeds it, regardless of live heap.
