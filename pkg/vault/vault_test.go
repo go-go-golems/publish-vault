@@ -1184,3 +1184,64 @@ func slugsOf(v *Vault) []string {
 	}
 	return out
 }
+
+// TestReloadNotePreservesDisambiguatedSlugs: LoadAll renames the later of two
+// colliding notes, but ReloadNote used to recompute the natural slug and assign
+// it directly — overwriting the note that owned it while stranding the old
+// suffixed entry, so a watched edit made one note vanish and duplicated the
+// other until a full reload. (PR #18 review, P2.)
+func TestReloadNotePreservesDisambiguatedSlugs(t *testing.T) {
+	root := t.TempDir()
+	writeVaultFiles(t, root, map[string]string{
+		"Alpha/Note.md": "# Upper",
+		"alpha/note.md": "# Lower",
+	})
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if len(v.AllNotes()) < 2 {
+		t.Skip("filesystem folded the two paths into one")
+	}
+
+	before := map[string]string{}
+	for _, n := range v.AllNotes() {
+		before[n.Slug] = n.Path
+	}
+
+	// Reload each note in turn, as the file watcher does on an edit.
+	for slug, rel := range before {
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.WriteFile(abs, []byte("# edited "+slug), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		note, err := v.ReloadNote(abs)
+		if err != nil {
+			t.Fatalf("ReloadNote(%s) error = %v", rel, err)
+		}
+		if note.Slug != slug {
+			t.Errorf("ReloadNote(%s) moved the note from slug %q to %q", rel, slug, note.Slug)
+		}
+	}
+
+	after := map[string]string{}
+	for _, n := range v.AllNotes() {
+		after[n.Slug] = n.Path
+	}
+	if len(after) != len(before) {
+		t.Fatalf("note count changed %d -> %d\nbefore %v\nafter  %v", len(before), len(after), before, after)
+	}
+	for slug, rel := range before {
+		if after[slug] != rel {
+			t.Errorf("slug %q maps to %q after reload, want %q", slug, after[slug], rel)
+		}
+	}
+	// SlugForPath must keep agreeing with the index, since the watcher deletes
+	// search documents by the slug it returns.
+	for _, n := range v.AllNotes() {
+		abs := filepath.Join(root, filepath.FromSlash(n.Path))
+		if got := v.SlugForPath(abs); got != n.Slug {
+			t.Errorf("SlugForPath(%q) = %q, want %q", n.Path, got, n.Slug)
+		}
+	}
+}

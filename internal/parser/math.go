@@ -406,12 +406,33 @@ func skipFencedBlock(body []byte, i int, fenceChar byte, fenceLen int) int {
 	j := lineEnd(body, i)
 	for j < n {
 		lineStop := lineEnd(body, j)
-		if ch, runLen, ok := fenceOpensAt(body, j); ok && ch == fenceChar && runLen >= fenceLen {
+		if fenceClosesAt(body, j, lineStop, fenceChar, fenceLen) {
 			return lineStop
 		}
 		j = lineStop
 	}
 	return n
+}
+
+// fenceClosesAt reports whether the line [lineStart, lineStop) closes a fence
+// opened with fenceLen fenceChars.
+//
+// A closing fence must be at least as long as the opening one AND carry nothing
+// but whitespace after its run. CommonMark allows an info string only on the
+// *opening* fence, so a line such as ```` ```example ```` inside a block opened
+// with ``` is code, not a terminator. Accepting it would end the skipped region
+// early and let the scanner treat `$...$` in the remaining code as math,
+// rewriting a code sample into rendered HTML.
+func fenceClosesAt(body []byte, lineStart, lineStop int, fenceChar byte, fenceLen int) bool {
+	ch, runLen, ok := fenceOpensAt(body, lineStart)
+	if !ok || ch != fenceChar || runLen < fenceLen {
+		return false
+	}
+	rest := body[lineStart:lineStop]
+	if idx := bytes.LastIndexByte(rest, fenceChar); idx >= 0 {
+		rest = rest[idx+1:]
+	}
+	return len(bytes.TrimSpace(rest)) == 0
 }
 
 // lineEnd returns the offset just past the newline terminating the line that

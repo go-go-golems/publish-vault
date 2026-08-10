@@ -147,6 +147,11 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 	}
 
 	log.Printf("vault: reloading %s", path)
+	// Capture the slug this path holds before the reload. A note whose slug was
+	// disambiguated after a collision can move between slugs when the vault
+	// changes, and the search index is keyed by slug rather than by path, so
+	// the old document would otherwise survive under a slug nothing serves.
+	previousSlug := vw.vault.SlugForPath(path)
 	note, err := vw.vault.ReloadNote(path)
 	if err != nil {
 		if errors.Is(err, vault.ErrUnpublished) {
@@ -162,6 +167,9 @@ func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 		}
 		log.Printf("vault: reload error: %v", err)
 		return
+	}
+	if previousSlug != "" && previousSlug != note.Slug {
+		vw.deleteFromSearch(previousSlug)
 	}
 	if vw.search != nil {
 		doc, err := vw.vault.SearchDocument(note)

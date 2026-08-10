@@ -286,3 +286,42 @@ func TestInlineMathDoesNotCloseInsideCodeSpan(t *testing.T) {
 		t.Fatalf("ScanMath found %d spans in currency prose: %+v", len(spans), spans)
 	}
 }
+
+// TestWikiLinkInsideMathIsNotIndexed: `[[Target]]` inside a formula is literal
+// TeX, not a link. Recording it would make buildBacklinks give Target a
+// backlink from a note that does not link to it. (PR #18 review, P2.)
+func TestWikiLinkInsideMathIsNotIndexed(t *testing.T) {
+	note := mustParse(t, "Formula $[[Target]]$ only, plus a real [[Other]].\n")
+	var targets []string
+	for _, l := range note.WikiLinks {
+		targets = append(targets, l.Target)
+	}
+	if len(targets) != 1 || targets[0] != "Other" {
+		t.Errorf("WikiLinks = %v, want only [Other]", targets)
+	}
+}
+
+// TestClosingFenceRequiresBareMarker: CommonMark permits an info string only on
+// the *opening* fence, so "```example" inside a ```-opened block is code, not a
+// terminator. Treating it as one ended the skip early and rewrote `$...$` in the
+// remaining code sample into math. (PR #18 review, P2.)
+func TestClosingFenceRequiresBareMarker(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{"info string is not a closer", "```\ncode $x$\n```example\nstill code $y$\n```\n", 0},
+		{"trailing spaces still close", "```\ncode $x$\n```   \n\n$real$\n", 1},
+		{"longer closer still closes", "```\ncode $x$\n`````\n\n$real$\n", 1},
+		{"shorter run does not close", "````\ncode $x$\n```\nstill code $y$\n````\n", 0},
+		{"tilde fence with info string", "~~~\ncode $x$\n~~~note\nstill code $y$\n~~~\n", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ScanMath([]byte(tt.src)); len(got) != tt.want {
+				t.Errorf("ScanMath() found %d spans, want %d: %+v", len(got), tt.want, got)
+			}
+		})
+	}
+}

@@ -238,20 +238,14 @@ func (v *Vault) LoadAll() error {
 			log.Printf("warning: note excluded path=%q reason=%s (filename has no URL-safe characters)", v.relPath(path), ExcludedByEmptySlug)
 			return nil
 		}
-		if existing, clash := v.notes[note.Slug]; clash {
-			// Both notes get published. filepath.Walk is lexical, so the first
-			// path to claim a slug keeps it across restarts and only the later
-			// one is renamed; the suffix is derived from that note's own path,
-			// so it is stable no matter what else the vault gains or loses.
-			// Previously the second note silently replaced the first.
-			natural := note.Slug
-			note.Slug = disambiguateSlug(natural, v.relPath(path), func(candidate string) bool {
-				_, taken := v.notes[candidate]
-				return taken
-			})
+		// Both notes get published. filepath.Walk is lexical, so the first path
+		// to claim a slug keeps it across restarts and only the later one is
+		// renamed. Previously the second note silently replaced the first.
+		if assigned, existing, renamed := v.assignSlug(note); renamed {
 			collisions++
 			log.Printf("warning: slug collision slug=%q kept=%q renamed=%q to=%q",
-				natural, existing.Path, v.relPath(path), note.Slug)
+				note.Slug, existing, v.relPath(path), assigned)
+			note.Slug = assigned
 		}
 		v.notes[note.Slug] = note
 		return nil
@@ -696,6 +690,16 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 		return nil, ErrUnpublished
 	}
 	v.mu.Lock()
+	// Drop whatever slug this path currently holds before reinserting. A note
+	// whose slug was disambiguated does not live at its natural slug, so
+	// inserting under a freshly computed one would overwrite the note that owns
+	// it and strand the old suffixed entry.
+	v.forgetPath(note.Path)
+	if assigned, existing, renamed := v.assignSlug(note); renamed {
+		log.Printf("warning: slug collision slug=%q kept=%q renamed=%q to=%q",
+			note.Slug, existing, note.Path, assigned)
+		note.Slug = assigned
+	}
 	v.notes[note.Slug] = note
 	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
@@ -727,6 +731,41 @@ func (v *Vault) SlugForPath(absPath string) string {
 	}
 	v.mu.RUnlock()
 	return pathToSlug(relPath)
+}
+
+// assignSlug decides which slug a note should occupy, given what is already in
+// the index. It returns the slug to use, the path of the note that owns the
+// natural slug when one is being displaced, and whether a rename happened.
+//
+// A note is never considered to collide with itself: reloading a file must
+// return the slug it already holds, whether that is the natural one or a
+// previously assigned suffix. Caller must hold v.mu.
+func (v *Vault) assignSlug(note *Note) (string, string, bool) {
+	existing, clash := v.notes[note.Slug]
+	if !clash || existing.Path == note.Path {
+		return note.Slug, "", false
+	}
+	assigned := disambiguateSlug(note.Slug, note.Path, func(candidate string) bool {
+		other, taken := v.notes[candidate]
+		return taken && other.Path != note.Path
+	})
+	return assigned, existing.Path, true
+}
+
+// forgetPath removes every index entry pointing at a note's path, returning the
+// slug it held. A note whose slug was disambiguated does not live at its
+// natural slug, so reinserting it under a freshly computed natural slug would
+// both overwrite whichever note owns that slug and strand the old suffixed
+// entry. Caller must hold v.mu.
+func (v *Vault) forgetPath(relPath string) string {
+	previous := ""
+	for slug, n := range v.notes {
+		if n.Path == relPath {
+			previous = slug
+			delete(v.notes, slug)
+		}
+	}
+	return previous
 }
 
 // disambiguateSlug returns a deterministic alternative for a slug already taken
