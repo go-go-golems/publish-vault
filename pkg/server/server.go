@@ -47,6 +47,10 @@ type Config struct {
 // Run starts the API server and, when enabled, serves the bundled web SPA from
 // the same process.
 func Run(ctx context.Context, cfg Config) error {
+	// Before loading anything: align the Go heap with the container limit so a
+	// large vault triggers GC rather than the OOM killer.
+	ApplyMemoryLimit()
+
 	if cfg.VaultDir == "" {
 		return fmt.Errorf("vault dir is required")
 	}
