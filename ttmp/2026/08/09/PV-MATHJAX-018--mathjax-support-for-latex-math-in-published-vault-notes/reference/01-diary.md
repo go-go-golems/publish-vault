@@ -66,7 +66,14 @@ hydration- and lifecycle-correctness the project already paid for.
 
 ### Prompt Context
 
-**User prompt (verbatim):** "Create a new docmgr ticket (in publish-vault, but ttmp.yaml should be set properly) for adding mathjax support, and Create  a detailed analysis / design / implementation guide that is for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file references. It should be very clear and technical. Store in the ticket and the nupload to remarkable.\n\n\nTHen work through the tasks one by one, keeping a detailed diary as you work (see format in the diary skill) and commit at appropriate intervals."
+**User prompt (verbatim):**
+
+```text
+Create a new docmgr ticket (in publish-vault, but ttmp.yaml should be set properly) for adding mathjax support, and Create  a detailed analysis / design / implementation guide that is for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file references. It should be very clear and technical. Store in the ticket and the nupload to remarkable.
+
+
+THen work through the tasks one by one, keeping a detailed diary as you work (see format in the diary skill) and commit at appropriate intervals.
+```
 
 **Assistant interpretation:** Create ticket `PV-MATHJAX-018` under the
 workspace-level `.ttmp.yaml` (which already roots docmgr at
