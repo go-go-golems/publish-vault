@@ -252,3 +252,29 @@ func TestGetNoteRouteShapes(t *testing.T) {
 		})
 	}
 }
+
+// TestSafeRedirectSlug pins the guard that keeps the canonical-slug redirect
+// same-origin. Slugify's alphabet makes these cases unreachable today; the
+// guard exists so widening that alphabet cannot silently turn the redirect
+// into an open redirect.
+func TestSafeRedirectSlug(t *testing.T) {
+	safe := []string{"a", "a/b", "notes/2026/08/09/thing", "a-b_c"}
+	unsafe := []string{
+		"",           // empty target
+		"/evil.com",  // becomes //evil.com after the prefix: protocol-relative
+		"//evil.com", //
+		`\evil.com`,  // some agents normalise backslashes to slashes
+		"../../etc",  // climbs out of /api/notes/
+		"a/../../b",  //
+	}
+	for _, s := range safe {
+		if !safeRedirectSlug(s) {
+			t.Errorf("safeRedirectSlug(%q) = false, want true", s)
+		}
+	}
+	for _, s := range unsafe {
+		if safeRedirectSlug(s) {
+			t.Errorf("safeRedirectSlug(%q) = true, want false", s)
+		}
+	}
+}

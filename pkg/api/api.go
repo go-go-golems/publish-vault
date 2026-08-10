@@ -140,9 +140,14 @@ func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 	v, _ := h.provider.Snapshot()
 	note, ok := v.GetNote(slug)
 	if !ok {
-		if canonical, found := v.CanonicalSlug(slug); found {
+		if canonical, found := v.CanonicalSlug(slug); found && safeRedirectSlug(canonical) {
 			// 308 rather than 301: the method and body must be preserved, and
 			// the redirect is a property of the slug, not of this request.
+			//
+			// #nosec G710 -- not an open redirect. The target is a key from the
+			// vault's own slug index; the request slug is only a lookup key and
+			// never reaches the Location header. safeRedirectSlug enforces the
+			// property gosec's taint analysis cannot see.
 			http.Redirect(w, r, "/api/notes/"+canonicalSlugPath(canonical), http.StatusPermanentRedirect)
 			return
 		}
@@ -150,6 +155,27 @@ func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, note)
+}
+
+// safeRedirectSlug reports whether a slug can be appended to "/api/notes/" and
+// still yield a same-origin, same-prefix path.
+//
+// Slugify already restricts slugs to [a-z0-9-_/], so today no vault slug can
+// carry a scheme, a host, or a traversal segment. This check does not trust
+// that: a slug beginning with "/" would make the Location "//host"-shaped and
+// therefore protocol-relative, which leaves the origin, and ".." would climb
+// out of the prefix. Both are cheap to reject and keep the redirect safe if the
+// slug alphabet is ever widened.
+func safeRedirectSlug(slug string) bool {
+	if slug == "" || strings.HasPrefix(slug, "/") || strings.HasPrefix(slug, `\`) {
+		return false
+	}
+	for _, segment := range strings.Split(slug, "/") {
+		if segment == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // canonicalSlugPath escapes a slug for use in a redirect Location while
