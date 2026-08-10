@@ -926,3 +926,57 @@ func TestEmbedOfNoteBecomingPublishedResolvesOnReload(t *testing.T) {
 		t.Errorf("embed should show the broken marker again once the target is hidden, got %q", host.HTML)
 	}
 }
+
+// TestMathPlaceholdersSurviveRebuildHTML guards a real invariant rather than a
+// hypothetical one: rebuildHTML runs four regex passes over every note's HTML
+// on every vault reload (wiki-link targets, wiki-link display text, image
+// sources, image embeds). None of them should match math markup — but they are
+// regexes over HTML, so the only thing keeping that true is a test.
+func TestMathPlaceholdersSurviveRebuildHTML(t *testing.T) {
+	root := t.TempDir()
+	src := "# Gaussian\n\n" +
+		"Density $f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}}$ and see [[Other]].\n\n" +
+		"$$\n\\begin{align}\na &= b \\\\\nc &= d\n\\end{align}\n$$\n"
+	if err := os.WriteFile(filepath.Join(root, "Gaussian.md"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Other.md"), []byte("# Other"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	note, ok := v.GetNote("gaussian")
+	if !ok {
+		t.Fatalf("GetNote(gaussian) not found")
+	}
+	before := note.HTML
+
+	// The wiki link must actually have been resolved, otherwise this test would
+	// pass trivially on a pipeline that never ran the rebuild passes at all.
+	if !strings.Contains(before, `href="/note/other"`) {
+		t.Fatalf("wiki link was not resolved, test is not exercising rebuildHTML:\n%s", before)
+	}
+
+	for _, want := range []string{
+		`<span class="math math-inline">f(x) = \frac{1}{\sigma\sqrt{2\pi}}</span>`,
+		`<div class="math math-display">`,
+		`a &amp;= b \\`,
+	} {
+		if !strings.Contains(before, want) {
+			t.Errorf("rendered HTML missing %q:\n%s", want, before)
+		}
+	}
+
+	// A second rebuild (what a live reload triggers) must be a fixed point.
+	v.mu.Lock()
+	v.rebuildHTML()
+	v.mu.Unlock()
+
+	note, _ = v.GetNote("gaussian")
+	if note.HTML != before {
+		t.Errorf("rebuildHTML() is not idempotent over math markup:\nbefore: %s\nafter:  %s", before, note.HTML)
+	}
+}
