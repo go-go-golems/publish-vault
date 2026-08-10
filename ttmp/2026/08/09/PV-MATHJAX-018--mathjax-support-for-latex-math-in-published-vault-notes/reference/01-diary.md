@@ -17,15 +17,15 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: repo://internal/parser/math.go
+    - Path: repo://publish-vault/internal/parser/math.go
       Note: Scanner and sentinel round-trip built in Step 2 (commit e9f2784)
-    - Path: repo://internal/parser/math_test.go
+    - Path: repo://publish-vault/internal/parser/math_test.go
       Note: Executable spec; caught the inline-placeholder escaping bug on first run
-    - Path: repo://vault-example/Mathematics/Math Showcase.md
+    - Path: 'repo://publish-vault/vault-example/Mathematics/Math Showcase.md'
       Note: Hostile fixture that found the code-span closer bug
-    - Path: repo://web/src/lib/mathjax.ts
+    - Path: repo://publish-vault/web/src/lib/mathjax.ts
       Note: Where the four MathJax-4 integration problems are fixed and documented (commit 40886c3)
-    - Path: repo://web/src/styles/prose.css
+    - Path: repo://publish-vault/web/src/styles/prose.css
       Note: Tailwind preflight override that restores inline SVG flow
 ExternalSources: []
 Summary: 'Chronological implementation diary for MathJax support: what was investigated, what was built, what broke, and how to review it.'

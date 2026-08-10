@@ -18,11 +18,11 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: repo://docker-compose.yml
+    - Path: repo://publish-vault/docker-compose.yml
       Note: Reference deployment wiring --search-index-path to a disk-backed volume
-    - Path: repo://pkg/server/memlimit.go
+    - Path: repo://publish-vault/pkg/server/memlimit.go
       Note: GOMEMLIMIT derived from the cgroup; note the soft-limit caveat in its doc comment
-    - Path: repo://pkg/server/runtime.go
+    - Path: repo://publish-vault/pkg/server/runtime.go
       Note: Reload serialisation and symlink no-op guard implemented in Step 8 (commit 945c2df)
     - Path: repo://publish-vault/pkg/search/search.go
       Note: Step 2/4/6 - search.New (line 46) uses bleve.NewMemOnly (884.7 MB); NewPersistent (line 64) is the already-implemented fix measured in Step 6.
@@ -33,7 +33,7 @@ RelatedFiles:
     - Path: repo://publish-vault/ttmp/2026/08/09/PV-MEMORY-019--diagnose-and-fix-oomkill-in-memory-vault-search-index-and-overlapping-reload-memory-growth/scripts/vaultmem/main.go
       Note: The measurement harness written for this ticket; calls vault.New and search.New/NewPersistent and reports MemStats plus /proc/self/status VmHWM.
 ExternalSources: []
-Summary: 'Chronological investigation diary for the PV-MEMORY-019 OOMKill analysis: how the vault was measured, what the heap profile showed, how the overlapping-reload failure mode was reproduced, and how the on-disk search index turned out to resolve the incident outright.'
+Summary: 'Chronological investigation diary for the PV-MEMORY-019 OOMKill analysis: how the vault was measured, what the heap profile showed, how the overlapping-reload failure mode was reproduced, and (Step 9) how production logs corrected the diagnosis - the on-disk index was already deployed, and the real cause is a git-sync webhook timeout that retries a 49s reload every 3s forever.'
 LastUpdated: 2026-08-09T00:00:00Z
 WhatFor: Following the reasoning and the dead ends behind the memory analysis, and knowing what to re-verify.
 WhenToUse: Read alongside the design doc when reviewing the findings or continuing the work.
@@ -1248,4 +1248,196 @@ args: [ ..., "--search-index-path", "/var/lib/publish-vault/search" ]
 resources:
   limits: { memory: 3Gi }
   requests: { memory: 2Gi }
+```
+
+---
+
+## Step 9: Production ground truth — the diagnosis was partly wrong
+
+Reading the live cluster corrected two things this ticket had asserted. The
+design document's top recommendation — "switch on `--search-index-path`, it was
+never enabled" — was already true in production and had been since commit
+`0ebec8b` in the gitops repo. And the failure is not a vault too large to fit;
+it is a **webhook retry loop** that rebuilds an unchanged vault forever.
+
+The lesson is narrow and worth stating plainly: this ticket's measurements were
+made against a local harness running the *default* configuration, and the
+default is not what production runs. Everything downstream of that — the
+ranking of fixes, the claim that the index was the biggest win — inherited the
+error. Ten minutes of `kubectl logs` would have caught it before the design
+document was written.
+
+### Prompt Context
+
+**User prompt (verbatim):** "update the ~/code/wesen/2026-03-27--hetzner-k3s setup."
+
+**Assistant interpretation:** Apply the remediation to the actual Kubernetes
+manifests in the gitops repo.
+
+**Inferred user intent:** Get the production deployment fixed, not just the
+application code.
+
+**Commit (gitops repo):** `eeaa2bb` — "fix(retro-obsidian-publish): break the git-sync webhook retry loop" (committed locally, NOT pushed; ArgoCD auto-syncs `main`)
+
+### What I did
+
+- Read `gitops/kustomize/retro-obsidian-publish/deployment.yaml` and the ArgoCD
+  Application (`syncPolicy.automated`, `selfHeal: true`, tracking `main`).
+- Pulled live state: pod status, restart counts, `describe`, both containers'
+  logs, and `kubectl top`.
+- Corrected the manifest: webhook timeout and backoff, memory limit and request,
+  `GOMEMLIMIT`, a `startupProbe`, and an `emptyDir` size limit.
+- Validated with `kubectl kustomize` and `kubectl apply --dry-run=server`, and
+  checked both git-sync flag names against the running v4.4.0 image.
+
+### Why
+
+The remediation had to land where the failure is. It turned out the failure was
+not where this ticket said it was.
+
+### What worked
+
+The production logs are unambiguous once read side by side. git-sync:
+
+```
+webhook  "sending webhook" hash=f1917789… timeout=30s
+webhook  "hook failed" error="context deadline exceeded" retry=3s
+```
+
+and the app, over the same window:
+
+```
+02:30:07 reload_swapped  heapSys=1.73GiB  duration=48.9s
+02:30:24 reload_start
+02:30:41 reload_swapped  heapSys=1.73GiB  duration=49.6s
+02:30:57 reload_start
+02:31:16 reload_swapped  heapSys=1.85GiB  duration=51.8s
+02:31:30 reload_start
+02:31:46 killed          (exit 137, 43rd restart)
+```
+
+`resolvedRoot` is byte-identical in every one of those lines. The vault never
+changed; none of that work was necessary.
+
+### What didn't work — two corrections to this ticket
+
+**1. The search index was already on disk.** The design document's headline
+recommendation, and its "zero application code" framing, were wrong. The
+manifest has carried `--search-index-path /data/search` against a disk-backed
+`emptyDir` since `0ebec8b`, and the app logs `persistentSearch="true"` on every
+load. The 884 MiB in-memory bleve measurement is real but describes the local
+default, not production. Production's vault load is 16.5s and 261 MB, not 82s
+and 1.56 GB.
+
+**2. The trigger is a webhook timeout, not "overlapping reloads" in the
+abstract.** This ticket knew reloads overlapped and hypothesised about why
+(section 9.3, "needs confirmation"). The mechanism is:
+`--webhook-timeout=30s` < the ~49s reload, so the call *always* expires;
+git-sync waits its 3s backoff and re-fires the same hash; each retry starts
+another full rebuild. It is a self-sustaining loop that needs no new commits to
+the vault at all.
+
+That reframes the fix ranking:
+
+| | Design doc said | Actually |
+|---|---|---|
+| On-disk search index | #1, biggest win | already deployed; not the problem |
+| Non-overlapping reload | #2 | **the fix** |
+| Webhook timeout | not mentioned | **the trigger** |
+| Raise limit / GOMEMLIMIT | #3, mitigation | still correct as headroom |
+
+### What I learned
+
+- Measuring the default configuration and reporting it as "production" is a
+  specific, repeatable mistake. The harness should have been pointed at the
+  deployed flags, or at minimum the manifest should have been read before the
+  measurements were interpreted.
+- `Reason: Error` with exit 137 is not the same as `Reason: OOMKilled`. Both
+  appear as "exit 137"; only the latter is the cgroup OOM killer. This pod
+  reports `Error`, which sent me to look at what else sends SIGKILL before
+  concluding anything about memory.
+- The `--webhook-timeout` default in git-sync is 1s. Any synchronous reload
+  endpoint behind it is a latent version of this bug; the value here (30s) was
+  already raised once and still was not enough.
+
+### What was tricky to build
+
+Separating "which of my three code fixes actually addresses production" from
+"which sounded most important". The serialisation fix (`945c2df`) is the one
+that matters, because it makes the retry loop structurally harmless: with
+`canSkipReload`, a repeat webhook against an unchanged symlink target is a stat.
+The `GOMEMLIMIT` work is headroom, and the index work was already done by
+someone else months ago. Getting that ordering right required the live logs, not
+the local measurements.
+
+The other subtlety is sequencing the rollout. The code fixes are in unpushed
+commits and no image has been built from them, so the deployed image
+(`sha-2682881`) predates all of them. The manifest change therefore has to stand
+on its own — which it does, because raising `--webhook-timeout` above the reload
+duration breaks the loop at the source without any application change.
+
+### What warrants a second pair of eyes
+
+- **The gitops commit is not pushed.** ArgoCD tracks `main` with
+  `automated`/`selfHeal`, so pushing deploys immediately. That is the user's
+  call, not mine.
+- `--webhook-timeout=300s` assumes the reload stays well under 300s. If the
+  vault grows enough to exceed it, the loop returns. The code-side
+  `canSkipReload` is what makes that safe permanently, so the new image should
+  still ship.
+- `startupProbe.failureThreshold: 60` (10 minutes) is generous. It means a
+  genuinely wedged process takes 10 minutes to be restarted on first boot.
+- Whether 3Gi is right once the new image lands. With serialisation the peak
+  should be one snapshot plus the 5s close-delay overlap, so 3Gi may be more
+  than needed — worth re-measuring rather than leaving permanently.
+
+### What should be done in the future
+
+- Push the gitops commit and watch the restart count stop climbing.
+- Build and deploy an image from the publish-vault commits so `canSkipReload`
+  makes the loop impossible rather than merely unlikely.
+- Amend the design document's sections 10.6 and 11(e) to record that the
+  on-disk index was already deployed, so the next reader does not re-derive the
+  wrong conclusion.
+- Re-measure the memory budget against the deployed configuration rather than
+  the local default.
+
+### Code review instructions
+
+- Read the gitops diff (`eeaa2bb`) alongside the two log excerpts above; the
+  commit message carries them so the reasoning survives without this diary.
+- Verify the claims yourself:
+
+  ```bash
+  kubectl -n retro-obsidian-publish logs <pod> -c git-sync   | grep webhook
+  kubectl -n retro-obsidian-publish logs <pod> -c app --previous | grep 'phase=reload'
+  kubectl -n retro-obsidian-publish get pod <pod> -o jsonpath='{.status.containerStatuses[*].lastState}'
+  ```
+
+- After pushing: `kubectl -n retro-obsidian-publish get pod -w` and confirm
+  `reload_start` no longer repeats for an unchanged `resolvedRoot`.
+
+### Technical details
+
+Live state at the time of investigation:
+
+```
+NAME                                      READY   STATUS    RESTARTS
+retro-obsidian-publish-846d8c8bd5-6kbkv   2/3     Running   45
+
+app        restarts=43  lastExit=137  reason=Error
+git-sync   restarts=2   lastExit=1    reason=Error
+ssr        restarts=0
+
+kubectl top:  app 1841m CPU / 451Mi   (mid-rebuild)
+node:         k3s-demo-1, 15982912Ki allocatable — 3Gi is comfortable
+```
+
+Production vault load, on-disk index (contrast with this ticket's local
+in-memory numbers of 82s / 1.56 GB):
+
+```
+phase=load_vault_done   notes=1712  duration=16.5s  heapAlloc=261 MB
+phase=load_search_done  notes=1712  duration=34.2s  heapSys=1.73 GiB
+phase=load_done                     duration=48.9s
 ```
