@@ -20,14 +20,19 @@ RelatedFiles:
       Note: read in Step 2; slugify's final strings.Trim(s, "-") not trimming '/' is the trailing-slash reproduction
     - Path: repo://publish-vault/pkg/vault/vault.go
       Note: read in Step 2 and exercised via vault.New/LoadAll/GetNote in scripts/01-slug-probe
+    - Path: repo://publish-vault/scripts/smoke-ssr-upstream-failures.mjs
+      Note: Regression test proving the four failure modes are now distinguishable
     - Path: repo://publish-vault/web/server.mjs
-      Note: the four lines the investigation converged on; copied verbatim into scripts/03-ssr-conflation-repro.mjs
+      Note: |-
+        the four lines the investigation converged on; copied verbatim into scripts/03-ssr-conflation-repro.mjs
+        The root-cause fix implemented in Step 10 (commit 878e372)
 ExternalSources: []
 Summary: ""
 LastUpdated: 2026-08-09T21:31:06.345231951-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Diary
@@ -888,3 +893,203 @@ header comment states what it proves and how to run it.
 Ticket: `publish-vault/ttmp/2026/08/09/PV-SLUG-020--note-not-found-for-nested-transcripts-slug-diagnose-slug-resolution-and-vault-exclusion`.
 Scripts run from the scratch workspace described in Step 3; Go 1.26.5, Node
 v22.22.1.
+
+---
+
+## Step 10: Implement the fix (F1 + F4 + F2)
+
+Implemented the three fixes the design doc recommended, in its recommended
+order. F1 is the actual fix for the reported symptom: the SSR sidecar now
+distinguishes "this note does not exist" from "I could not ask", so a restarting
+backend can no longer be reported — and cached — as a missing note. F4 makes the
+next instance of this take a `grep` instead of a debugger. F2 removes the
+permanent trailing-slash class of 404 that had nothing to do with the incident
+but was found on the way.
+
+The work confirmed the investigation's central claim in the most direct way
+available: a regression test that drives the *real* `web/server.mjs` against a
+stub backend rigged to fail in each distinct way. Before the change all four
+failure modes produced `404 Note not found`; after it they produce 404, 503, 502
+and 502 respectively.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, implement slug fix"
+
+**Assistant interpretation:** Implement the fix designed in this ticket, rather
+than continuing to analyse it.
+
+**Inferred user intent:** The investigation is finished and trusted; turn its
+recommendation into working code.
+
+**Commit (code):** `878e372` — "fix(PV-SLUG-020): stop reporting an unreachable backend as a missing note"
+
+### What I did
+
+- **F1** — replaced `fetchAPI`'s `null` with `fetchAPIResult` returning
+  `{kind: ok|not_found|unreachable|server_error|bad_body}`, and branched the
+  note and widget-page paths on it. Added `sendUpstreamFailure` (503 with
+  `Retry-After` for unreachable, 502 otherwise) and `Cache-Control: no-store` on
+  every error response. Also guarded `/api/config`, whose 5xx used to render a
+  200 page titled `undefined` (row D of the original repro).
+- **F4** — added `ExclusionReason` and a `v.excluded` map recorded during
+  `LoadAll`, with a per-reason tally logged once and parse errors, slug
+  collisions and degenerate slugs logged individually.
+  `ExclusionReasonFor(relPath)` walks up parent directories so a question about
+  `drafts/Foo.md` is answered by the rule that excluded `drafts/`.
+- **F2** — added `normalizedIdx` (lowercase, trimmed and collapsed slashes)
+  built beside `notes`, `CanonicalSlug`, and a 308 redirect in `api.getNote` on
+  an exact miss. Wired `buildNormalizedIndex` into `ReloadNote`/`RemoveNote` so
+  the watcher path stays consistent.
+- Refused the empty slug (the half of Phase 4 that does not change live URLs).
+- Wrote `scripts/smoke-ssr-upstream-failures.mjs` and the section 12 regression
+  tests.
+
+### Why
+
+The doc's recommendation was explicit — F1 + F4 first, then F2, and never F3.
+F1 is the root cause; F4 is what makes the class of bug cheap next time; F2
+closes a second, permanent defect found during the investigation.
+
+### What worked
+
+- The stub-backend smoke test. Making the four failure modes distinguishable is
+  the entire fix, so a test that produces all four against the real server is
+  the right shape, and it matches the repo's existing `smoke-ssr-hydration.mjs`
+  idiom rather than inventing a new one.
+- `socket.destroy()` on one endpoint to simulate an unreachable backend while
+  `/api/config` stays healthy. That isolates the note path; killing the whole
+  stub tests a different (also real) scenario, so the suite does both.
+- The ticket's own `02-http-slug-matrix.sh` as an acceptance check: the
+  trailing-slash row moved from 404 to `308 -> 200` with no edits to the script.
+- The slug-algebra table test reproduced all 12 measured rows from section 3.1
+  on the first run, including `Привет мир -> ""`, which is reassuring about the
+  investigation's numbers.
+
+### What didn't work
+
+**Pruned directories recorded nothing.** First run of the exclusion test:
+
+```
+--- FAIL: TestExcludedNotesRecordTheirReason
+    vault_test.go:1115: ExclusionReasonFor("drafts/Hid.md") recorded nothing, want "vault-ignore"
+```
+
+`ShouldPruneDir` makes the walk `SkipDir` an excluded directory, so files
+beneath it are never visited and could never be recorded. Fixed by recording the
+*directory* at the prune point and having `ExclusionReasonFor` walk up ancestors
+— which is also the better answer for an operator, since "drafts/ is excluded"
+explains the rule rather than the instance.
+
+**The doubled-slash row expected the wrong status.**
+
+```
+api_test.go:233: GET /api/notes/transcripts/2026//designing-rag/the_algebra = 301, want 308
+```
+
+gorilla/mux cleans `//` and issues its own 301 before the handler runs, so that
+shape never reaches `CanonicalSlug`. The test now pins 301 with a comment, so a
+future router change that stops cleaning is caught instead of silently 404ing.
+
+**The first `buildNormalizedIndex` was map-order dependent.** When two slugs
+shared a normalized key, which one won depended on Go's randomized map
+iteration. Rewrote it to bucket slugs by key first and then apply an explicit
+rule: a canonical slug owns its key; otherwise the key is dropped.
+
+### What I learned
+
+- `null` as a failure value is not a small wart. Four distinct upstream states
+  collapsed into one, and the *loudest* of them (a hard 404 that CDNs cache)
+  became the reported answer for all four. The fix is mostly about restoring
+  information the code already had and threw away.
+- `Cache-Control: no-store` matters as much as the status code here. A 404
+  emitted during a restart outlives the restart if anything caches it.
+- Recording the exclusion *reason* costs one map and makes an entire class of
+  support question self-service. It should have been there from the start.
+- Ambiguity via case is actually unreachable from real vault paths, because
+  `slugify` already lowercases — so two files differing only in case collide on
+  the *slug*, not on the normalized key. The ambiguity guard in
+  `buildNormalizedIndex` is therefore defensive rather than load-bearing, which
+  is worth knowing before someone "simplifies" it away.
+
+### What was tricky to build
+
+Making the redirect provably loop-free. A 308 to a slug that itself normalizes
+differently would bounce forever, and that failure only shows up under a client
+that follows redirects. Three things together rule it out: `normalizeSlug` is
+idempotent (`TestNormalizeSlugIsIdempotent`), `CanonicalSlug` returns
+`ok=false` when the input is already canonical so a slug can never redirect to
+itself, and the API route-shape test *follows* every `Location` it receives and
+asserts the follow-up is 200 rather than another redirect.
+
+The other subtlety was keeping `normalizedIdx` consistent on the watcher path.
+`ReloadNote` and `RemoveNote` mutate `v.notes` directly under their own lock, so
+a stale normalized index would outlive an edit and redirect to a note that no
+longer exists. Both now rebuild it alongside the wiki-link and backlink indexes.
+
+### What warrants a second pair of eyes
+
+- The `/api/config` guard is a behaviour change beyond the literal scope of F1:
+  a page that used to render (badly) now returns 502/503. I think that is right
+  — a page with no vault name and no title is not a successful response — but it
+  is the change most likely to surprise.
+- `buildNormalizedIndex` runs on every `ReloadNote`, i.e. once per file change,
+  and is O(notes). For the 1712-note production vault that is cheap next to the
+  `rebuildHTML` already happening there, but it is another full scan on a path
+  that PV-MEMORY-019 shows is already expensive.
+- 308 versus 301. 308 preserves method and body; nothing here is non-GET today,
+  so 301 would also work and is better cached by old clients. 308 is the
+  stricter choice.
+
+### What should be done in the future
+
+- Phase 4's remaining half: colliding slugs still resolve last-write-wins, now
+  with a warning. A deterministic suffix would fix it but changes live URLs, so
+  it needs a decision rather than an implementation.
+- Phase 5: `/api/notes/_diagnose` and the reasoned 404 body, with the
+  public/private disclosure split.
+- The `excluded` map is now populated but only read by tests; the diagnose
+  endpoint is what makes it useful in production.
+
+### Code review instructions
+
+- Start at `web/server.mjs` — `fetchAPIResult`, `sendUpstreamFailure`, and the
+  note branch. That is the actual fix; everything else is supporting work.
+- Then `pkg/vault/vault.go`: `LoadAll`'s `drop` closure,
+  `buildNormalizedIndex`, `normalizeSlug`, `CanonicalSlug`.
+- Then `pkg/api/api.go` `getNote`.
+- Validate:
+
+  ```bash
+  go test ./publish-vault/... -count=1
+  golangci-lint run ./pkg/vault/... ./pkg/api/... ./internal/parser/...
+  cd publish-vault && node scripts/smoke-ssr-upstream-failures.mjs --skip-build
+  ```
+
+  and, against a running server with the fixture note:
+
+  ```bash
+  bash ttmp/.../scripts/02-http-slug-matrix.sh http://127.0.0.1:18420
+  ```
+
+### Technical details
+
+Measured before to after, same fixture and same scripts:
+
+| Case | Before | After |
+|---|---|---|
+| note exists, API healthy | 200 | 200 |
+| note genuinely absent | 404 `Note not found` | 404 `Note not found` |
+| backend hangs up | 404 `Note not found` | **503** `Backend unavailable` |
+| backend 5xx | 200 title `undefined` | **502** `Backend error` |
+| backend returns bad JSON | 404 `Note not found` | **502** `Backend error` |
+| backend fully down | 404 `Note not found` | **503** `Backend unavailable` |
+| `/api/notes/<slug>/` | 404 | **308** then 200 |
+
+Load-time diagnostics now emitted for a vault with one ignored dir, one
+`publish: false` note and one non-Latin filename:
+
+```
+warning: note excluded path="Привет.md" reason=degenerate-slug (filename has no URL-safe characters)
+vault load: 2 notes published, excluded vault-ignore=1 publish-false=1 degenerate-slug=1
+```

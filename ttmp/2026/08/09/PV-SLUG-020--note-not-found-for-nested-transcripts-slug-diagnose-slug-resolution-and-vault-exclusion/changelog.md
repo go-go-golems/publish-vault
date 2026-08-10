@@ -49,3 +49,15 @@ Audited the real vault (scripts/05-vault-slug-audit): 1740 markdown files on dis
 
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/ttmp/2026/08/09/PV-SLUG-020--note-not-found-for-nested-transcripts-slug-diagnose-slug-resolution-and-vault-exclusion/scripts/05-vault-slug-audit/main.go — disk-vs-index diff, collision and empty-slug audit
 
+
+## 2026-08-09
+
+Implemented F1+F4+F2 (commit 878e372). SSR sidecar now distinguishes not_found/unreachable/server_error/bad_body -> 404/503/502/502 with no-store; vault records an ExclusionReason per dropped path and logs a per-reason tally; getNote 308-redirects an exact miss to the canonical slug. Verified: new scripts/smoke-ssr-upstream-failures.mjs passes all six cases, and the ticket's 02-http-slug-matrix.sh trailing-slash row moved 404 -> 308 -> 200.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/api/api.go — getNote 308 redirect to the canonical slug
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/vault/vault.go — ExclusionReason recording, normalized fallback index, empty-slug guard
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/scripts/smoke-ssr-upstream-failures.mjs — Regression test that drives the real server.mjs against a stub backend failing in each distinct way
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/web/server.mjs — fetchAPIResult tagged result and the note/widget/config branches - the root-cause fix
+
