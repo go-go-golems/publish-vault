@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -1057,26 +1058,78 @@ func TestNormalizeSlugIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestAmbiguousNormalizedSlugDoesNotRedirect: when two real notes share a
-// normalized key, guessing which one the reader meant would silently serve the
-// wrong note. A 404 is the correct answer.
-func TestAmbiguousNormalizedSlugDoesNotRedirect(t *testing.T) {
+// TestCollidingSlugsAreBothPublished: two files whose paths slugify to the same
+// string used to resolve last-write-wins, silently discarding one note. Both are
+// now published, the lexically-first path keeping the natural slug so existing
+// URLs are stable, and the later one getting a suffix derived from its own path.
+func TestCollidingSlugsAreBothPublished(t *testing.T) {
 	root := t.TempDir()
 	writeVaultFiles(t, root, map[string]string{
-		"Alpha/note.md": "# One",
-		"alpha/note.md": "# Two",
+		"Alpha/Note.md": "# Upper",
+		"alpha/note.md": "# Lower",
 	})
 	v, err := New(root)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	// Both files slugify to the same key on a case-insensitive filesystem; on a
-	// case-sensitive one they differ only by case and share a normalized key.
 	if len(v.AllNotes()) < 2 {
 		t.Skip("filesystem folded the two paths into one; nothing to disambiguate")
 	}
-	if got, ok := v.CanonicalSlug("ALPHA/NOTE"); ok {
-		t.Errorf("CanonicalSlug(ALPHA/NOTE) = (%q, true), want no redirect for an ambiguous key", got)
+
+	if _, ok := v.GetNote("alpha/note"); !ok {
+		t.Errorf("the natural slug should still resolve; slugs are %v", slugsOf(v))
+	}
+	// Every note must be reachable at its own slug, and no two may share one.
+	seen := map[string]string{}
+	for _, n := range v.AllNotes() {
+		if prev, dup := seen[n.Slug]; dup {
+			t.Errorf("slug %q is shared by %q and %q", n.Slug, prev, n.Path)
+		}
+		seen[n.Slug] = n.Path
+		if _, ok := v.GetNote(n.Slug); !ok {
+			t.Errorf("note %q is not reachable at its own slug %q", n.Path, n.Slug)
+		}
+	}
+
+	// The suffix must be stable: reloading the same vault must not renumber it.
+	before := slugsOf(v)
+	if err := v.LoadAll(); err != nil {
+		t.Fatalf("LoadAll() error = %v", err)
+	}
+	after := slugsOf(v)
+	sort.Strings(before)
+	sort.Strings(after)
+	if strings.Join(before, ",") != strings.Join(after, ",") {
+		t.Errorf("slugs changed across reload:\n before %v\n after  %v", before, after)
+	}
+
+	// The watcher deletes by path, so a renamed note must still be found.
+	for _, n := range v.AllNotes() {
+		abs := filepath.Join(root, filepath.FromSlash(n.Path))
+		if got := v.SlugForPath(abs); got != n.Slug {
+			t.Errorf("SlugForPath(%q) = %q, want %q", n.Path, got, n.Slug)
+		}
+	}
+}
+
+// TestAmbiguousNormalizedKeyIsNotResolved guards buildNormalizedIndex directly:
+// when two real slugs share a normalized key and neither is the canonical form,
+// picking one would serve the wrong note.
+func TestAmbiguousNormalizedKeyIsNotResolved(t *testing.T) {
+	v := &Vault{notes: map[string]*Note{
+		"a//b": {Slug: "a//b"},
+		"a/b/": {Slug: "a/b/"},
+	}}
+	v.buildNormalizedIndex()
+	if got, ok := v.CanonicalSlug("A/B"); ok {
+		t.Errorf("CanonicalSlug(A/B) = (%q, true), want no redirect for an ambiguous key", got)
+	}
+
+	// With the canonical form present, it owns the key.
+	v.notes["a/b"] = &Note{Slug: "a/b"}
+	v.buildNormalizedIndex()
+	if got, ok := v.CanonicalSlug("A/B"); !ok || got != "a/b" {
+		t.Errorf("CanonicalSlug(A/B) = (%q, %v), want (a/b, true)", got, ok)
 	}
 }
 

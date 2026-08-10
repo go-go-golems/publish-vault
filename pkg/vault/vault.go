@@ -2,6 +2,8 @@
 package vault
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -175,6 +177,7 @@ func (v *Vault) LoadAll() error {
 	// always matter (parse errors and slug collisions), which are logged
 	// individually below.
 	counts := map[ExclusionReason]int{}
+	collisions := 0
 	drop := func(absPath string, reason ExclusionReason) {
 		v.excluded[v.relPath(absPath)] = reason
 		counts[reason]++
@@ -236,12 +239,19 @@ func (v *Vault) LoadAll() error {
 			return nil
 		}
 		if existing, clash := v.notes[note.Slug]; clash {
-			// Last-write-wins used to silently discard one of the two notes.
-			// It still does — changing the winner would change live URLs — but
-			// it is no longer silent.
-			log.Printf("warning: slug collision slug=%q kept=%q dropped=%q reason=%s",
-				note.Slug, existing.Path, v.relPath(path), ExcludedByCollision)
-			drop(path, ExcludedByCollision)
+			// Both notes get published. filepath.Walk is lexical, so the first
+			// path to claim a slug keeps it across restarts and only the later
+			// one is renamed; the suffix is derived from that note's own path,
+			// so it is stable no matter what else the vault gains or loses.
+			// Previously the second note silently replaced the first.
+			natural := note.Slug
+			note.Slug = disambiguateSlug(natural, v.relPath(path), func(candidate string) bool {
+				_, taken := v.notes[candidate]
+				return taken
+			})
+			collisions++
+			log.Printf("warning: slug collision slug=%q kept=%q renamed=%q to=%q",
+				natural, existing.Path, v.relPath(path), note.Slug)
 		}
 		v.notes[note.Slug] = note
 		return nil
@@ -250,8 +260,9 @@ func (v *Vault) LoadAll() error {
 		return err
 	}
 
-	if len(counts) > 0 {
-		log.Printf("vault load: %d notes published, excluded %s", len(v.notes), formatExclusionCounts(counts))
+	if len(counts) > 0 || collisions > 0 {
+		log.Printf("vault load: %d notes published, excluded %s, renamed %d colliding slug(s)",
+			len(v.notes), formatExclusionCounts(counts), collisions)
 	}
 
 	v.buildNormalizedIndex()
@@ -703,7 +714,34 @@ func (v *Vault) SlugForPath(absPath string) string {
 	if err != nil {
 		return ""
 	}
+	// Consult the index first: a note renamed to resolve a slug collision does
+	// not live at its natural slug, and returning that would make the watcher
+	// delete the wrong note (or nothing at all) when the file is removed.
+	rel := filepath.ToSlash(relPath)
+	v.mu.RLock()
+	for slug, n := range v.notes {
+		if n.Path == rel {
+			v.mu.RUnlock()
+			return slug
+		}
+	}
+	v.mu.RUnlock()
 	return pathToSlug(relPath)
+}
+
+// disambiguateSlug returns a deterministic alternative for a slug already taken
+// by another note. The suffix is derived from the note's own vault-relative
+// path, so it does not shift when unrelated notes are added or removed — a
+// positional suffix like "-2" would renumber and break links.
+func disambiguateSlug(natural, relPath string, taken func(string) bool) string {
+	sum := sha256.Sum256([]byte(relPath))
+	digest := hex.EncodeToString(sum[:])
+	for n := 6; n < len(digest); n += 2 {
+		if candidate := natural + "-" + digest[:n]; !taken(candidate) {
+			return candidate
+		}
+	}
+	return natural + "-" + digest
 }
 
 // RemoveNote removes a note from the vault index and returns the removed slug so
