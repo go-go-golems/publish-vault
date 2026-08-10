@@ -1093,3 +1093,136 @@ Load-time diagnostics now emitted for a vault with one ignored dir, one
 warning: note excluded path="Привет.md" reason=degenerate-slug (filename has no URL-safe characters)
 vault load: 2 notes published, excluded vault-ignore=1 publish-false=1 degenerate-slug=1
 ```
+
+---
+
+## Step 11: Phase 4 — publish both notes when two paths slugify the same
+
+Step 10 left slug collisions logged but still resolving last-write-wins, because
+fixing them changes the URL of the losing note and that was not mine to decide.
+The user withdrew that objection ("live urls changing is fine"), so this step
+finishes Phase 4: both colliding notes are now published, the lexically-first
+path keeping the natural slug and the later one taking a deterministic suffix.
+
+The audit in Step 8 found five real collisions in the production vault, all
+case-only variants — five notes that exist on disk, are parsed, are indexed, and
+are then silently thrown away because another file mapped to the same key.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 10 for the implementation prompt; this
+step was unblocked by "what's next? live urls changing is fine.")
+
+**Assistant interpretation:** Implement the remaining half of Phase 4 now that
+changing URLs is acceptable.
+
+**Inferred user intent:** Stop losing notes; URL stability for the losing side
+of a collision is not worth keeping the data loss.
+
+**Commit (code):** `edc6848` — "fix(PV-SLUG-020): publish both notes when two paths slugify the same"
+
+### What I did
+
+- Added `disambiguateSlug(natural, relPath, taken)`: on collision the later note
+  gets `natural + "-" + sha256(relPath)[:6]`, widening the hash prefix if that
+  is also taken.
+- Changed `LoadAll` to rename rather than overwrite, and to count renames
+  separately from exclusions in the summary log.
+- Changed `SlugForPath` to consult the index by path before recomputing.
+- Tests: `TestCollidingSlugsAreBothPublished` (both reachable, no shared slug,
+  stable across a reload, `SlugForPath` round-trips) and
+  `TestAmbiguousNormalizedKeyIsNotResolved`.
+
+### Why
+
+`filepath.Walk` is lexical, so "first path wins the natural slug" is stable
+across restarts — existing URLs do not move. Deriving the suffix from the
+losing note's *own path* rather than from its position means it does not shift
+when unrelated notes are added or removed; a positional `-2` would renumber and
+break links every time the vault changed.
+
+### What worked
+
+- Hash-of-path suffixes are stable by construction, and the test proves it by
+  reloading the same vault and comparing the full slug set.
+- The live check showed the intended behaviour immediately:
+  `slug collision slug="alpha/note" kept="Alpha/Note.md" renamed="alpha/note.md" to="alpha/note-676d36"`,
+  with both slugs returning 200.
+
+### What didn't work
+
+**A test from Step 10 became wrong.** `TestAmbiguousNormalizedSlugDoesNotRedirect`
+asserted that `ALPHA/NOTE` does not resolve when two notes collide. With
+disambiguation the two notes now have *distinct* slugs, so the normalized key is
+no longer ambiguous and resolving it is correct. The test was asserting the old
+data-loss behaviour. Replaced with `TestCollidingSlugsAreBothPublished` plus a
+direct unit test of `buildNormalizedIndex` for the genuine ambiguity case.
+
+**I found a bug in my own Step 10 code while editing it.** The collision branch
+called `drop(path, ExcludedByCollision)` and then stored the note anyway, so the
+warning claimed the *first* note was kept while the code actually replaced it
+with the second — the log said the opposite of what happened. Fixed as part of
+this change.
+
+### What I learned
+
+- A test can encode a bug as an expectation. That one passed for a day and was
+  only exposed by fixing the behaviour underneath it. Worth re-reading nearby
+  tests whenever changing behaviour rather than assuming a green suite means the
+  change was neutral.
+- `SlugForPath` recomputing the slug from the path was an invisible coupling:
+  correct exactly as long as `slug == pathToSlug(path)` for every note. The
+  moment one note's slug is *not* derivable from its path, the watcher deletes
+  the wrong key. That kind of "derive it again" shortcut is fine until it isn't,
+  and nothing flags the transition.
+
+### What was tricky to build
+
+The watcher interaction, which is not visible from the collision code at all.
+`RemoveNote` and the watcher's `deleteFromSearch` both call `SlugForPath`, which
+recomputed `pathToSlug(relPath)`. For a renamed note that returns the *natural*
+slug — the one belonging to the other note — so deleting the renamed file would
+have deleted its colliding sibling from the index and left the renamed note
+resident forever. Fixed by having `SlugForPath` scan `v.notes` for the matching
+`Path` first and only fall back to recomputation. It is an O(n) scan, but it
+runs on delete events only, and adding a second index to keep in sync would be
+worse. The test asserts `SlugForPath(abs) == n.Slug` for every note including
+the renamed one.
+
+### What warrants a second pair of eyes
+
+- The suffix format. `alpha/note-676d36` is stable and unambiguous but opaque;
+  if these URLs are meant to be shared, deriving something readable from the
+  differing path segment might be preferable.
+- Which note "wins" is lexical walk order. For the production vault's five
+  case-only collisions that means the capitalised variant usually wins, because
+  uppercase sorts first. Whether that is the desired winner for each of the five
+  is a content question, not a code one — worth eyeballing the five once
+  deployed.
+- `SlugForPath`'s O(n) scan is on the watcher's delete path. Fine for 1712 notes
+  and rare events; not fine if something starts calling it per request.
+
+### What should be done in the future
+
+- Re-run `scripts/05-vault-slug-audit` against the real vault after deploying
+  and confirm the collisions section is empty and the five renamed slugs are
+  what you would want.
+- Phase 5 remains: `/api/notes/_diagnose` and the reasoned 404 body.
+
+### Code review instructions
+
+- `pkg/vault/vault.go`: the collision branch in `LoadAll`, `disambiguateSlug`,
+  and `SlugForPath` (read the comment about why it consults the index).
+- Validate: `go test ./publish-vault/pkg/vault/... -count=1`, then run a server
+  over a vault containing `Alpha/Note.md` and `alpha/note.md` and confirm both
+  slugs return 200.
+
+### Technical details
+
+```
+warning: slug collision slug="alpha/note" kept="Alpha/Note.md" renamed="alpha/note.md" to="alpha/note-676d36"
+vault load: 4 notes published, excluded vault-ignore=1 publish-false=1 degenerate-slug=1, renamed 1 colliding slug(s)
+
+$ curl -o /dev/null -w '%{http_code}' /api/notes/alpha/note           -> 200
+$ curl -o /dev/null -w '%{http_code}' /api/notes/alpha/note-676d36    -> 200
+```

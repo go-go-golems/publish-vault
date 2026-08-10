@@ -61,3 +61,12 @@ Implemented F1+F4+F2 (commit 878e372). SSR sidecar now distinguishes not_found/u
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/scripts/smoke-ssr-upstream-failures.mjs — Regression test that drives the real server.mjs against a stub backend failing in each distinct way
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/web/server.mjs — fetchAPIResult tagged result and the note/widget/config branches - the root-cause fix
 
+
+## 2026-08-09
+
+Phase 4 complete (commit edc6848): colliding slugs now publish both notes, first-by-walk-order keeping the natural slug and the later one taking a path-derived suffix. SlugForPath consults the index so the watcher deletes the right note. Also fixed a bug in the previous commit where the collision log named the wrong survivor.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/vault/vault.go — disambiguateSlug, the LoadAll collision branch, and the SlugForPath index lookup
+

@@ -18,6 +18,12 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: repo://docker-compose.yml
+      Note: Reference deployment wiring --search-index-path to a disk-backed volume
+    - Path: repo://pkg/server/memlimit.go
+      Note: GOMEMLIMIT derived from the cgroup; note the soft-limit caveat in its doc comment
+    - Path: repo://pkg/server/runtime.go
+      Note: Reload serialisation and symlink no-op guard implemented in Step 8 (commit 945c2df)
     - Path: repo://publish-vault/pkg/search/search.go
       Note: Step 2/4/6 - search.New (line 46) uses bleve.NewMemOnly (884.7 MB); NewPersistent (line 64) is the already-implemented fix measured in Step 6.
     - Path: repo://publish-vault/pkg/server/runtime.go
@@ -32,6 +38,7 @@ LastUpdated: 2026-08-09T00:00:00Z
 WhatFor: Following the reasoning and the dead ends behind the memory analysis, and knowing what to re-verify.
 WhenToUse: Read alongside the design doc when reviewing the findings or continuing the work.
 ---
+
 
 
 
@@ -1019,3 +1026,226 @@ ttmp/2026/08/09/PV-MEMORY-019--diagnose-and-fix-oomkill-.../
 | 6 | No `GOMEMLIMIT`, no `GOGC`, no pprof, no singleflight anywhere in the repo | grep |
 | 7 | `RuntimeState.Reload` holds no lock around `loadSnapshot`; the old snapshot is retained 30 s | `runtime.go:100`, `:18` |
 | 8 | **`--search-index-path` already exists and resolves the incident: peak RSS 800.3 MiB, fits the current limit with 48 % headroom, zero code change** | `results/03` |
+
+---
+
+## Step 8: Implement the in-repo fixes (reload serialisation, GOMEMLIMIT, index, pprof)
+
+Turned the investigation into code. The constraint that shaped this step is
+that the *measured* biggest win — moving the 884 MiB bleve index off the Go
+heap — is a deployment change, and the Kubernetes manifest lives in a different
+repository (`wesen/2026-03-27--hetzner-k3s`,
+`gitops/kustomize/retro-obsidian-publish/deployment.yaml`). So this step ships
+everything that is application code, wires the index change into the one
+deployment this repo does own (docker-compose), and leaves the cluster manifest
+as an explicit, written-down handoff rather than pretending it is done.
+
+What is application code turned out to be substantial: reloads could overlap,
+nothing bounded the Go heap against the container limit, nothing warned when the
+index was being built into memory, the replaced snapshot was held for 30s, and
+there was no way to profile the running process.
+
+### Prompt Context
+
+**User prompt (verbatim):** "what's next? live urls changing is fine.\n\ndid you fix the memory?"
+
+**Assistant interpretation:** Answer honestly whether the memory work had been
+implemented (it had not — only analysed), then implement it, along with the
+slug ticket's Phase 4 which the "live urls changing is fine" clause unblocks.
+
+**Inferred user intent:** Stop producing analysis and start landing fixes; the
+URL-stability objection that had been holding back one item is withdrawn.
+
+**Commits (code):** `945c2df` — "fix(PV-MEMORY-019): stop overlapping reloads and align the heap with the cgroup"; `292932f` — "feat(PV-MEMORY-019): add --pprof-addr and shorten the old-snapshot hold"
+
+### What I did
+
+- Added `reloadMu` to `RuntimeState` and took it for the whole of `Reload`, so
+  two snapshot builds can never be in flight at once.
+- Added a no-op guard: when the configured root is a **symlink** whose target is
+  unchanged, `Reload` logs `reload_skipped_unchanged` and returns.
+- Extracted `resolveRoot` so the guard and `loadSnapshot` agree on resolution.
+- Wrote `pkg/server/memlimit.go`: `ApplyMemoryLimit` reads the cgroup v2/v1
+  memory limit and calls `debug.SetMemoryLimit(limit * 0.85)`, called first
+  thing in `server.Run`.
+- Added an in-memory-index warning above 400 notes in `buildSearchIndex`.
+- Wired `--search-index-path` into `docker-compose.yml` against a named
+  (disk-backed) volume.
+- Dropped `oldSnapshotCloseDelay` from 30s to 5s.
+- Added `--pprof-addr` serving `net/http/pprof` on a separate listener.
+- Tests: `TestReloadSkipsUnchangedSymlinkTarget`, `TestReloadIsSerialised`,
+  `TestReadCgroupMemoryMax` (6 rows), `TestApplyMemoryLimitRespectsExplicitEnv`,
+  `TestApplyMemoryLimitNoCgroup`.
+
+### Why
+
+Ranked by the measurements in Steps 3–6. Reload overlap is what turns a heavy
+but survivable load into a crash loop (1897 MiB for one snapshot, 3849 MiB for
+two), and it is entirely fixable in this repo. `GOMEMLIMIT` is the cheapest
+mitigation and derives itself from the cgroup so the two numbers cannot drift.
+The index is the biggest single win but needs a volume. pprof is what makes the
+next investigation cost minutes.
+
+### What worked
+
+- The serialisation is simple and the live check is convincing: five concurrent
+  `POST /api/admin/reload` produced five `reload_start`/`reload_swapped` pairs
+  with no interleaving.
+- The symlink guard behaves exactly as the production deployment needs: three
+  webhooks against an unchanged symlink produced three
+  `reload_skipped_unchanged` and no build; re-pointing the symlink produced one
+  build and served the new revision (`From A` → `From B`).
+- Deriving `GOMEMLIMIT` from the cgroup rather than hardcoding it means the
+  deployment only has to set the container limit.
+- `--search-index-path` genuinely needed no application change — the flag,
+  `search.NewPersistent`, and the atomic build/rename/reopen were all already
+  there and simply never switched on. Verified an index directory appears on
+  disk when the flag is set.
+
+### What didn't work
+
+**The no-op guard broke two existing tests.**
+
+```
+--- FAIL: TestReloadRereadsVaultConfig
+    runtime_test.go:404: secrets/plan should be published after the exclusion was removed
+    runtime_test.go:414: index should be hidden after the config excluded it
+--- FAIL: TestExplicitVaultConfigPathIsRereadOnReload
+    runtime_test.go:488: secrets/plan should be excluded after the explicit config gained the pattern
+```
+
+The design doc's pseudocode skips whenever `EvalSymlinks(configuredRoot)` equals
+the active `ResolvedRoot`. That is wrong in general: under a plain directory the
+resolved root never changes while the *contents* do, so the guard silently
+served stale content — which is exactly what those two tests assert against.
+The fix narrows the guard to the case where "unchanged target" actually implies
+"unchanged input": a symlink root, which is the git-sync deployment, where each
+revision is a fresh immutable checkout. Under a plain directory `Reload` always
+rebuilds, as before.
+
+This is the second time in this session that a design document's pseudocode had
+a real bug in it, and both times a pre-existing test caught it.
+
+### What I learned
+
+- "The input is unchanged" is a claim about the deployment topology, not about a
+  path. Making the guard conditional on the root actually being a symlink is the
+  difference between a correct optimisation and a stale-content bug.
+- `GOMEMLIMIT` is a soft limit, and that cuts both ways: with a live heap that
+  genuinely does not fit, it converts an OOMKill into a GC death spiral. It is
+  only safe to ship *because* it is paired with the index change; on its own, at
+  the current 1536 MiB with a 985 MiB live heap, it would make things worse. The
+  code comment says so, because a future reader will otherwise assume it is a
+  complete fix.
+- cgroup v1 signals "unlimited" with a sentinel near max int64 rather than a
+  keyword, so a naive parse yields a ~9 PiB "limit" and an 85% headroom
+  calculation that overflows into nonsense. Both spellings are in the test table.
+
+### What was tricky to build
+
+Deciding where the no-op guard goes relative to the mutex. Putting it *before*
+taking `reloadMu` looks cheaper — callers that have nothing to do would not
+queue — but it is wrong: a caller that arrives while a build is in flight would
+see the *old* resolved root, decide there is work to do, queue, and then rebuild
+a revision the in-flight reload was already publishing. Taking the lock first
+and re-checking inside means a queued caller sees the result of the reload it
+waited on, which is what makes a burst of webhooks collapse to one build.
+
+The second subtlety was the interaction with `closeSnapshotAfter`. Shortening
+the delay to 5s is safe only because the swap itself is atomic and readers take
+a snapshot pointer under `RLock`; a request that has already obtained the old
+snapshot keeps a live pointer to it, so the delay only needs to outlive the
+*request*, not the reload.
+
+### What warrants a second pair of eyes
+
+- The symlink-only condition in `canSkipReload`. If any real deployment uses a
+  bind-mounted directory that is atomically replaced (rather than a symlink),
+  the guard will not fire for it — that is the safe direction, but worth knowing.
+- `memLimitHeadroom = 0.85`. It is a guess calibrated to leave ~460 MiB of a
+  3 GiB limit for non-heap RSS. With a disk-backed index, page cache for the
+  mmap'd bleve segments also lives outside the Go heap and inside the cgroup, so
+  0.85 may still be too generous. Worth re-measuring after the index moves.
+- `oldSnapshotCloseDelay` 30s → 5s. If any handler holds a snapshot across a
+  long-running operation, 5s could close an index underneath it. I could not
+  find such a handler; search is the longest and completes in milliseconds.
+
+### What should be done in the future
+
+- **The gitops manifest change, which is the actual biggest win and is not
+  done**: a disk-backed `emptyDir` (explicitly *not* `medium: Memory`, which is
+  charged to the same cgroup and would change nothing), `--search-index-path`
+  pointing at it, the memory limit raised, and probe `initialDelaySeconds`
+  raised above the 82s load time so a probe cannot restart the pod mid-load.
+- Phase 5 of the plan: eliminate the duplicate per-note HTML (`Note.HTML` +
+  `Note.sourceHTML`, ~68 MiB).
+- Making `reloadHandler` answer 204 immediately and reload in the background.
+  Now that reloads are serialised and idempotent, a client timeout and retry is
+  harmless in the symlink deployment, so this is less urgent than it looked.
+- Phase 7: incremental reload.
+
+### Code review instructions
+
+- `pkg/server/runtime.go`: `Reload` (the mutex and the guard placement),
+  `canSkipReload` (the symlink condition — read its comment), `resolveRoot`.
+- `pkg/server/memlimit.go`: `ApplyMemoryLimit` and `readCgroupMemoryMax`.
+- `pkg/server/pprof.go`: confirm it is a separate `http.Server`, not routes on
+  the public mux.
+- Validate:
+
+  ```bash
+  go test ./publish-vault/pkg/server/... -count=1
+  golangci-lint run ./pkg/...
+  ```
+
+  Live checks used here:
+
+  ```bash
+  # serialisation: 5 concurrent webhooks against a directory root
+  for i in 1 2 3 4 5; do curl -s -X POST localhost:PORT/api/admin/reload & done; wait
+  # no-op: 3 webhooks against an unchanged symlink root
+  # then advance the symlink and confirm exactly one rebuild
+  # pprof isolation
+  curl -o /dev/null -w '%{http_code}' localhost:16060/debug/pprof/   # 200
+  curl -o /dev/null -w '%{http_code}' localhost:18425/debug/pprof/   # 404
+  ```
+
+### Technical details
+
+Observed reload phases, five concurrent webhooks against a directory root:
+
+```
+5 phase=reload_start
+5 phase=reload_swapped
+```
+
+Three webhooks against an unchanged symlink, then one symlink advance:
+
+```
+3 phase=reload_skipped_unchanged
+1 phase=reload_start
+1 phase=reload_swapped
+```
+
+Startup warning when the index is built into memory:
+
+```
+warning: search index is in memory for N notes and will dominate heap usage;
+pass --search-index-path <writable-dir> to keep it on disk (needs a volume, not tmpfs)
+```
+
+Still required, in `wesen/2026-03-27--hetzner-k3s`,
+`gitops/kustomize/retro-obsidian-publish/deployment.yaml`:
+
+```yaml
+volumes:
+  - name: search-index
+    emptyDir: { sizeLimit: 4Gi }        # disk-backed; NOT medium: Memory
+volumeMounts:
+  - name: search-index
+    mountPath: /var/lib/publish-vault
+args: [ ..., "--search-index-path", "/var/lib/publish-vault/search" ]
+resources:
+  limits: { memory: 3Gi }
+  requests: { memory: 2Gi }
+```

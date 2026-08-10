@@ -39,3 +39,14 @@ KEY RESULT: measured the already-implemented --search-index-path option. Search 
 
 Wrote the design document (incident analysis, system map, memory budget table, reload timelines, pseudocode for six fixes, API and file references, seven-phase plan, reproduction commands, ten open questions) and the investigation diary; added 9 phase-ordered tasks.
 
+
+## 2026-08-09
+
+Implemented the in-repo fixes (commits 945c2df, 292932f): Reload is serialised on a mutex and skips rebuilds when a symlink root is unchanged; ApplyMemoryLimit derives GOMEMLIMIT from the cgroup; buildSearchIndex warns when indexing a large vault into memory; docker-compose wires --search-index-path to a disk-backed volume; oldSnapshotCloseDelay 30s -> 5s; new --pprof-addr on a separate listener. Verified live: 5 concurrent webhooks = 5 serialised builds, 3 webhooks on an unchanged symlink = 0 builds, symlink advance = 1 build. The gitops manifest change (limit + emptyDir + flag) remains outstanding and is now tracked as two tasks.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/server/memlimit.go — GOMEMLIMIT derived from the cgroup limit
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/server/pprof.go — Separate pprof listener so the next investigation is one command
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/server/runtime.go — Reload serialisation and the symlink no-op guard
+
