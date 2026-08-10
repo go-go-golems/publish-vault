@@ -18,6 +18,12 @@ linters:
     - nonamedreturns
     - predeclared
   exclusions:
+    # ttmp/ is this project's scratch space for investigation scripts and
+    # debugging harnesses (see AGENT.md). Those are throwaway programs written
+    # to answer one question, not shipped code, and holding them to the
+    # production lint rules only produces noise that blocks unrelated PRs.
+    paths:
+      - ttmp/
     rules:
       - linters:
           - staticcheck
@@ -32,3 +38,6 @@ linters:
 formatters:
   enable:
     - gofmt
+  exclusions:
+    paths:
+      - ttmp/

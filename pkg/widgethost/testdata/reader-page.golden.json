@@ -38,6 +38,7 @@
               "embeds": true,
               "highlight": true,
               "html": "\u003ch1 id=\"index\"\u003eIndex\u003c/h1\u003e\n\u003cp\u003eHello.\u003c/p\u003e\n",
+              "math": true,
               "mermaid": true,
               "slug": "index"
             },

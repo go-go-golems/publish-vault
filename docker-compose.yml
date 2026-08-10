@@ -12,6 +12,12 @@ services:
       - "8080:8080"
     volumes:
       - ${VAULT_PATH:-./vault-example}:/vault:ro
+      # Disk for the search index. Keeping it out of the Go heap is the single
+      # largest memory saving available to this service: for a 1712-note vault
+      # an in-memory bleve index is 884 MiB, 84% of the live heap. A named
+      # volume (disk-backed) is required — a tmpfs would be charged to the same
+      # memory budget and change nothing. See PV-MEMORY-019.
+      - search-index:/var/lib/publish-vault
     environment:
       - VAULT_DIR=/vault
     command:
@@ -19,6 +25,8 @@ services:
       - "--port"
       - "8080"
       - "--serve-web"
+      - "--search-index-path"
+      - "/var/lib/publish-vault/search"
       - "--vault-name"
       - "${VAULT_NAME:-My Vault}"
       - "--page-title"
@@ -38,3 +46,6 @@ services:
       - API_BASE=http://app:8080
       - BASE_URL=${BASE_URL:-http://localhost:8080}
     restart: unless-stopped
+
+volumes:
+  search-index:

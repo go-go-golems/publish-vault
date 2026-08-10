@@ -236,6 +236,12 @@ export default defineConfig(({ command, isSsrBuild }) => ({
           ? "src/lib/highlightLanguages.server.ts"
           : "src/lib/highlightLanguages.ts"
       ),
+      // MathJax's TeX engine and glyph tables are browser-only and large.
+      // enhanceMath only runs from an effect, so the SSR bundle needs the stub.
+      "@mathjax-typeset": path.resolve(
+        WEB_ROOT,
+        isSsrBuild ? "src/lib/mathjax.server.ts" : "src/lib/mathjax.ts"
+      ),
     },
     dedupe: ["react", "react-dom", "react-router", "react-router-dom"],
   },

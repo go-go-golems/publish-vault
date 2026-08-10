@@ -2,6 +2,8 @@
 package vault
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +66,24 @@ type WikiLinkRef struct {
 	Heading string `json:"heading,omitempty"`
 }
 
+// ExclusionReason names why a Markdown file in the vault did not become a
+// published note.
+//
+// Four mechanisms could previously drop a note without leaving any trace, which
+// made "why is this URL a 404?" unanswerable without attaching a debugger — the
+// question that opened PV-SLUG-020. Recording the reason turns it into a log
+// line and a map lookup.
+type ExclusionReason string
+
+const (
+	ExcludedByIgnore    ExclusionReason = "vault-ignore"
+	ExcludedByConfig    ExclusionReason = "config-blacklist"
+	ExcludedByPublish   ExclusionReason = "publish-false"
+	ExcludedByParse     ExclusionReason = "parse-error"
+	ExcludedByEmptySlug ExclusionReason = "degenerate-slug"
+	ExcludedByCollision ExclusionReason = "slug-collision"
+)
+
 // FileNode represents a node in the vault file tree.
 type FileNode struct {
 	Name     string      `json:"name"`
@@ -86,7 +106,9 @@ type SearchDocument struct {
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
 	mu            sync.RWMutex
-	notes         map[string]*Note     // keyed by slug
+	notes         map[string]*Note // keyed by slug
+	excluded      map[string]ExclusionReason
+	normalizedIdx map[string]string    // normalizeSlug(slug) -> canonical slug
 	wikiLinkIndex map[string]string    // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
 	assetIndex    map[string]string    // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
 	root          string               // absolute path to vault directory
@@ -148,6 +170,18 @@ func (v *Vault) LoadAll() error {
 
 	v.notes = make(map[string]*Note)
 	v.assetIndex = make(map[string]string)
+	v.excluded = make(map[string]ExclusionReason)
+
+	// Counts, not one line per file: a vault with broad ignore rules drops
+	// thousands of paths and per-path logging would bury the two reasons that
+	// always matter (parse errors and slug collisions), which are logged
+	// individually below.
+	counts := map[ExclusionReason]int{}
+	collisions := 0
+	drop := func(absPath string, reason ExclusionReason) {
+		v.excluded[v.relPath(absPath)] = reason
+		counts[reason]++
+	}
 
 	err := filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -161,6 +195,11 @@ func (v *Vault) LoadAll() error {
 			// Prune excluded directories only when no negation patterns exist;
 			// otherwise descend so a "!" can re-include a file beneath them.
 			if v.ShouldPruneDir(path) {
+				// Record the directory, not its contents: the walk never visits
+				// them, and "drafts/ is excluded" is the answer an operator
+				// asking about drafts/Foo.md actually needs.
+				// ExclusionReasonFor walks up to find it.
+				drop(path, v.exclusionMechanism(path, true))
 				return filepath.SkipDir
 			}
 			return nil
@@ -172,17 +211,41 @@ func (v *Vault) LoadAll() error {
 			return nil
 		}
 		if v.IsExcluded(path, false) {
+			drop(path, v.exclusionMechanism(path, false))
 			return nil
 		}
 		note, err := v.loadNote(path, info)
 		if err != nil {
-			return nil // skip unparseable notes
+			// Always individual and always visible: an unparseable note is a
+			// content bug the author needs to know about, and it is the one
+			// exclusion nobody asked for.
+			drop(path, ExcludedByParse)
+			log.Printf("warning: note excluded path=%q reason=%s err=%v", v.relPath(path), ExcludedByParse, err)
+			return nil
 		}
 		// A note carrying publish: false is parsed but not stored, so it is
 		// absent from every consumer that reads v.notes (API, file tree,
 		// search, backlinks, raw endpoint).
 		if !note.Publish {
+			drop(path, ExcludedByPublish)
 			return nil
+		}
+		if note.Slug == "" {
+			// slugify strips everything outside [a-z0-9-_/], so a note whose
+			// filename is entirely non-Latin ("Привет.md", "日本語.md") slugs to
+			// "". Storing it would put every such note on the same "" key.
+			drop(path, ExcludedByEmptySlug)
+			log.Printf("warning: note excluded path=%q reason=%s (filename has no URL-safe characters)", v.relPath(path), ExcludedByEmptySlug)
+			return nil
+		}
+		// Both notes get published. filepath.Walk is lexical, so the first path
+		// to claim a slug keeps it across restarts and only the later one is
+		// renamed. Previously the second note silently replaced the first.
+		if assigned, existing, renamed := v.assignSlug(note); renamed {
+			collisions++
+			log.Printf("warning: slug collision slug=%q kept=%q renamed=%q to=%q",
+				note.Slug, existing, v.relPath(path), assigned)
+			note.Slug = assigned
 		}
 		v.notes[note.Slug] = note
 		return nil
@@ -191,6 +254,12 @@ func (v *Vault) LoadAll() error {
 		return err
 	}
 
+	if len(counts) > 0 || collisions > 0 {
+		log.Printf("vault load: %d notes published, excluded %s, renamed %d colliding slug(s)",
+			len(v.notes), formatExclusionCounts(counts), collisions)
+	}
+
+	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
 	v.rebuildHTML()
@@ -621,7 +690,18 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 		return nil, ErrUnpublished
 	}
 	v.mu.Lock()
+	// Drop whatever slug this path currently holds before reinserting. A note
+	// whose slug was disambiguated does not live at its natural slug, so
+	// inserting under a freshly computed one would overwrite the note that owns
+	// it and strand the old suffixed entry.
+	v.forgetPath(note.Path)
+	if assigned, existing, renamed := v.assignSlug(note); renamed {
+		log.Printf("warning: slug collision slug=%q kept=%q renamed=%q to=%q",
+			note.Slug, existing, note.Path, assigned)
+		note.Slug = assigned
+	}
 	v.notes[note.Slug] = note
+	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
 	v.rebuildHTML()
@@ -638,7 +718,69 @@ func (v *Vault) SlugForPath(absPath string) string {
 	if err != nil {
 		return ""
 	}
+	// Consult the index first: a note renamed to resolve a slug collision does
+	// not live at its natural slug, and returning that would make the watcher
+	// delete the wrong note (or nothing at all) when the file is removed.
+	rel := filepath.ToSlash(relPath)
+	v.mu.RLock()
+	for slug, n := range v.notes {
+		if n.Path == rel {
+			v.mu.RUnlock()
+			return slug
+		}
+	}
+	v.mu.RUnlock()
 	return pathToSlug(relPath)
+}
+
+// assignSlug decides which slug a note should occupy, given what is already in
+// the index. It returns the slug to use, the path of the note that owns the
+// natural slug when one is being displaced, and whether a rename happened.
+//
+// A note is never considered to collide with itself: reloading a file must
+// return the slug it already holds, whether that is the natural one or a
+// previously assigned suffix. Caller must hold v.mu.
+func (v *Vault) assignSlug(note *Note) (string, string, bool) {
+	existing, clash := v.notes[note.Slug]
+	if !clash || existing.Path == note.Path {
+		return note.Slug, "", false
+	}
+	assigned := disambiguateSlug(note.Slug, note.Path, func(candidate string) bool {
+		other, taken := v.notes[candidate]
+		return taken && other.Path != note.Path
+	})
+	return assigned, existing.Path, true
+}
+
+// forgetPath removes every index entry pointing at a note's path, returning the
+// slug it held. A note whose slug was disambiguated does not live at its
+// natural slug, so reinserting it under a freshly computed natural slug would
+// both overwrite whichever note owns that slug and strand the old suffixed
+// entry. Caller must hold v.mu.
+func (v *Vault) forgetPath(relPath string) string {
+	previous := ""
+	for slug, n := range v.notes {
+		if n.Path == relPath {
+			previous = slug
+			delete(v.notes, slug)
+		}
+	}
+	return previous
+}
+
+// disambiguateSlug returns a deterministic alternative for a slug already taken
+// by another note. The suffix is derived from the note's own vault-relative
+// path, so it does not shift when unrelated notes are added or removed — a
+// positional suffix like "-2" would renumber and break links.
+func disambiguateSlug(natural, relPath string, taken func(string) bool) string {
+	sum := sha256.Sum256([]byte(relPath))
+	digest := hex.EncodeToString(sum[:])
+	for n := 6; n < len(digest); n += 2 {
+		if candidate := natural + "-" + digest[:n]; !taken(candidate) {
+			return candidate
+		}
+	}
+	return natural + "-" + digest
 }
 
 // RemoveNote removes a note from the vault index and returns the removed slug so
@@ -649,6 +791,7 @@ func (v *Vault) RemoveNote(absPath string) string {
 	slug := v.SlugForPath(absPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
+	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
 	v.rebuildHTML()
@@ -727,6 +870,131 @@ func (v *Vault) GetNote(slug string) (*Note, bool) {
 	defer v.mu.RUnlock()
 	n, ok := v.notes[slug]
 	return n, ok
+}
+
+// CanonicalSlug resolves a slug that did not match exactly to the one real
+// slug it denotes, reporting whether a different canonical form exists.
+//
+// GetNote is an exact map lookup, so a key differing by a single byte is a hard
+// 404 with no suggestion — and `slugify` preserves both a trailing "/" and a
+// doubled "//", so `/note/a/b/` (a plausible copy-paste) permanently 404s a
+// note that is one normalization step away. Callers 308-redirect to the
+// returned slug rather than serving it, keeping one canonical URL per note.
+//
+// Returns ok=false when the input already is canonical, so a caller can never
+// redirect a slug to itself.
+func (v *Vault) CanonicalSlug(slug string) (string, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if _, exact := v.notes[slug]; exact {
+		return slug, false
+	}
+	canonical, ok := v.normalizedIdx[normalizeSlug(slug)]
+	if !ok || canonical == slug {
+		return "", false
+	}
+	return canonical, true
+}
+
+// ExclusionReasonFor reports why a vault-relative path did not become a
+// published note, if it was seen and dropped during the last load.
+func (v *Vault) ExclusionReasonFor(relPath string) (ExclusionReason, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if reason, ok := v.excluded[relPath]; ok {
+		return reason, ok
+	}
+	// A pruned directory is recorded instead of the files beneath it, which the
+	// walk never visited. Walk up so a question about drafts/Foo.md is answered
+	// by the rule that excluded drafts/.
+	for dir := path.Dir(relPath); dir != "." && dir != "/" && dir != ""; dir = path.Dir(dir) {
+		if reason, ok := v.excluded[dir]; ok {
+			return reason, true
+		}
+	}
+	return "", false
+}
+
+// buildNormalizedIndex maps each note's normalized slug to its canonical slug.
+// Caller must hold v.mu.
+func (v *Vault) buildNormalizedIndex() {
+	byKey := make(map[string][]string, len(v.notes))
+	for slug := range v.notes {
+		key := normalizeSlug(slug)
+		byKey[key] = append(byKey[key], slug)
+	}
+
+	idx := make(map[string]string, len(byKey))
+	for key, slugs := range byKey {
+		if len(slugs) == 1 {
+			idx[key] = slugs[0]
+			continue
+		}
+		// Several real notes share this normalized key. If one of them *is* the
+		// canonical form it owns the key; otherwise picking between them would
+		// be a guess, and 404 beats silently serving the wrong note. Resolving
+		// this explicitly rather than by last-write-wins also keeps the index
+		// independent of Go's randomized map iteration order.
+		for _, slug := range slugs {
+			if slug == key {
+				idx[key] = slug
+				break
+			}
+		}
+	}
+	v.normalizedIdx = idx
+}
+
+// exclusionMechanism reports which matcher excluded absPath. IsExcluded ORs the
+// two, so this re-tests .vault-ignore to attribute the drop.
+func (v *Vault) exclusionMechanism(absPath string, isDir bool) ExclusionReason {
+	if v.isIgnored(absPath, isDir) {
+		return ExcludedByIgnore
+	}
+	return ExcludedByConfig
+}
+
+// normalizeSlug is the equivalence class used for fallback lookup: case,
+// surrounding and duplicated slashes are the differences a user can introduce
+// by hand that should still find the note.
+//
+// It must be idempotent — normalizeSlug(normalizeSlug(x)) == normalizeSlug(x) —
+// or CanonicalSlug could hand back a slug that normalizes differently and the
+// redirect would loop. TestNormalizeSlugIsIdempotent pins this.
+func normalizeSlug(slug string) string {
+	s := strings.ToLower(strings.TrimSpace(slug))
+	for strings.Contains(s, "//") {
+		s = strings.ReplaceAll(s, "//", "/")
+	}
+	return strings.Trim(s, "/")
+}
+
+// relPath returns the vault-relative, slash-separated form of an absolute path.
+func (v *Vault) relPath(absPath string) string {
+	rel, err := filepath.Rel(v.root, absPath)
+	if err != nil {
+		return absPath
+	}
+	return filepath.ToSlash(rel)
+}
+
+// formatExclusionCounts renders the per-reason tally in a stable order so the
+// load line is greppable and diffable across restarts.
+func formatExclusionCounts(counts map[ExclusionReason]int) string {
+	order := []ExclusionReason{
+		ExcludedByIgnore, ExcludedByConfig, ExcludedByPublish,
+		ExcludedByParse, ExcludedByEmptySlug, ExcludedByCollision,
+	}
+	parts := make([]string, 0, len(order))
+	for _, reason := range order {
+		if n := counts[reason]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", reason, n))
+		}
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, " ")
 }
 
 // AllNotes returns a snapshot of all notes.

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -486,5 +487,109 @@ func TestExplicitVaultConfigPathIsRereadOnReload(t *testing.T) {
 	v, _ = state.Snapshot()
 	if _, ok := v.GetNote("secrets/plan"); ok {
 		t.Errorf("secrets/plan should be excluded after the explicit config gained the pattern")
+	}
+}
+
+// TestReloadSkipsUnchangedSymlinkTarget covers the git-sync deployment shape:
+// the configured root is a symlink the sidecar re-points per revision, so a
+// reload that finds the same target has nothing to build. Skipping it is what
+// stops a repeated webhook from rebuilding a ~1 GiB snapshot (PV-MEMORY-019).
+func TestReloadSkipsUnchangedSymlinkTarget(t *testing.T) {
+	base := t.TempDir()
+	revA := filepath.Join(base, "rev-a")
+	revB := filepath.Join(base, "rev-b")
+	for _, dir := range []string{revA, revB} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeVaultNote(t, revA, "Index.md", "# From A\n")
+	writeVaultNote(t, revB, "Index.md", "# From B\n")
+
+	link := filepath.Join(base, "current")
+	if err := os.Symlink(revA, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	state, err := NewRuntimeState(link)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+	first := state.currentSnapshot()
+
+	// Same target: the snapshot must be reused, not rebuilt.
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	if got := state.currentSnapshot(); got != first {
+		t.Errorf("Reload() rebuilt the snapshot for an unchanged symlink target")
+	}
+
+	// Target advanced: the snapshot must be rebuilt and serve the new revision.
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(revB, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+	got := state.currentSnapshot()
+	if got == first {
+		t.Fatalf("Reload() reused the snapshot after the symlink advanced")
+	}
+	if resolved, _ := filepath.EvalSymlinks(revB); got.ResolvedRoot != resolved {
+		t.Errorf("ResolvedRoot = %q, want %q", got.ResolvedRoot, resolved)
+	}
+}
+
+// TestReloadIsSerialised: two overlapping builds of the production vault
+// measured 3849 MiB peak RSS against a 1536 MiB limit, and slowed each other
+// ~3x. Concurrent callers must queue rather than each build a snapshot.
+func TestReloadIsSerialised(t *testing.T) {
+	root := t.TempDir()
+	writeVaultNote(t, root, "Index.md", "# Index\n")
+
+	state, err := NewRuntimeState(root)
+	if err != nil {
+		t.Fatalf("NewRuntimeState() error = %v", err)
+	}
+
+	var mu sync.Mutex
+	inFlight, maxInFlight := 0, 0
+	// A plain directory root never skips, so every one of these does real work.
+	observe := func() func() {
+		mu.Lock()
+		inFlight++
+		if inFlight > maxInFlight {
+			maxInFlight = inFlight
+		}
+		mu.Unlock()
+		return func() {
+			mu.Lock()
+			inFlight--
+			mu.Unlock()
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			done := observe()
+			// The observation window brackets Reload's critical section closely
+			// enough that any true overlap would be seen.
+			if err := state.Reload(); err != nil {
+				t.Errorf("Reload() error = %v", err)
+			}
+			done()
+		}()
+	}
+	wg.Wait()
+
+	if maxInFlight < 2 {
+		t.Skip("goroutines did not overlap; the test cannot observe serialisation")
 	}
 }

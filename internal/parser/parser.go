@@ -54,11 +54,21 @@ func isImageTarget(target string) bool {
 
 // Parse takes raw Markdown bytes and returns a ParsedNote.
 func Parse(src []byte) (*ParsedNote, error) {
-	// --- Pre-process: extract wiki links before goldmark sees them ---
-	wikiLinks := extractWikiLinks(src)
+	// --- Lift LaTeX math out before anything else reads or rewrites the source ---
+	// Math runs first because replaceWikiLinks injects raw HTML (quotes,
+	// attributes) into the body; scanning that output for `$` could swallow
+	// markup. The math itself comes back in RestoreMath, after every HTML
+	// post-pass.
+	processed, mathSpans := replaceMathInBody(src)
+
+	// --- Extract wiki links from the masked source, not the raw one ---
+	// `[[Foo]]` inside a formula is literal TeX, not a link. Scanning the raw
+	// source would still record it, and buildBacklinks would then give Foo a
+	// backlink pointing at a note that does not link to it.
+	wikiLinks := extractWikiLinks(processed)
 
 	// --- Replace [[wiki links]] with placeholder HTML so goldmark doesn't mangle them ---
-	processed := replaceWikiLinks(src)
+	processed = replaceWikiLinks(processed)
 
 	// --- Build goldmark with frontmatter ---
 	md := goldmark.New(
@@ -91,6 +101,9 @@ func Parse(src []byte) (*ParsedNote, error) {
 
 	// --- Render callouts (admonitions) ---
 	htmlOut = renderCallouts(htmlOut)
+
+	// --- Put math back, last, so no other pass ever sees its markup ---
+	htmlOut = RestoreMath(htmlOut, mathSpans)
 
 	// --- Extract title ---
 	title := extractTitle(frontmatter, src)
@@ -633,7 +646,11 @@ func isFrontmatterDelimiter(line string) bool {
 
 // stripMarkdown removes common Markdown syntax for plain-text excerpt.
 func stripMarkdown(src []byte) string {
-	s := string(src)
+	// Drop math delimiters first, keeping the TeX body, so a note about the
+	// normal distribution is findable by searching "sigma". Running before the
+	// emphasis/link regexes matters: they would otherwise chew through the
+	// underscores and backslashes inside a formula.
+	s := string(StripMathDelimiters(src))
 	// Remove wiki links
 	s = wikiLinkRegex.ReplaceAllStringFunc(s, func(m string) string {
 		_, alias, _ := parseWikiLinkInner(m[2 : len(m)-2])

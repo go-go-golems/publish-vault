@@ -1,0 +1,42 @@
+GOMAXPROCS=8 GOGC="" GOMEMLIMIT=""
+vault=/home/manuel/code/wesen/go-go-golems/go-go-parc
+
+on-disk: mdFiles=1739 mdBytes=59267905 (56.5 MiB)  assetFiles=1970 assetBytes=2271422933 (2166.2 MiB)  walk=23ms
+
+00-baseline                  elapsed=0s         heapAlloc=     0.6 MiB  heapInuse=     1.6 MiB  heapSys=    11.4 MiB  sys=    17.4 MiB  nextGC=     4.0 MiB  numGC=2  maxRSS=    20.0 MiB
+01-vault1-loaded             elapsed=23.532s    heapAlloc=   151.0 MiB  heapInuse=   173.4 MiB  heapSys=   279.5 MiB  sys=   290.0 MiB  nextGC=   302.3 MiB  numGC=215  maxRSS=   298.6 MiB
+02-search1-built             elapsed=1m50.937s  heapAlloc=   984.4 MiB  heapInuse=  1591.1 MiB  heapSys=  1863.4 MiB  sys=  1931.7 MiB  nextGC=  1969.0 MiB  numGC=277  maxRSS=  1929.7 MiB
+
+== per-note retained field totals (snapshot 1) ==
+notes                 = 1712
+HTML bytes            = 71148293 (67.9 MiB)
+sourceHTML bytes (~)  = 71148293 (67.9 MiB)  [unexported, approximated as == HTML]
+Excerpt bytes         = 346121 (338.0 KiB)
+Title bytes           = 88641
+Path bytes            = 151909
+Slug bytes            = 142507
+WikiLink refs         = 4394
+Backlink entries      = 3450
+Tag entries           = 8295
+HTML / markdown ratio = 1.20x
+
+03-vault2-loaded             elapsed=1m10.665s  heapAlloc=  1134.7 MiB  heapInuse=  1798.5 MiB  heapSys=  2715.5 MiB  sys=  2792.0 MiB  nextGC=  2269.6 MiB  numGC=283  maxRSS=  2795.4 MiB
+04-search2-built             elapsed=1m46.542s  heapAlloc=  1967.9 MiB  heapInuse=  3195.9 MiB  heapSys=  3731.4 MiB  sys=  3860.2 MiB  nextGC=  3936.1 MiB  numGC=303  maxRSS=  3848.9 MiB
+
+heap profile written to /tmp/claude-1000/-home-manuel-workspaces-2026-08-09-publish-vault-mathjax/bf523fbe-21da-4e70-82cf-09d2f99fadea/scratchpad/snap2.heap
+
+== summary ==
+vault only (live heap delta)   = 150.4 MiB
+search only (live heap delta)  = 833.4 MiB
+one snapshot (vault+search)    = 983.8 MiB
+bytes per note (one snapshot)  = 602537
+multiplier vs on-disk markdown = 17.40x
+peak phase                     = 04-search2-built
+peak heapAlloc (live)          = 1967.9 MiB
+peak heapSys                   = 3731.4 MiB
+peak runtime Sys               = 3860.2 MiB
+peak RSS (VmHWM)               = 3848.9 MiB
+current RSS (VmRSS)            = 3547.3 MiB
+
+NOTE: VmHWM is the number a Kubernetes memory limit is enforced against.
+      A 1536 MiB limit is breached when peak RSS exceeds it, regardless of live heap.

@@ -365,6 +365,55 @@
     font-family: system-ui, Chicago, sans-serif !important;
   }
 
+  /* ── LaTeX math (PV-MATHJAX-018) ──
+     Placeholders arrive holding raw TeX and are swapped for MathJax SVG after
+     hydration. Style the pre-typeset state so it reads as "source, about to
+     become math" rather than as a broken page — that state is also what a
+     reader without JavaScript sees, so it must stay legible. */
+  .math {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.95em;
+    opacity: 0.7;
+  }
+  .math[data-math-state="done"] {
+    font-family: inherit;
+    font-size: inherit;
+    opacity: 1;
+  }
+  .math[data-math-state="error"] {
+    color: var(--color-danger, #a33);
+    border-bottom: 1px dotted currentColor;
+    cursor: help; /* the title attribute carries the TeX error */
+    opacity: 1;
+  }
+  /* MathJax draws glyphs with currentColor, so math follows the theme ink. */
+  .math mjx-container svg {
+    color: inherit;
+  }
+  /* Tailwind's preflight applies `svg { display: block }` (the cssremedy rule
+     for replaced elements). That is wrong for MathJax: a block SVG becomes its
+     own line box and stretches to the paragraph width, so "The identity
+     $e^{i\pi}+1=0$ ties together…" renders on three lines with the formula
+     700px wide. Restore inline flow and the SVG's intrinsic width. MathJax
+     sets vertical-align inline on the element itself, so the baseline is
+     already correct once display is fixed. */
+  .math mjx-container > svg {
+    display: inline-block;
+    max-width: none;
+  }
+  .math-display {
+    display: block;
+    margin: 1rem 0;
+    text-align: center;
+    /* A wide \begin{align} scrolls inside its own box; without this it forces
+       a horizontal scrollbar onto the whole page. */
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .math-display mjx-container[display="true"] {
+    margin: 0;
+  }
+
   /* ── Mobile Responsive Overrides (<768px) ── */
   @media (max-width: 767px) {
     .note-prose {

@@ -9,12 +9,72 @@
  *
  * Ordering constraint: mermaid must run before syntax highlighting so that
  * `language-mermaid` code blocks are replaced by SVG containers before hljs
- * walks the remaining <pre> blocks.
+ * walks the remaining <pre> blocks. Math is independent of both — the Go
+ * parser never emits a `.math` placeholder inside a code block — but it runs
+ * first anyway so addCopyButtons never measures a half-typeset <pre>.
  */
 import { nanoid } from "nanoid";
 import { highlightCodeBlocks } from "@highlight-languages";
 
 let mermaidInitialized = false;
+
+/**
+ * Typeset the `.math` placeholders the Go parser emits for `$…$` and `$$…$$`.
+ *
+ * The element's text content is the verbatim TeX source — the parser escapes
+ * only &, < and >, so the DOM hands it back byte-identical. On success the TeX
+ * is replaced by MathJax's SVG output; on failure it stays visible and the
+ * element is marked data-math-state="error", which also gives us a working
+ * no-JavaScript fallback for free.
+ *
+ * Idempotent via data-math-state, which matters more here than for the other
+ * passes: the effect re-runs whenever resolvedHtml changes, and resolveEmbeds
+ * injects new subtrees asynchronously after it has already finished.
+ */
+export function enhanceMath(root: HTMLElement): () => void {
+  const nodes = root.querySelectorAll<HTMLElement>(".math:not([data-math-state])");
+  if (nodes.length === 0) return () => {};
+
+  let cancelled = false;
+
+  const run = async () => {
+    const { typesetTeX, ensureMathStyles } = await import("@mathjax-typeset");
+    if (cancelled) return;
+    await ensureMathStyles();
+    if (cancelled) return;
+
+    // Sequential rather than Promise.all: the MathJax document object is a
+    // singleton with internal state, and a note has a handful of formulas, not
+    // hundreds. Batch before reaching for concurrency here.
+    for (const el of Array.from(nodes)) {
+      if (cancelled) return;
+      // Claim synchronously, before the await, so a concurrent pass (React 19
+      // strict mode double-invokes effects) cannot typeset the same element
+      // twice.
+      if (el.dataset.mathState) continue;
+      el.dataset.mathState = "pending";
+
+      const tex = el.textContent ?? "";
+      const display = el.classList.contains("math-display");
+      const { node, error } = await typesetTeX(tex, display);
+
+      if (cancelled || !el.isConnected) return;
+      if (!node) {
+        el.dataset.mathState = "error";
+        el.title = error ?? "math error";
+        continue; // leave the TeX source visible
+      }
+      el.textContent = "";
+      el.appendChild(node);
+      el.dataset.mathState = "done";
+    }
+  };
+
+  void run();
+  return () => {
+    cancelled = true;
+  };
+}
 
 /**
  * Replace `code.language-mermaid` blocks with rendered SVG containers.
@@ -147,10 +207,16 @@ export function enhanceHeadingAnchors(root: HTMLElement): void {
  * note's rendered HTML through the supplied loader. The loader is injected
  * so the component layer can route it through RTK Query (and the static
  * vault in VITE_STATIC_VAULT builds) instead of raw fetch().
+ *
+ * onEmbedRendered fires once per successfully resolved embed, with the
+ * container holding the injected HTML. Embeds land after the enhancement
+ * effects have already run, so anything that must apply to embedded content
+ * (math, and eventually the other passes) has to be re-driven from here.
  */
 export function resolveEmbeds(
   root: HTMLElement,
-  loadNoteHtml: (slug: string) => Promise<string | null>
+  loadNoteHtml: (slug: string) => Promise<string | null>,
+  onEmbedRendered?: (container: HTMLElement) => void
 ): void {
   const embeds = root.querySelectorAll<HTMLElement>(".wiki-embed");
   embeds.forEach(embed => {
@@ -167,6 +233,7 @@ export function resolveEmbeds(
         container.className = "wiki-embed-content retro-inset my-2";
         container.innerHTML = html;
         embed.appendChild(container);
+        onEmbedRendered?.(container);
       })
       .catch(() => {
         // Show broken link indicator

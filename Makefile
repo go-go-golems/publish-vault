@@ -54,7 +54,7 @@ docker-lint:
 
 gosec:
 	GOWORK=off go install github.com/securego/gosec/v2/cmd/gosec@latest
-	GOWORK=off gosec -exclude-generated -exclude=G101,G304,G301,G306,G204 -exclude-dir=.history ./...
+	GOWORK=off gosec -exclude-generated -exclude=G101,G304,G301,G306,G204 -exclude-dir=.history -exclude-dir=ttmp ./...
 
 govulncheck:
 	GOWORK=off go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -72,8 +72,13 @@ glazed-lint-build:
 		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_LINT_VERSION); \
 	fi
 
+# Lint the shipped packages only. ttmp/ holds one-off investigation scripts and
+# debugging harnesses (see AGENT.md); they are not Glazed commands and applying
+# the CLI-authoring conventions to them blocks unrelated work.
+GLAZED_LINT_TARGETS ?= ./cmd/... ./internal/... ./pkg/...
+
 glazed-lint: glazed-lint-build
-	GOWORK=off $(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./...
+	GOWORK=off $(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_TARGETS)
 
 # logcopter package loggers. Invoked directly (not via go generate ./...)
 # because pkg/web/generate.go triggers the Dagger frontend build.

@@ -35,6 +35,7 @@ type Settings struct {
 	SSRURL              string `glazed:"ssr-url"`
 	Favicon             string `glazed:"favicon"`
 	SearchIndexPath     string `glazed:"search-index-path"`
+	PprofAddr           string `glazed:"pprof-addr"`
 	PagesDir            string `glazed:"pages-dir"`
 	Config              string `glazed:"config"`
 }
@@ -102,6 +103,10 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Optional base directory for per-snapshot persistent bleve indexes. When empty, search stays in memory."),
 			),
+			fields.New("pprof-addr", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Listen address for net/http/pprof (e.g. 127.0.0.1:6060). Serves heap and goroutine profiles on a SEPARATE listener from the public API, so it is never exposed by the main port. Empty disables it."),
+			),
 			fields.New("pages-dir", fields.TypeString,
 				fields.WithDefault(""),
 				fields.WithHelp("Directory of widget.dsl page scripts served at /api/widget/*. Defaults to <vault>/.publish/pages; widget routes stay disabled when the directory does not exist."),
@@ -147,5 +152,5 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	// The config file is read by the runtime, once per vault snapshot, so an
 	// admin reload picks up config edits. An empty path defaults to
 	// <resolved vault root>/.publish/config.yaml.
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PagesDir: pagesDir, VaultConfigPath: settings.Config})
+	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PprofAddr: settings.PprofAddr, PagesDir: pagesDir, VaultConfigPath: settings.Config})
 }

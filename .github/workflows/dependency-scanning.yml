@@ -56,8 +56,9 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
-
+      # Delegate to the Makefile rather than repeating the flags here. The two
+      # had drifted: `make gosec` excluded ttmp/ (scratch investigation scripts,
+      # see AGENT.md) while this job did not, so CI failed on findings that were
+      # green locally and unreachable in the shipped binary.
       - name: Run Gosec Security Scanner
-        run: gosec -exclude-generated -exclude=G101,G304,G301,G306,G204 -exclude-dir=.history ./...
+        run: make gosec

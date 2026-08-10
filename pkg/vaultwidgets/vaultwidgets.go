@@ -5,7 +5,7 @@
 // JS view:
 //
 //	const vw = require("vault.widgets");
-//	vw.noteHtml(note, {embeds, anchors, highlight, mermaid})  → NoteHtml node
+//	vw.noteHtml(note, {embeds, anchors, highlight, mermaid, math})  → NoteHtml node
 //	vw.frontmatter(note, {onTagClick})                        → FrontmatterPanel node
 //	vw.breadcrumb(note)                                       → BreadcrumbBar node
 //	vw.backlinks(note, {onSelect})                            → BacklinksPanel node (entries resolved server-side)
@@ -80,6 +80,7 @@ func Loader(provider api.SnapshotProvider, _ api.PublicConfig) require.ModuleLoa
 				"anchors":   boolOpt(o, "anchors", true),
 				"highlight": boolOpt(o, "highlight", true),
 				"mermaid":   boolOpt(o, "mermaid", true),
+				"math":      boolOpt(o, "math", true),
 			}), nil
 		})
 

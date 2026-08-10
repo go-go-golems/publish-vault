@@ -41,12 +41,17 @@ type Config struct {
 	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
 	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
 	VaultConfigPath     string // Optional vault config file (publish blacklist). Empty = <vault>/.publish/config.yaml. Re-read on every reload.
+	PprofAddr           string // Optional listen address for net/http/pprof (e.g. 127.0.0.1:6060). Empty = disabled.
 	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
 // the same process.
 func Run(ctx context.Context, cfg Config) error {
+	// Before loading anything: align the Go heap with the container limit so a
+	// large vault triggers GC rather than the OOM killer.
+	ApplyMemoryLimit()
+
 	if cfg.VaultDir == "" {
 		return fmt.Errorf("vault dir is required")
 	}
@@ -59,6 +64,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
 		return fmt.Errorf("invalid port %q: %w", cfg.Port, err)
 	}
+
+	startPprof(cfg.PprofAddr)
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
 	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfigPath: cfg.VaultConfigPath})

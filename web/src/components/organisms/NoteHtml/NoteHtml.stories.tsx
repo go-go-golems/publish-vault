@@ -39,5 +39,31 @@ export const EnhancementsDisabled: Story = {
     highlight: false,
     embeds: false,
     anchors: false,
+    math: false,
   },
+};
+
+// The placeholders below are exactly what internal/parser emits: the TeX lives
+// in the element's text content, escaped only for &, < and >. enhanceMath swaps
+// each one for MathJax SVG after mount.
+const mathHtml = `
+  <p>The identity <span class="math math-inline">e^{i\\pi} + 1 = 0</span> ties together
+  five constants, and <span class="math math-inline">a_1, a_2, \\ldots, a_n</span> keeps
+  its underscores.</p>
+  <div class="math math-display">
+\\begin{align}
+\\mathbb{E}[X]      &amp;= \\mu \\\\
+\\mathrm{Var}(X)    &amp;= \\sigma^2
+\\end{align}
+  </div>
+  <p>Prices are prose: the book costs $30 and $25 used.</p>
+`;
+
+export const Math: Story = {
+  args: { html: mathHtml, slug: "math-note" },
+};
+
+/** Math left untypeset — this is what a reader without JavaScript sees. */
+export const MathNotTypeset: Story = {
+  args: { html: mathHtml, slug: "math-note", math: false },
 };

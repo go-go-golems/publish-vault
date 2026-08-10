@@ -1,0 +1,33 @@
+File: vaultmem
+Build ID: f9a6304f79081e3893880db9822f2824fb59ab36
+Type: inuse_space
+Time: 2026-08-09 20:24:08 EDT
+Showing nodes accounting for 1034.87MB, 98.84% of 1046.97MB total
+Dropped 74 nodes (cum <= 5.23MB)
+Showing top 25 nodes out of 28
+      flat  flat%   sum%        cum   cum%
+  544.16MB 51.97% 51.97%   544.16MB 51.97%  github.com/blevesearch/upsidedown_store_api.(*EmulatedBatch).Set
+  153.51MB 14.66% 66.64%   340.52MB 32.52%  github.com/blevesearch/bleve/v2/index/upsidedown/store/gtreap.(*Writer).ExecuteBatch
+  150.69MB 14.39% 81.03%   151.20MB 14.44%  regexp.(*Regexp).ReplaceAllStringFunc
+   96.50MB  9.22% 90.25%    96.50MB  9.22%  github.com/blevesearch/gtreap.(*Treap).split
+      83MB  7.93% 98.18%   179.51MB 17.15%  github.com/blevesearch/gtreap.(*Treap).union
+       7MB  0.67% 98.84%        7MB  0.67%  github.com/blevesearch/bleve/v2/index/upsidedown.(*DictionaryRow).Value (inline)
+         0     0% 98.84%   884.68MB 84.50%  github.com/blevesearch/bleve/v2.(*indexImpl).Index
+         0     0% 98.84%   884.68MB 84.50%  github.com/blevesearch/bleve/v2/index/upsidedown.(*UpsideDownCouch).Update
+         0     0% 98.84%   884.68MB 84.50%  github.com/blevesearch/bleve/v2/index/upsidedown.(*UpsideDownCouch).UpdateWithAnalysis
+         0     0% 98.84%   884.68MB 84.50%  github.com/blevesearch/bleve/v2/index/upsidedown.(*UpsideDownCouch).batchRows
+         0     0% 98.84%     7.50MB  0.72%  github.com/blevesearch/bleve/v2/index/upsidedown.(*upsideDownMerge).FullMerge
+         0     0% 98.84%   179.51MB 17.15%  github.com/blevesearch/gtreap.(*Treap).Upsert (inline)
+         0     0% 98.84%    77.69MB  7.42%  github.com/go-go-golems/publish-vault/internal/parser.Parse
+         0     0% 98.84%    73.13MB  6.99%  github.com/go-go-golems/publish-vault/internal/parser.renderCallouts (inline)
+         0     0% 98.84%   884.68MB 84.50%  github.com/go-go-golems/publish-vault/pkg/search.(*Index).Index
+         0     0% 98.84%   884.68MB 84.50%  github.com/go-go-golems/publish-vault/pkg/search.New
+         0     0% 98.84%   884.68MB 84.50%  github.com/go-go-golems/publish-vault/pkg/search.New.func1
+         0     0% 98.84%   884.68MB 84.50%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).ForEachSearchDocument
+         0     0% 98.84%   159.28MB 15.21%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).LoadAll
+         0     0% 98.84%    79.19MB  7.56%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).LoadAll.func1
+         0     0% 98.84%    77.69MB  7.42%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+         0     0% 98.84%    78.07MB  7.46%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).rebuildHTML
+         0     0% 98.84%   159.28MB 15.21%  github.com/go-go-golems/publish-vault/pkg/vault.New
+         0     0% 98.84%    77.56MB  7.41%  github.com/go-go-golems/publish-vault/pkg/vault.replaceUnresolvedNoteEmbeds (inline)
+         0     0% 98.84%  1043.96MB 99.71%  main.main

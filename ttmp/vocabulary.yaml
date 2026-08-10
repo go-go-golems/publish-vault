@@ -121,6 +121,30 @@ topics:
       description: goja/go-go-goja embedded JavaScript runtime and native modules
     - slug: architecture
       description: System architecture, module layout, and framework design decisions
+    - slug: mathjax
+      description: MathJax LaTeX math typesetting in rendered notes
+    - slug: math
+      description: Mathematical notation, formulas, and typesetting
+    - slug: latex
+      description: LaTeX / TeX source syntax handling
+    - slug: memory
+      description: Process memory usage, heap growth, and allocation behavior
+    - slug: oom
+      description: Out-of-memory kills, cgroup limits, and exit 137 diagnosis
+    - slug: profiling
+      description: Runtime profiling with pprof, MemStats, and gctrace
+    - slug: reload
+      description: Vault reload lifecycle, snapshot swapping, and admin reload endpoint
+    - slug: bleve
+      description: Bleve full-text search engine index construction and storage
+    - slug: kubernetes
+      description: Kubernetes workloads, probes, resource limits, and pod lifecycle
+    - slug: slug
+      description: Note slug generation, URL slug resolution, and slug/path mapping
+    - slug: routing
+      description: HTTP route matching, URL decoding, and SPA fallback routing
+    - slug: frontmatter
+      description: YAML frontmatter parsing and frontmatter-driven behaviour (publish, title, tags)
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
@@ -132,6 +156,8 @@ docTypes:
       description: Ticket landing page
     - slug: skill
       description: Skill documentation (what it's for and when to use it)
+    - slug: design
+      description: Architecture and design documents
 intent:
     - slug: long-term
       description: Likely to persist

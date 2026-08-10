@@ -14,7 +14,7 @@ It is designed for people who want to publish a personal knowledge base without 
 - **Full-text search**: notes are indexed with Bleve and queried through `/api/search`.
 - **File tree navigation**: the sidebar mirrors the vault folder hierarchy and opens to the active note.
 - **Markdown rendering**: supports frontmatter, tables, task lists, footnotes, code blocks, callouts, and heading anchors.
-- **Client-side enhancements**: syntax highlighting, Mermaid diagrams, copy buttons on code blocks, collapsible callouts, and inline embeds.
+- **Client-side enhancements**: syntax highlighting, Mermaid diagrams, MathJax math typesetting, copy buttons on code blocks, collapsible callouts, and inline embeds.
 - **Live local development**: run the Go backend and Vite frontend separately while editing UI code.
 - **Content update hook**: optional reload endpoint for setups where a Git checkout is updated by another process.
 
@@ -334,11 +334,56 @@ The parser supports:
   - `> [!type]-` for collapsed callouts;
 - computed backlinks;
 - Mermaid diagrams in fenced `mermaid` code blocks;
+- LaTeX math, typeset with MathJax:
+  - `$inline$` and `\(inline\)`
+  - `$$display$$` and `\[display\]`
+  - AMS environments such as `align`, `cases`, `pmatrix`;
 - syntax highlighting for code blocks;
 - copy buttons on code blocks;
 - heading permalink anchors.
 
 Some Obsidian-specific behavior is intentionally approximated. The goal is not to reimplement the full Obsidian application. The goal is to publish a readable, linkable, searchable website from the same Markdown source files.
+
+---
+
+## Math
+
+Math is written the way Obsidian writes it — `$x^2$` inline, `$$…$$` on its own
+lines for display — and is typeset in the browser by MathJax (TeX input, SVG
+output).
+
+```markdown
+The identity $e^{i\pi} + 1 = 0$ ties five constants together.
+
+$$
+\begin{align}
+\mathbb{E}[X]   &= \mu \\
+\mathrm{Var}(X) &= \sigma^2
+\end{align}
+$$
+```
+
+`\(…\)` and `\[…\]` work as well, for LaTeX pasted from elsewhere.
+
+Some details worth knowing:
+
+- **Dollar signs in prose are safe.** "costs $30 and $25" is not math: an opening
+  `$` may not be followed by whitespace, and a closing `$` may not be preceded by
+  whitespace nor followed by a digit. Write `\$` if you want a literal dollar
+  sign next to a digit.
+- **Code is never touched.** Code spans and fenced blocks are skipped, so a note
+  *about* math syntax renders correctly. Indented (4-space) code blocks are the
+  exception — use fences for code containing dollar signs.
+- **Math is protected from Markdown.** TeX is lifted out of the source before the
+  Markdown parser runs, so `a_1 + b_2` keeps its underscores, `\\` survives inside
+  `align`, and `&` is not mangled.
+- **Nothing is downloaded unless a note has math.** MathJax and its font glyph
+  ranges are lazily loaded, so math-free pages are unaffected.
+- **Without JavaScript**, the raw TeX source stays visible rather than the
+  paragraph going blank. The `/note/<slug>.md` mirror always serves the original
+  Markdown, math included.
+- **Search indexes the TeX body**, so a note whose only mention of sigma is
+  `$\sigma^2$` is findable by searching for `sigma`.
 
 ---
 

@@ -9,6 +9,7 @@
     "build:ssr": "vite build --ssr src/entry-server.tsx --outDir dist/ssr",
     "build:all": "pnpm build && pnpm build:ssr",
     "smoke:ssr": "node ../scripts/smoke-ssr-hydration.mjs",
+    "smoke:upstream": "node ../scripts/smoke-ssr-upstream-failures.mjs",
     "ssr": "node server.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "check": "tsc --noEmit",
@@ -17,6 +18,8 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@mathjax/mathjax-newcm-font": "^4.1.3",
+    "@mathjax/src": "^4.1.3",
     "@radix-ui/react-dialog": "^1.1.15",
     "@reduxjs/toolkit": "^2.11.2",
     "clsx": "^2.1.1",

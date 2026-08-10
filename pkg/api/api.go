@@ -12,6 +12,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -127,16 +128,66 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 // getNote returns a single note by slug.
+//
+// On an exact miss it tries the normalized index before 404ing: slugs preserve
+// a trailing "/" and a doubled "//", so URLs a reader can produce by hand — a
+// copy-paste that kept the trailing slash, a mixed-case path — used to be a
+// permanent 404 on a note that was one normalization step away. Redirecting
+// rather than serving keeps one canonical URL per note for caches and crawlers.
 func (h *Handler) getNote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
 	v, _ := h.provider.Snapshot()
 	note, ok := v.GetNote(slug)
 	if !ok {
+		if canonical, found := v.CanonicalSlug(slug); found && safeRedirectSlug(canonical) {
+			// 308 rather than 301: the method and body must be preserved, and
+			// the redirect is a property of the slug, not of this request.
+			//
+			// #nosec G710 -- not an open redirect. The target is a key from the
+			// vault's own slug index; the request slug is only a lookup key and
+			// never reaches the Location header. safeRedirectSlug enforces the
+			// property gosec's taint analysis cannot see.
+			http.Redirect(w, r, "/api/notes/"+canonicalSlugPath(canonical), http.StatusPermanentRedirect)
+			return
+		}
 		http.Error(w, `{"error":"note not found"}`, http.StatusNotFound)
 		return
 	}
 	jsonResponse(w, note)
+}
+
+// safeRedirectSlug reports whether a slug can be appended to "/api/notes/" and
+// still yield a same-origin, same-prefix path.
+//
+// Slugify already restricts slugs to [a-z0-9-_/], so today no vault slug can
+// carry a scheme, a host, or a traversal segment. This check does not trust
+// that: a slug beginning with "/" would make the Location "//host"-shaped and
+// therefore protocol-relative, which leaves the origin, and ".." would climb
+// out of the prefix. Both are cheap to reject and keep the redirect safe if the
+// slug alphabet is ever widened.
+func safeRedirectSlug(slug string) bool {
+	if slug == "" || strings.HasPrefix(slug, "/") || strings.HasPrefix(slug, `\`) {
+		return false
+	}
+	for _, segment := range strings.Split(slug, "/") {
+		if segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// canonicalSlugPath escapes a slug for use in a redirect Location while
+// leaving the "/" separators intact — the route is registered as
+// {slug:.*}, so the path segments are part of the slug rather than
+// sub-resources.
+func canonicalSlugPath(slug string) string {
+	parts := strings.Split(slug, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 // getNoteRaw returns the raw markdown source for a note.

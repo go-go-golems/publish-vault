@@ -15,7 +15,15 @@ import (
 	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
-var oldSnapshotCloseDelay = 30 * time.Second
+// oldSnapshotCloseDelay is how long a replaced snapshot is kept alive after a
+// swap so requests that already read its vault and search index can finish.
+//
+// It is memory, not just time: an in-memory bleve index for the production
+// vault is 884 MiB, and holding the previous one for this long means the swap
+// costs double that for the duration. Five seconds comfortably outlives any
+// request this service serves (the slowest is a search over a loaded index)
+// while releasing the old index promptly. See PV-MEMORY-019.
+var oldSnapshotCloseDelay = 5 * time.Second
 
 // RuntimeOptions configures how runtime snapshots are loaded.
 type RuntimeOptions struct {
@@ -48,6 +56,14 @@ type RuntimeState struct {
 	searchIndexPath string
 	vaultConfigPath string
 	snapshot        *Snapshot
+
+	// reloadMu serialises the expensive build so two reloads can never be in
+	// flight at once. Building a snapshot of the production vault costs about
+	// 1 GiB of live heap and over a minute; two overlapping builds measured
+	// 3849 MiB peak RSS against a 1536 MiB limit, and each build slowed the
+	// other roughly threefold, which is the positive feedback loop that turned
+	// a slow reload into a crash loop. See PV-MEMORY-019.
+	reloadMu sync.Mutex
 }
 
 // NewRuntimeState loads a vault from configuredRoot and builds the initial
@@ -97,9 +113,27 @@ func (s *RuntimeState) ConfiguredRoot() string {
 
 // Reload builds a new vault and search index, then atomically swaps them into
 // service. If loading or indexing fails, the previous state remains active.
+//
+// Reloads are serialised and idempotent. Concurrent callers queue on reloadMu
+// rather than each building their own snapshot, and a caller that finds the
+// vault already pointing at the resolved root it would have built returns
+// immediately. git-sync only advances its symlink when the revision actually
+// changes, so in steady state this turns a repeated webhook into a stat.
 func (s *RuntimeState) Reload() error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
 	started := time.Now()
 	configured := s.ConfiguredRoot()
+
+	// The no-op guard runs after taking reloadMu, not before: a queued caller
+	// must re-check, because the reload it was waiting on has very likely just
+	// published the revision it wanted.
+	if s.canSkipReload() {
+		logMemoryPhase("reload_skipped_unchanged", "configuredRoot", configured, "resolvedRoot", s.ResolvedRoot())
+		return nil
+	}
+
 	logMemoryPhase("reload_start", "configuredRoot", configured)
 	next, err := loadSnapshot(configured, s.searchIndexPath, s.vaultConfigPath)
 	if err != nil {
@@ -120,14 +154,9 @@ func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string) (*Sna
 	started := time.Now()
 	logMemoryPhase("load_start", "configuredRoot", configuredRoot, "persistentSearch", fmt.Sprint(searchIndexPath != ""))
 
-	absRoot, err := filepath.Abs(configuredRoot)
+	resolvedRoot, err := resolveRoot(configuredRoot)
 	if err != nil {
-		return nil, fmt.Errorf("invalid vault path: %w", err)
-	}
-
-	resolvedRoot, err := filepath.EvalSymlinks(absRoot)
-	if err != nil {
-		return nil, fmt.Errorf("resolve vault path %q: %w", absRoot, err)
+		return nil, err
 	}
 	revision := snapshotRevision(resolvedRoot, time.Now())
 	logMemoryPhase("load_resolved_root", "configuredRoot", configuredRoot, "resolvedRoot", resolvedRoot, "revision", revision)
@@ -163,6 +192,48 @@ func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string) (*Sna
 	}, nil
 }
 
+// canSkipReload reports whether a reload provably has nothing to do.
+//
+// It is deliberately narrow. The only deployment where "the input is unchanged"
+// can be decided cheaply is the git-sync one: the configured root is a symlink
+// that the sidecar re-points at a fresh, immutable checkout per revision, so an
+// unchanged target means an unchanged vault. When the configured root is a
+// plain directory — dev, docker-compose bind mounts, the tests — files and the
+// .publish config can be edited in place under a stable path, and skipping
+// would silently serve stale content. In that case always rebuild.
+func (s *RuntimeState) canSkipReload() bool {
+	configured := s.ConfiguredRoot()
+	absRoot, err := filepath.Abs(configured)
+	if err != nil {
+		return false
+	}
+	info, err := os.Lstat(absRoot)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	resolved, err := resolveRoot(configured)
+	if err != nil {
+		return false
+	}
+	cur := s.currentSnapshot()
+	return cur != nil && cur.ResolvedRoot == resolved
+}
+
+// resolveRoot turns the configured vault path into the concrete directory it
+// currently points at, following a git-sync style symlink. Reload compares the
+// result against the active snapshot to decide whether there is anything to do.
+func resolveRoot(configuredRoot string) (string, error) {
+	absRoot, err := filepath.Abs(configuredRoot)
+	if err != nil {
+		return "", fmt.Errorf("invalid vault path: %w", err)
+	}
+	resolved, err := filepath.EvalSymlinks(absRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve vault path %q: %w", absRoot, err)
+	}
+	return resolved, nil
+}
+
 // loadVaultConfig reads the publish blacklist for one snapshot. An empty
 // configPath resolves to <resolvedRoot>/.publish/config.yaml so the config
 // travels with the vault revision. A missing file yields an empty config; a
@@ -180,8 +251,19 @@ func loadVaultConfig(resolvedRoot, configPath string) *vaultconfig.Config {
 	return cfg
 }
 
+// inMemoryIndexWarnNotes is the note count above which an in-memory search
+// index is worth warning about. The production vault (1712 notes) puts 884 MiB
+// of bleve gtreap nodes on the Go heap — 84% of the live heap and, on its own,
+// more than half the container limit. Measured in PV-MEMORY-019; a vault a
+// quarter that size is already the point where an operator should know.
+const inMemoryIndexWarnNotes = 400
+
 func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search.Index, string, error) {
 	if searchIndexPath == "" {
+		if n := v.Count(); n >= inMemoryIndexWarnNotes {
+			log.Printf("warning: search index is in memory for %d notes and will dominate heap usage; "+
+				"pass --search-index-path <writable-dir> to keep it on disk (needs a volume, not tmpfs)", n)
+		}
 		si, err := search.New(v)
 		return si, "", err
 	}
