@@ -3,19 +3,24 @@ Title: Stripping the .md extension from wiki-link targets
 Ticket: PV-WIKILINK-021
 Status: active
 Topics:
-    - wiki-links
+    - wiki-link
     - parser
     - vault
 DocType: design
 Intent: long-term
 Owners: []
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://internal/parser/parser.go
+      Note: parseWikiLinkInner is the chosen choke point; slugify is why the dot becomes a hyphen
+    - Path: repo://pkg/vault/vault.go
+      Note: pathToSlug and buildWikiLinkIndex are the extension-less side of the disagreement
 ExternalSources: []
-Summary: "Wiki-link targets written with a trailing .md slugify to a `-md` slug that does not match any note, so the link either dies as #unresolved-… or silently lands on an unrelated note. Fix: strip a trailing .md from the target once, in parseWikiLinkInner, before anything derives a slug, display text or backlink from it."
-LastUpdated: 2026-08-10
-WhatFor: "Design for the fix to `.md`-suffixed wiki-link targets"
-WhenToUse: "Read before touching wiki-link target parsing or the wiki-link index"
+Summary: 'Wiki-link targets written with a trailing .md slugify to a `-md` slug that does not match any note, so the link either dies as #unresolved-… or silently lands on an unrelated note. Fix: strip a trailing .md from the target once, in parseWikiLinkInner, before anything derives a slug, display text or backlink from it.'
+LastUpdated: 2026-08-10T00:00:00Z
+WhatFor: Design for the fix to `.md`-suffixed wiki-link targets
+WhenToUse: Read before touching wiki-link target parsing or the wiki-link index
 ---
+
 
 # Stripping the .md extension from wiki-link targets
 
