@@ -139,6 +139,12 @@ topics:
       description: Bleve full-text search engine index construction and storage
     - slug: kubernetes
       description: Kubernetes workloads, probes, resource limits, and pod lifecycle
+    - slug: slug
+      description: Note slug generation, URL slug resolution, and slug/path mapping
+    - slug: routing
+      description: HTTP route matching, URL decoding, and SPA fallback routing
+    - slug: frontmatter
+      description: YAML frontmatter parsing and frontmatter-driven behaviour (publish, title, tags)
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
