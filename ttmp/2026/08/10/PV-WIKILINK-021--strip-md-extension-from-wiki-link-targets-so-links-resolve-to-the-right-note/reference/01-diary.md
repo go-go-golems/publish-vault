@@ -11,9 +11,15 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: repo://internal/parser/parser.go
-      Note: StripNoteExtension and its single call site in parseWikiLinkInner — the fix (commit bfbcab4)
+      Note: |-
+        StripNoteExtension and its single call site in parseWikiLinkInner — the fix (commit bfbcab4)
+        StripNoteExtension (commit bfbcab4) and resolveSelfHeadingLinks + the target-less branch of wikiLinkHTML (commit b620b39)
     - Path: repo://pkg/vault/vault.go
       Note: ResolveWikiLink normalises the target; buildWikiLinkIndex explains why the index has no extension-bearing key (commit bfbcab4)
+    - Path: repo://web/src/components/organisms/NoteHtml/NoteHtml.tsx
+      Note: 'Click handler returns early for bare #fragment hrefs, so same-page anchors fall through to the browser'
+    - Path: repo://web/src/components/organisms/NoteView/noteEnhancements.ts
+      Note: enhanceHeadingAnchors makes heading ids shareable URLs — why they were left as goldmark emits them
     - Path: repo://web/src/vault/staticVault.ts
       Note: Parallel TS resolver with the same bug — stripNoteExtension/wikiLinkLabel (commit 2fb5955)
 ExternalSources: []
@@ -22,6 +28,7 @@ LastUpdated: 2026-08-10T00:00:00Z
 WhatFor: Review trail and continuation notes for PV-WIKILINK-021
 WhenToUse: Read before resuming work on wiki-link target resolution
 ---
+
 
 
 # Diary
@@ -444,3 +451,318 @@ third one ever appears:
 
 Neither matches the extension-less key both index builders register, so both
 needed the same strip — but only the Go one could ever collide with a real note.
+
+---
+
+## Step 4: Discovering that the fragment cannot be computed
+
+This step was supposed to be small — give `[[#Heading]]` a same-page href and a
+display string — and it stopped being small about five minutes in. Before
+writing the fix I checked what the anchor would actually have to point at, and
+found that goldmark's auto heading IDs and our `slugify` disagree on most real
+headings. So the obvious implementation (`href="#" + slugify(heading)`) would
+have produced a link that looks correct in the HTML, passes any test written
+against `slugify`, and still does nothing when clicked.
+
+The finding is bigger than this ticket: the same mismatch affects every
+cross-note `[[Note#Heading]]` link, which I fixed the *note* half of yesterday
+without ever checking the *fragment* half.
+
+### Prompt Context
+
+**User prompt (verbatim):** "fix the 1. and write a detaield diary as you work, according to the diary skill for the format."
+
+**Assistant interpretation:** Fix the first of the two follow-ups I reported —
+`[[#Heading]]` same-note links rendering as an empty anchor pointing at the
+vault root — and keep a diary in the skill's format while doing it.
+
+**Inferred user intent:** The Pattern Zoo note's table of contents is entirely
+`[[#Heading]]` links and is currently invisible and non-functional in the
+published site; they want it to work.
+
+**Commit (code):** b620b39 — "fix(PV-WIKILINK-021): make [[#Heading]] a working same-page anchor"
+
+### What I did
+
+- Wrote `scripts/03-heading-id-divergence`, which renders real heading text
+  through the parser and prints goldmark's emitted `id` next to
+  `parser.Slugify`'s answer for the same string.
+- Confirmed the frontend can accept a bare `#id` href: `NoteHtml.tsx` bails out
+  of SPA routing with `if (href?.startsWith("#")) return;`, leaving the browser
+  to scroll.
+- Checked that heading ids are user-facing — `enhanceHeadingAnchors` injects a
+  `#` permalink into every heading that has one — before considering any change
+  to how they are generated.
+
+### Why
+
+Because "compute the fragment the same way we compute slugs" is the answer a
+reasonable person reaches for, and it is wrong here. Establishing that up front
+determined the whole shape of the fix.
+
+### What worked
+
+`scripts/03-heading-id-divergence`, on headings taken from the user's own note:
+
+```
+OK "Identity is an API decision"                       goldmark="identity-is-an-api-decision"       slugify="identity-is-an-api-decision"
+!! "Pattern 1 — Semantic Identity as Explicit Proj…"   goldmark="pattern-1--semantic-identity-as-…" slugify="pattern-1-semantic-identity-as-…"
+!! "9.2 Kernel K0: canonical identity"                 goldmark="92-kernel-k0-canonical-identity"   slugify="9-2-kernel-k0-canonical-identity"
+!! "7.3 Domain-separated hashes"                       goldmark="73-domain-separated-hashes"        slugify="7-3-domain-separated-hashes"
+!! "Entity–Derivation–Observation Separation"          goldmark="entityderivationobservation-sep…"  slugify="entity-derivation-observation-sep…"
+```
+
+Five of seven realistic headings disagree. The rule is that goldmark **drops**
+punctuation it does not want, while `slugify` **replaces** it with `-`; they
+agree only when the heading contains nothing but letters, digits and spaces.
+
+### What didn't work
+
+Nothing was attempted and abandoned here — but the near-miss is worth recording,
+because it is the kind of bug that ships: had I written
+`href="#" + slugify(heading)` and a test asserting exactly that, the test would
+have passed, the HTML would have looked plausible in review, and every link
+would still have been dead. The only thing that caught it was rendering a
+heading and reading the id back.
+
+### What I learned
+
+Three separate slug algorithms are live in this renderer: `slugify` (note slugs
+and wiki-link fragments), goldmark's auto heading ID (heading anchors), and
+`titleToSlug` in the static TS vault. Any code that produces a value consumed by
+another one of them has to be checked against it rather than assumed compatible.
+
+Also: heading ids are a published URL surface here, not an implementation
+detail. `enhanceHeadingAnchors` gives every heading a copyable `#` permalink, so
+regenerating ids with a different algorithm would silently break links people
+have already shared. That ruled out the "make goldmark use `slugify`" option,
+which would otherwise have been the tidiest.
+
+### What was tricky to build
+
+Nothing yet — this step was investigation. The trickiness it uncovered is in
+Step 5.
+
+### What warrants a second pair of eyes
+
+The conclusion that heading ids must stay as goldmark emits them. It rests on
+`enhanceHeadingAnchors` making them shareable URLs; if nobody has ever shared
+one, unifying the algorithms would be a cleaner end state than what I built.
+
+### What should be done in the future
+
+- Cross-note `[[Note#Heading]]` fragments have the same mismatch and are **not**
+  fixed by this ticket — quantified in Step 5.
+
+### Code review instructions
+
+- `go run ./ttmp/2026/08/10/PV-WIKILINK-021--*/scripts/03-heading-id-divergence`
+  — every `!!` row is a heading whose wiki-link fragment would miss.
+- `internal/parser/parser.go:84` (`parser.WithAutoHeadingID()`) is where the
+  heading ids come from; `internal/parser/parser.go` `slugify` is the other
+  algorithm.
+
+### Technical details
+
+goldmark's auto heading ID keeps `[a-z0-9]`, `-` and `_`, maps spaces to `-`,
+and **deletes** everything else, then disambiguates duplicates with a `-1`,
+`-2`, … suffix. `slugify` maps every character outside `[a-z0-9\-_/]` to `-`
+and collapses runs. Hence `9.2 …` → `92-…` vs `9-2-…`, and
+`Entity–Derivation–Observation` → `entityderivationobservation` vs
+`entity-derivation-observation`.
+
+---
+
+## Step 5: Resolve the fragment against the rendered HTML
+
+Given that the fragment cannot be derived, the fix reads it back. `wikiLinkHTML`
+emits a placeholder for a target-less link — `<a href="#"
+class="wiki-link wiki-link-self" data-heading="…">` — and a new post-render pass,
+`resolveSelfHeadingLinks`, runs after goldmark, collects every rendered heading's
+id and text, and rewrites each placeholder to point at the id that actually
+exists. Exact by construction, and immune to goldmark changing its algorithm.
+
+Matching follows Obsidian: heading text, case-insensitive, runs of whitespace
+collapsed, first heading wins on duplicates. A target that matches no heading
+text is tried against the ids directly, so a link written in already-slugified
+form still lands; anything left over becomes a visibly broken link instead of a
+silent jump to nowhere.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 4)
+
+**Assistant interpretation:** (see Step 4)
+
+**Inferred user intent:** (see Step 4)
+
+**Commit (code):** b620b39 — "fix(PV-WIKILINK-021): make [[#Heading]] a working same-page anchor"
+
+### What I did
+
+- Added the `target == ""` branch to `wikiLinkHTML`: display text falls back to
+  the heading, and the link never enters the `/note/<slug>` path.
+- Added `resolveSelfHeadingLinks` and called it from `Parse` after
+  `renderCallouts`, before `RestoreMath`.
+- Excluded target-less links from `extractWikiLinks`, so they stop entering
+  `WikiLinks` (and the backlink graph, and the agent Markdown view) as
+  empty-target entries.
+- Four new parser tests and one vault test.
+- Gave the static TS vault's `wikiLinkLabel` a heading fallback so the link is at
+  least visible there.
+- Wrote `scripts/04-self-heading-links` (end-to-end through the vault) and
+  `scripts/05-real-self-heading-check` (audits a real note).
+
+### Why
+
+Resolution rather than derivation is the only approach that cannot drift: it
+reads the same document the reader will scroll. It also gets duplicate headings
+right for free — goldmark emits `notes` and `notes-1`, and picking the first
+match is exactly Obsidian's behaviour — which a mirrored algorithm could only
+achieve by reimplementing goldmark's collision counter.
+
+### What worked
+
+On the user's actual note, before and after (`scripts/05-real-self-heading-check`,
+with the parser checked out at `2fb5955` for the "before" column):
+
+| | before | after |
+|---|---|---|
+| same-note links | 24 | 24 |
+| resolved to a real heading id | 0 | **24** |
+| rendered as `/note/#…` (vault root) | 24 | 0 |
+| anchors with no visible text | 24 | 0 |
+| dangling (id absent from the page) | — | 0 |
+
+`go test ./... -count=1` green across all 13 packages; `make lint` 0 issues;
+`make web-check` clean.
+
+### What didn't work
+
+`git stash` to get the "before" numbers was a mistake. The fix was already
+committed, so stashing changed nothing relevant, and `git stash pop` then hit
+
+```
+Auto-merging ttmp/vocabulary.yaml
+CONFLICT (content): Merge conflict in ttmp/vocabulary.yaml
+```
+
+against a **stale lefthook autostash** left over from an earlier session (it adds
+`api`/`xgoja` topics that HEAD already contains — 87 slugs at HEAD vs 65 in the
+stash). Resolved with `git checkout HEAD -- ttmp/vocabulary.yaml`. I left the
+stash entry in place rather than dropping someone else's stash; it is
+`stash@{0}: autostash` and its content is already in HEAD.
+
+The correct move, used afterwards, is `git checkout HEAD~1 -- internal/parser/parser.go`,
+measure, then `git checkout HEAD -- internal/parser/parser.go`.
+
+### What I learned
+
+`marked` v18, which the static TS vault uses, emits **no heading ids at all** —
+automatic header ids moved out to `marked-gfm-heading-id`. So the static build
+has never supported heading fragments, cross-note ones included, and
+`enhanceHeadingAnchors` is a no-op there. `[[#Heading]]` cannot be made to work
+in that build without first adding heading ids, which is a feature, not a fix.
+Hence the deliberate half-measure there: the link becomes visible, and stays
+marked broken, which is at least honest.
+
+### What was tricky to build
+
+**Ordering against the math pass.** `resolveSelfHeadingLinks` compares the
+heading text in the rendered HTML against the `data-heading` attribute. Math is
+lifted out of the source *before* wiki links are extracted and restored *after*
+every HTML pass, so during the window in between both sides carry the same
+placeholders — a heading like `## $\sigma$ notes` and a link `[[#$\sigma$ notes]]`
+match each other. Run the pass after `RestoreMath` instead and one side has TeX
+markup while the other still has a placeholder, and the link silently breaks.
+The call sits between `renderCallouts` and `RestoreMath` for exactly this reason,
+and the comment there says so.
+
+**Not being undone by the vault.** `rebuildHTML` re-runs every resolution pass
+over the parser output on each reload, so a correct anchor can still be rewritten
+later. Two passes were candidates to eat it: `ReplaceWikiLinksString`, whose
+`hrefNoteRe` only matches `href="/note/…"` (ours is `href="#…"`), and
+`ReplaceWikiLinkDisplay`, whose regex requires the literal `class="wiki-link"`
+with its closing quote plus a `data-raw` attribute — ours is
+`class="wiki-link wiki-link-self"` and carries no `data-raw`. Both miss, but by
+accident of their patterns rather than by design, so
+`TestSelfHeadingLinksSurviveRebuild` pins it at the vault layer where a future
+change to either regex would show up.
+
+**Deciding what an unmatched heading should look like.** Silently leaving
+`href="#"` would reproduce the original complaint in a new form. It now renders
+`href="#unresolved-<slugified heading>"` with a `broken` class — which
+`prose.css` already styles as dotted red, since the static vault has emitted
+`wiki-link broken` all along — and, crucially, keeps its text.
+
+### What warrants a second pair of eyes
+
+- `resolveSelfHeadingLinks` parses HTML with regexes. It is operating on our own
+  freshly generated markup rather than arbitrary input, and the heading regex
+  `(?s)<h[1-6][^>]*\bid="([^"]*)"[^>]*>(.*?)</h[1-6]>` is non-greedy, but a
+  heading containing a raw `</h2>` inside an HTML block would confuse it. The
+  same style is already used throughout this file.
+- The id-fallback rule (`[[#some-heading]]` matching a heading whose id is
+  `some-heading`) is **not** Obsidian behaviour. I added it because the notes
+  that motivated this ticket are LLM-written and tend to emit slug forms. It
+  only fires when the text match fails, so it cannot shadow a real heading.
+- Excluding target-less links from `WikiLinks` changes the `wikiLinks` array in
+  the note JSON. They were empty-target entries that never resolved, so nothing
+  should depend on them — but it is an API-shaped change.
+
+### What should be done in the future
+
+- **Cross-note fragments have the same bug and are not fixed.**
+  `scripts/06-cross-note-fragment-audit` measures it on the Pattern Zoo note:
+  **8 of 28** cross-note `#Heading` links point at an id that does not exist in
+  the target, so they open the right note at the top of the page. Every one is a
+  heading with a `.` or a dash in it (`#9.2 Kernel K0: canonical identity` asks
+  for `#9-2-kernel-k0-canonical-identity`; the target renders
+  `#92-kernel-k0-canonical-identity`). The same read-it-back approach applies,
+  but it needs a per-note heading-id index in the vault layer and a fragment
+  resolver in `rebuildHTML`, which is a materially larger change than this one.
+- `![[#Heading]]` (embedding a section of the current note) still renders as an
+  empty `<div class="wiki-embed" data-target="">` — invisible, like the link bug
+  just fixed. Transclusion of one's own section is a real feature rather than a
+  one-line repair, so it is untouched.
+- Block references `[[#^blockid]]` are not supported and now render as visibly
+  broken rather than invisibly broken. That is an improvement, not support.
+- The static build has no heading ids at all (see above).
+
+### Code review instructions
+
+- Start at `internal/parser/parser.go`: the `target == ""` branch in
+  `wikiLinkHTML`, then `resolveSelfHeadingLinks`, then its call site in `Parse`
+  (note the comment on why it precedes `RestoreMath`).
+- `go test ./internal/parser/... ./pkg/vault/... -count=1`
+- `go run ./ttmp/2026/08/10/PV-WIKILINK-021--*/scripts/04-self-heading-links` —
+  shows resolution end-to-end through the vault, including duplicate headings and
+  a deliberately missing one.
+- `go run ./ttmp/2026/08/10/PV-WIKILINK-021--*/scripts/05-real-self-heading-check -note "/home/manuel/code/wesen/go-go-golems/go-go-parc/Transcripts/Research/09 - RAG-MATHS Pattern Zoo.md"`
+  — must print `resolved: 24`, `broken: 0`, `dangling: 0`.
+- To see the "before": `git checkout HEAD~1 -- internal/parser/parser.go`, run
+  the same command, then `git checkout HEAD -- internal/parser/parser.go`.
+
+### Technical details
+
+Rendered output for the four interesting cases:
+
+```html
+<!-- punctuation goldmark drops but slugify would hyphenate -->
+<a href="#92-kernel-k0-canonical-identity" class="wiki-link wiki-link-self"
+   data-heading="9.2 Kernel K0: canonical identity" data-alias="">9.2 Kernel K0: canonical identity</a>
+
+<!-- alias wins over heading text -->
+<a href="#entityderivationobservation-separation" class="wiki-link wiki-link-self"
+   data-heading="Entity–Derivation–Observation Separation" data-alias="call it EDO">call it EDO</a>
+
+<!-- duplicate headings: goldmark emits notes and notes-1; first wins -->
+<a href="#notes" class="wiki-link wiki-link-self" data-heading="Notes" data-alias="">Notes</a>
+
+<!-- no such heading: visible, and marked -->
+<a href="#unresolved-no-such-heading" class="wiki-link wiki-link-self broken"
+   data-heading="no such heading" data-alias="">no such heading</a>
+```
+
+Before the fix, all four were `<a href="/note/#…" class="wiki-link" data-target=""
+data-raw="" data-alias=""></a>` — note the empty element content.

@@ -41,9 +41,32 @@ links), because `[[X.md]]` and `[[X]]` were separate entries before.
 Design: [design/01-stripping-the-md-extension-from-wiki-link-targets.md](./design/01-stripping-the-md-extension-from-wiki-link-targets.md).
 Diary: [reference/01-diary.md](./reference/01-diary.md).
 
-Two follow-ups are open in tasks.md and were deliberately **not** fixed here:
-`[[#Heading]]` same-note links (a different bug in the same function), and the
-absence of any unit-test runner under `web/`.
+## Second fix: [[#Heading]] same-note links
+
+A wiki link with no target names a heading in the note it sits in. It went
+through the `/note/<slug>` path anyway with an empty slug, rendering
+`<a href="/note/#heading" ...></a>` — **empty text, so invisible on the page**,
+pointing at the vault root. 24 of them in the Pattern Zoo note.
+
+The fragment cannot be computed: goldmark's auto heading IDs and `slugify`
+disagree on most real headings (`9.2 Kernel K0` → `92-kernel-k0`, not
+`9-2-kernel-k0`), and goldmark suffixes duplicates. `resolveSelfHeadingLinks`
+reads the ids back out of the rendered HTML instead. On the Pattern Zoo note:
+**0 → 24** resolved, **24 → 0** invisible anchors, 0 dangling.
+
+Design: [design/02-same-note-heading-links-and-why-the-fragment-must-be-read-back.md](./design/02-same-note-heading-links-and-why-the-fragment-must-be-read-back.md).
+
+## Open follow-ups
+
+See tasks.md. Deliberately not fixed here:
+
+- **Cross-note `[[Note#Heading]]` fragments have the same mismatch** — 8 of 28
+  dangle in the Pattern Zoo note, opening the right note at the top of the page.
+  Needs a per-note heading-id index in the vault layer.
+- `![[#Heading]]` self-embeds still render as an empty invisible div; the static
+  build has no heading ids at all (marked v18).
+- No unit-test runner under `web/`, so `staticVault.ts` is type-checked but never
+  executed.
 
 ## Key Links
 

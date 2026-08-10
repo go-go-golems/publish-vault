@@ -32,3 +32,22 @@ Step 3: same fix in the static TS resolver; validated on the real 09 - RAG-MATHS
 
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/web/src/vault/staticVault.ts — stripNoteExtension/wikiLinkLabel — titleToSlug deleted the dot rather than hyphenating it
 
+
+## 2026-08-10
+
+Step 4: found that goldmark's auto heading IDs and parser.Slugify disagree on most real headings (goldmark deletes '.' and dashes where slugify hyphenates them), so a [[#Heading]] fragment cannot be computed — it has to be read back out of the rendered HTML
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — parser.WithAutoHeadingID() vs slugify — the two algorithms
+
+
+## 2026-08-10
+
+Step 5: [[#Heading]] now renders as a same-page anchor carrying the heading as its text, with the fragment resolved against the ids goldmark actually emitted (Obsidian matching rules, first heading wins, visibly broken when unmatched). Same-note links no longer enter WikiLinks. On the Pattern Zoo note: 24 invisible /note/# anchors before, 24 working anchors and 0 dangling after (commit b620b39)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — resolveSelfHeadingLinks and the target-less branch of wikiLinkHTML
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/web/src/vault/staticVault.ts — wikiLinkLabel falls back to the heading so the link is visible in the static build
+
