@@ -41,6 +41,7 @@ type Config struct {
 	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
 	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
 	VaultConfigPath     string // Optional vault config file (publish blacklist). Empty = <vault>/.publish/config.yaml. Re-read on every reload.
+	PprofAddr           string // Optional listen address for net/http/pprof (e.g. 127.0.0.1:6060). Empty = disabled.
 	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
@@ -63,6 +64,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if _, err := net.LookupPort("tcp", cfg.Port); err != nil {
 		return fmt.Errorf("invalid port %q: %w", cfg.Port, err)
 	}
+
+	startPprof(cfg.PprofAddr)
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
 	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfigPath: cfg.VaultConfigPath})

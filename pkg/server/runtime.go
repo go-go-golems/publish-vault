@@ -15,7 +15,15 @@ import (
 	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
 )
 
-var oldSnapshotCloseDelay = 30 * time.Second
+// oldSnapshotCloseDelay is how long a replaced snapshot is kept alive after a
+// swap so requests that already read its vault and search index can finish.
+//
+// It is memory, not just time: an in-memory bleve index for the production
+// vault is 884 MiB, and holding the previous one for this long means the swap
+// costs double that for the duration. Five seconds comfortably outlives any
+// request this service serves (the slowest is a search over a loaded index)
+// while releasing the old index promptly. See PV-MEMORY-019.
+var oldSnapshotCloseDelay = 5 * time.Second
 
 // RuntimeOptions configures how runtime snapshots are loaded.
 type RuntimeOptions struct {
