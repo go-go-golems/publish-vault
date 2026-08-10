@@ -1341,3 +1341,108 @@ func TestSelfHeadingLinksSurviveRebuild(t *testing.T) {
 		t.Fatalf("WikiLinks = %#v, want just the Other link", zoo.WikiLinks)
 	}
 }
+
+// TestCrossNoteHeadingFragmentsUseTheTargetsRenderedIDs is the regression test
+// for the cross-note half of the fragment bug. The parser writes a provisional
+// fragment with slugify; the target note's heading ids come from goldmark, which
+// disagrees with slugify on any heading containing punctuation. Before the fix
+// these links opened the right note at the top of the page.
+func TestCrossNoteHeadingFragmentsUseTheTargetsRenderedIDs(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md",
+		"# Target\n\n"+
+			"## 9.2 Kernel K0: canonical identity\n\n"+
+			"## Entity–Derivation–Observation Separation\n\n"+
+			"## Notes\n\n## Notes\n")
+	writeVaultTestFile(t, root, "Hidden.md", "---\npublish: false\n---\n\n# Hidden\n\n## Secret Section\n")
+	writeVaultTestFile(t, root, "Source.md",
+		"# Source\n\n"+
+			"- punct: [[Target#9.2 Kernel K0: canonical identity]]\n"+
+			"- dashes: [[Target#Entity–Derivation–Observation Separation]]\n"+
+			"- dupe: [[Target#Notes]]\n"+
+			"- absent: [[Target#no such heading]]\n"+
+			"- hidden: [[Hidden#Secret Section]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	src, ok := v.GetNote("source")
+	if !ok {
+		t.Fatal("source note missing")
+	}
+
+	// goldmark deletes "." and the dashes; slugify would have hyphenated them.
+	for _, want := range []string{
+		`href="/note/target#92-kernel-k0-canonical-identity"`,
+		`href="/note/target#entityderivationobservation-separation"`,
+		`href="/note/target#notes"`,
+	} {
+		if !strings.Contains(src.HTML, want) {
+			t.Errorf("expected %s, got: %s", want, src.HTML)
+		}
+	}
+	for _, unwanted := range []string{
+		`#9-2-kernel-k0-canonical-identity`,
+		`#entity-derivation-observation-separation`,
+		`#notes-1`, // duplicate headings: the first one wins
+	} {
+		if strings.Contains(src.HTML, unwanted) {
+			t.Errorf("stale slugified fragment %s survived: %s", unwanted, src.HTML)
+		}
+	}
+	// A heading the target does not have leaves the link working, without a
+	// fragment that points at nothing.
+	if !strings.Contains(src.HTML, `href="/note/target"`) {
+		t.Errorf("absent heading should drop the fragment, not the link: %s", src.HTML)
+	}
+	if strings.Contains(src.HTML, "#no-such-heading") {
+		t.Errorf("fragment for an absent heading should be dropped: %s", src.HTML)
+	}
+	// An unpublished target is not a note at all: the link is already unresolved
+	// and must not be rewritten into a /note/ link by the fragment pass.
+	if !strings.Contains(src.HTML, `href="#unresolved-hidden"`) {
+		t.Errorf("link to an unpublished note should stay unresolved: %s", src.HTML)
+	}
+}
+
+// TestCrossNoteHeadingFragmentsFollowTargetEdits guards the reload path: the
+// fragment lives in the *linking* note's HTML but is derived from the *target*
+// note, so renaming a heading has to re-resolve every link pointing at it.
+func TestCrossNoteHeadingFragmentsFollowTargetEdits(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 1.1 First\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target#1.1 First]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	src, _ := v.GetNote("source")
+	if !strings.Contains(src.HTML, `href="/note/target#11-first"`) {
+		t.Fatalf("initial fragment wrong: %s", src.HTML)
+	}
+
+	// Rename the heading; the link now names a heading that no longer exists.
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 2.2 Second\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); err != nil {
+		t.Fatalf("ReloadNote: %v", err)
+	}
+	src, _ = v.GetNote("source")
+	if strings.Contains(src.HTML, "#11-first") {
+		t.Fatalf("stale fragment survived the target's edit: %s", src.HTML)
+	}
+	if !strings.Contains(src.HTML, `href="/note/target"`) {
+		t.Fatalf("link should still open the target: %s", src.HTML)
+	}
+
+	// Put it back: the link must recover rather than stay dropped.
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 1.1 First\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); err != nil {
+		t.Fatalf("ReloadNote: %v", err)
+	}
+	src, _ = v.GetNote("source")
+	if !strings.Contains(src.HTML, `href="/note/target#11-first"`) {
+		t.Fatalf("fragment did not recover after the heading came back: %s", src.HTML)
+	}
+}

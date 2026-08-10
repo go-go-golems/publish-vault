@@ -284,9 +284,14 @@ func wikiLinkHTML(match []byte) []byte {
 	}
 	href := "/note/" + slug
 	if heading != "" {
+		// A provisional fragment. slugify is not how the target note's heading
+		// ids are made, so the vault replaces this with the id the target
+		// actually rendered (ResolveWikiLinkHeadings); data-heading carries the
+		// heading text that pass needs, since the fragment alone has already
+		// lost it.
 		href += "#" + slugify(heading)
 	}
-	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-alias="` + alias + `">` + display + `</a>`)
+	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-heading="` + stdhtml.EscapeString(heading) + `" data-alias="` + alias + `">` + display + `</a>`)
 }
 
 var (
@@ -300,49 +305,68 @@ var (
 	whitespaceRe      = regexp.MustCompile(`\s+`)
 )
 
-// resolveSelfHeadingLinks points [[#Heading]] links at the heading goldmark
-// actually rendered, instead of at a slug we computed ourselves.
+// HeadingIndex maps a rendered note's headings to the ids goldmark gave them.
 //
-// This has to be resolution rather than derivation: goldmark's auto heading IDs
-// and slugify disagree (goldmark drops "." and "—" outright where slugify turns
-// them into "-", so "9.2 Kernel K0" becomes "92-kernel-k0" rather than
-// "9-2-kernel-k0"), and goldmark additionally suffixes duplicate headings with
-// "-1", "-2". Reading the ids back out of the rendered HTML is exact by
+// It exists because a wiki-link fragment cannot be *computed*: goldmark's auto
+// heading IDs and slugify disagree (goldmark drops "." and "—" outright where
+// slugify turns them into "-", so "9.2 Kernel K0" becomes "92-kernel-k0" rather
+// than "9-2-kernel-k0"), and goldmark additionally suffixes duplicate headings
+// with "-1", "-2". Reading the ids back out of the rendered HTML is exact by
 // construction and cannot drift when goldmark changes its algorithm.
-//
-// Headings are matched on their text, case-insensitively and with runs of
-// whitespace collapsed, which is how Obsidian matches them; the first heading
-// with that text wins, again matching Obsidian. A target that matches no
-// heading text is tried against the ids themselves, so a link written in the
-// already-slugified form still lands. Anything left over becomes a visibly
-// unresolved link rather than a silent jump to the top of the page.
-func resolveSelfHeadingLinks(htmlIn string) string {
-	if !strings.Contains(htmlIn, `class="wiki-link wiki-link-self"`) {
-		return htmlIn
-	}
+type HeadingIndex struct {
+	byText map[string]string
+	ids    map[string]bool
+}
 
-	byText := map[string]string{}
-	ids := map[string]bool{}
+// BuildHeadingIndex reads every id-bearing heading out of rendered note HTML.
+func BuildHeadingIndex(htmlIn string) *HeadingIndex {
+	idx := &HeadingIndex{byText: map[string]string{}, ids: map[string]bool{}}
 	for _, m := range renderedHeadingRe.FindAllStringSubmatch(htmlIn, -1) {
 		id, inner := m[1], m[2]
-		ids[id] = true
+		idx.ids[id] = true
 		key := normalizeHeadingKey(stdhtml.UnescapeString(htmlTagRe.ReplaceAllString(inner, "")))
 		if key == "" {
 			continue
 		}
-		if _, exists := byText[key]; !exists {
-			byText[key] = id
+		if _, exists := idx.byText[key]; !exists {
+			idx.byText[key] = id
 		}
 	}
+	return idx
+}
+
+// Lookup resolves a heading as written in a wiki link to the id it must point
+// at. Matching is on heading text, case-insensitively and with runs of
+// whitespace collapsed, which is how Obsidian matches; the first heading with
+// that text wins, again matching Obsidian. A heading that matches no text is
+// tried against the ids themselves, so a link written in the already-slugified
+// form still lands. A nil index resolves nothing, so callers can cache misses.
+func (h *HeadingIndex) Lookup(heading string) (string, bool) {
+	if h == nil {
+		return "", false
+	}
+	if id, ok := h.byText[normalizeHeadingKey(heading)]; ok {
+		return id, true
+	}
+	if h.ids[heading] {
+		return heading, true
+	}
+	return "", false
+}
+
+// resolveSelfHeadingLinks points [[#Heading]] links at the heading goldmark
+// actually rendered in this very note. Anything it cannot match becomes a
+// visibly unresolved link rather than a silent jump to the top of the page.
+func resolveSelfHeadingLinks(htmlIn string) string {
+	if !strings.Contains(htmlIn, `class="wiki-link wiki-link-self"`) {
+		return htmlIn
+	}
+	idx := BuildHeadingIndex(htmlIn)
 
 	return selfHeadingLinkRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
 		sub := selfHeadingLinkRe.FindStringSubmatch(match)
 		heading := stdhtml.UnescapeString(sub[1])
-		id, ok := byText[normalizeHeadingKey(heading)]
-		if !ok && ids[heading] {
-			id = heading
-			ok = true
-		}
+		id, ok := idx.Lookup(heading)
 		if !ok {
 			return `<a href="#unresolved-` + stdhtml.EscapeString(slugify(heading)) +
 				`" class="wiki-link wiki-link-self broken" data-heading="` + sub[1] + `" data-alias="` + sub[2] + `">`
@@ -424,6 +448,47 @@ func ReplaceWikiLinksString(html string, resolver func(string) string) string {
 		return `href="/note/` + resolved + fragment + `"`
 	})
 	return html
+}
+
+// crossNoteHeadingLinkRe matches a resolved wiki-link anchor that carries a
+// heading. The attribute order is fixed because wikiLinkHTML generates it and
+// ReplaceWikiLinksString only rewrites values in place.
+var crossNoteHeadingLinkRe = regexp.MustCompile(
+	`<a href="/note/([^"#]*)(#[^"]*)?" class="wiki-link" data-target="([^"]*)" data-raw="([^"]*)" data-heading="([^"]+)" data-alias="([^"]*)">`)
+
+// ResolveWikiLinkHeadings replaces the provisional slugified fragment of a
+// [[Note#Heading]] link with the id the *target* note actually rendered.
+//
+// The fragment wikiLinkHTML wrote is a guess made with slugify, and the target's
+// heading ids come from goldmark, which does not agree with slugify on any
+// heading containing punctuation (see HeadingIndex). The link therefore opened
+// the right note at the top of the page whenever the two differed.
+//
+// resolver receives the resolved target slug and the heading as written, and
+// returns the real id. When it declines — the target is not a published note,
+// the heading does not exist there, or the link is a block reference
+// ([[Note#^blockid]]) — the fragment is dropped rather than left pointing at an
+// id that is known not to exist. The link still opens the note.
+func ResolveWikiLinkHeadings(html string, resolver func(slug, heading string) (string, bool)) string {
+	// rebuildHTML runs this over every note on every reload, and most notes hold
+	// no heading link at all. A substring scan is far cheaper than the regexp,
+	// and every anchor this pass can act on carries the attribute.
+	if !strings.Contains(html, ` data-heading="`) {
+		return html
+	}
+	return crossNoteHeadingLinkRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := crossNoteHeadingLinkRe.FindStringSubmatch(match)
+		if len(sub) < 7 {
+			return match
+		}
+		slug, target, raw, heading, alias := sub[1], sub[3], sub[4], sub[5], sub[6]
+		fragment := ""
+		if id, ok := resolver(slug, stdhtml.UnescapeString(heading)); ok {
+			fragment = "#" + stdhtml.EscapeString(id)
+		}
+		return `<a href="/note/` + slug + fragment + `" class="wiki-link" data-target="` + target +
+			`" data-raw="` + raw + `" data-heading="` + heading + `" data-alias="` + alias + `">`
+	})
 }
 
 // ReplaceWikiLinkDisplay replaces the display text of wiki links when the

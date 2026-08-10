@@ -700,3 +700,64 @@ func TestSelfHeadingLinkDegenerateFormsAreLeftAlone(t *testing.T) {
 		t.Fatalf("degenerate [[#]] should not become a link, got: %s", parsed.HTML)
 	}
 }
+
+// TestResolveWikiLinkHeadings covers the fragment rewrite in isolation: the
+// provisional slugified fragment wikiLinkHTML wrote is replaced with whatever
+// the resolver says the target note actually rendered, and dropped when the
+// resolver declines rather than left pointing at an id known not to exist.
+func TestResolveWikiLinkHeadings(t *testing.T) {
+	html := `<p>` +
+		`<a href="/note/other#9-2-kernel-k0" class="wiki-link" data-target="other" data-raw="Other" data-heading="9.2 Kernel K0" data-alias="">Other</a>` +
+		`<a href="/note/gone#missing" class="wiki-link" data-target="gone" data-raw="Gone" data-heading="missing" data-alias="">Gone</a>` +
+		`<a href="/note/plain" class="wiki-link" data-target="plain" data-raw="Plain" data-heading="" data-alias="">Plain</a>` +
+		`</p>`
+
+	got := ResolveWikiLinkHeadings(html, func(slug, heading string) (string, bool) {
+		if slug == "other" && heading == "9.2 Kernel K0" {
+			return "92-kernel-k0", true
+		}
+		return "", false
+	})
+
+	if !contains(got, `href="/note/other#92-kernel-k0"`) {
+		t.Errorf("fragment not replaced with the real id: %s", got)
+	}
+	if !contains(got, `href="/note/gone"`) || contains(got, `href="/note/gone#missing"`) {
+		t.Errorf("unresolvable fragment should be dropped, not kept: %s", got)
+	}
+	if !contains(got, `href="/note/plain"`) {
+		t.Errorf("link without a heading should be untouched: %s", got)
+	}
+	// The rewrite must preserve every other attribute, since later passes key
+	// off data-raw and data-alias.
+	if !contains(got, `data-raw="Other" data-heading="9.2 Kernel K0" data-alias=""`) {
+		t.Errorf("attributes were not preserved: %s", got)
+	}
+	if !contains(got, `>Other</a>`) {
+		t.Errorf("display text was not preserved: %s", got)
+	}
+}
+
+// TestWikiLinkCarriesHeadingForLaterResolution pins that the parser hands the
+// heading text on in an attribute. The fragment alone cannot be resolved later:
+// slugify is lossy, so "#9-2-kernel-k0" no longer tells anyone that the heading
+// was "9.2 Kernel K0".
+func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
+	parsed, err := Parse([]byte("# T\n\nSee [[Other Note#9.2 Kernel K0: canonical identity]].\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, `data-heading="9.2 Kernel K0: canonical identity"`) {
+		t.Fatalf("heading text not carried on the anchor: %s", parsed.HTML)
+	}
+
+	// A link with no heading still carries the attribute, empty — the fragment
+	// pass keys off a non-empty value, so it must be there to be absent.
+	plain, err := Parse([]byte("# T\n\nSee [[Other Note]].\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(plain.HTML, `data-heading=""`) {
+		t.Fatalf("headingless link should carry an empty data-heading: %s", plain.HTML)
+	}
+}

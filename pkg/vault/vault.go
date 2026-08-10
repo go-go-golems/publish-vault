@@ -506,12 +506,35 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 // the target became publishable, because the placeholder it was rendered from
 // would be gone.
 func (v *Vault) rebuildHTML() {
+	// Heading indexes are built on demand and cached for the length of the
+	// pass: only notes that are the target of a [[Note#Heading]] link need one,
+	// which is a small minority of the vault, but a popular target is linked
+	// many times. A nil entry caches "this slug is not a published note".
+	headingIndexes := map[string]*parser.HeadingIndex{}
+	headingIndexFor := func(slug string) *parser.HeadingIndex {
+		if idx, seen := headingIndexes[slug]; seen {
+			return idx
+		}
+		var idx *parser.HeadingIndex
+		if target, ok := v.notes[slug]; ok {
+			idx = parser.BuildHeadingIndex(target.sourceOrRenderedHTML())
+		}
+		headingIndexes[slug] = idx
+		return idx
+	}
+
 	for _, note := range v.notes {
 		note.HTML = parser.ReplaceWikiLinksString(note.sourceOrRenderedHTML(), func(target string) string {
 			if resolved, ok := v.wikiLinkIndex[target]; ok {
 				return resolved
 			}
 			return ""
+		})
+		// Must follow ReplaceWikiLinksString: the fragment is resolved against
+		// the note the link ends up at, which is only known once the slug has
+		// been. Consults v.notes directly because rebuildHTML runs under v.mu.
+		note.HTML = parser.ResolveWikiLinkHeadings(note.HTML, func(slug, heading string) (string, bool) {
+			return headingIndexFor(slug).Lookup(heading)
 		})
 		note.HTML = parser.ReplaceWikiLinkDisplay(note.HTML, func(slug string) string {
 			if n, ok := v.notes[slug]; ok {
