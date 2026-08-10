@@ -56,15 +56,29 @@ reads the ids back out of the rendered HTML instead. On the Pattern Zoo note:
 
 Design: [design/02-same-note-heading-links-and-why-the-fragment-must-be-read-back.md](./design/02-same-note-heading-links-and-why-the-fragment-must-be-read-back.md).
 
+## Third fix: cross-note [[Note#Heading]] fragments
+
+Same mismatch one level up. The parser wrote the fragment with `slugify`; the
+target note's ids come from goldmark. **84 of the 186** rendered cross-note
+fragments in the Pattern Zoo note pointed at an id that does not exist, so those
+links opened the right note at the top of the page. Zero of them were typos —
+every heading named really exists, it was just named by the wrong scheme.
+
+The fragment cannot be repaired where it is written (`Parse` sees one note), so
+the anchor now carries `data-heading` and `ResolveWikiLinkHeadings` resolves it
+in `rebuildHTML`, once the slug is known, against the target's own rendered
+headings. Living there means a heading rename re-resolves every inbound link on
+the next reload. **84 → 0** dangling.
+
 ## Open follow-ups
 
-See tasks.md. Deliberately not fixed here:
+See tasks.md. Deliberately not fixed:
 
-- **Cross-note `[[Note#Heading]]` fragments have the same mismatch** — 8 of 28
-  dangle in the Pattern Zoo note, opening the right note at the top of the page.
-  Needs a per-note heading-id index in the vault layer.
-- `![[#Heading]]` self-embeds still render as an empty invisible div; the static
-  build has no heading ids at all (marked v18).
+- `![[Note#Heading]]` embeds ignore the heading entirely — `resolveEmbeds`
+  injects the whole target note. `![[#Heading]]` self-embeds render as an empty
+  invisible div.
+- The static build has no heading ids at all (marked v18), so it emits no heading
+  fragments, cross-note included.
 - No unit-test runner under `web/`, so `staticVault.ts` is type-checked but never
   executed.
 

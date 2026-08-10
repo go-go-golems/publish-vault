@@ -51,3 +51,13 @@ Step 5: [[#Heading]] now renders as a same-page anchor carrying the heading as i
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — resolveSelfHeadingLinks and the target-less branch of wikiLinkHTML
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/web/src/vault/staticVault.ts — wikiLinkLabel falls back to the heading so the link is visible in the static build
 
+
+## 2026-08-10
+
+Step 6: cross-note [[Note#Heading]] fragments now resolve against the target note's own rendered heading ids. Anchors carry data-heading (the slugified fragment is lossy); ResolveWikiLinkHeadings runs in rebuildHTML after the slug is known, so a heading rename re-resolves inbound links on reload. Pattern Zoo note: 84 of 186 rendered fragments dangled before, 0 after (commit 1a91868)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — HeadingIndex factored out of the same-note pass, plus ResolveWikiLinkHeadings
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/vault/vault.go — rebuildHTML resolves fragments against the target, with a per-pass heading-index cache
+

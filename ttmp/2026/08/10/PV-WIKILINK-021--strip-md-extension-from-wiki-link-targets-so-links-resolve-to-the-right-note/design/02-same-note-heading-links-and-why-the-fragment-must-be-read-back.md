@@ -125,16 +125,36 @@ from the parser output on every reload.
   `wikiLinkLabel` falls back to the heading so the link is at least visible, and
   it stays marked broken.
 
+## Cross-note fragments
+
+`[[Other Note#Heading]]` had the identical mismatch and was fixed in a second
+pass — 84 of the 186 rendered cross-note fragments in the Pattern Zoo note
+pointed at an id that does not exist, opening the right note at the top of the
+page.
+
+It could not be done here in `Parse`, which sees one note: the answer lives in a
+different one. So `HeadingIndex` was factored out of this pass, the anchor gained
+a `data-heading` attribute (the fragment alone is lossy — `#9-2-kernel-k0` no
+longer says the heading was `9.2 Kernel K0`), and `ResolveWikiLinkHeadings` runs
+in `rebuildHTML` once the slug is known. Heading indexes are built lazily per
+target and cached for the pass.
+
+Living in `rebuildHTML` also means a heading rename re-resolves every link
+pointing at it on the next reload. A heading the target does not have drops the
+fragment rather than leaving one known to dangle.
+
 ## Not fixed here
 
-- **Cross-note `[[Note#Heading]]` fragments have the identical mismatch.**
-  `scripts/06-cross-note-fragment-audit` finds 8 of 28 dangling in the Pattern
-  Zoo note — they open the right note at the top of the page. The same
-  read-it-back approach applies but needs a per-note heading-id index in the
-  vault layer and a fragment resolver in `rebuildHTML`.
-- `![[#Heading]]` self-embeds still render as an empty invisible div.
-- Block references `[[#^blockid]]` are unsupported; they now render visibly
-  broken rather than invisibly broken.
+- `![[#Heading]]` and `![[Note#Heading]]` embeds ignore the heading entirely —
+  `resolveEmbeds` injects the whole target note. Self-embeds still render as an
+  empty invisible div.
+- Block references `[[#^blockid]]` are unsupported; a same-note one renders
+  visibly broken, a cross-note one drops its fragment.
+- A heading containing math, linked from another note, does not resolve: math is
+  lifted per note, so the two sides carry different placeholders. The fragment is
+  dropped and the link still opens the note.
+- The static TS vault emits no heading fragments at all, because marked v18
+  emits no heading ids.
 
 ## Validation
 

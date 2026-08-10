@@ -1,11 +1,11 @@
-// Command 06-cross-note-fragment-audit measures the *remaining* fragment
-// problem, which this ticket does not fix: [[Other Note#Heading]] computes its
-// fragment with slugify, while the target note's heading ids come from
-// goldmark. Where the two algorithms disagree the link opens the right note at
-// the top of the page instead of at the heading.
+// Command 06-cross-note-fragment-audit checks that every [[Note#Heading]] link
+// in a real note ends up pointing at a heading id that actually exists in the
+// note it links to.
 //
-// It parses a note, renders each linked target, and reports how many fragments
-// name an id that does not exist in the target.
+// It reads the *rendered* href rather than recomputing it, so it measures what
+// the reader gets. It stages the note and its link targets into a temp vault —
+// the fragment is resolved in the vault layer, and loading go-go-parc in full is
+// its own memory story (PV-MEMORY-019).
 //
 //	go run ./ttmp/2026/08/10/PV-WIKILINK-021--*/scripts/06-cross-note-fragment-audit \
 //	  -vault /home/manuel/code/wesen/go-go-golems/go-go-parc \
@@ -19,11 +19,19 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/go-go-golems/publish-vault/internal/parser"
+	"github.com/go-go-golems/publish-vault/pkg/vault"
 )
 
-var idRe = regexp.MustCompile(`\bid="([^"]*)"`)
+var (
+	idRe   = regexp.MustCompile(`\bid="([^"]*)"`)
+	hrefRe = regexp.MustCompile(`<a href="/note/([^"#]*)(#[^"]*)?" class="wiki-link" data-target="[^"]*" data-raw="([^"]*)" data-heading="([^"]*)"`)
+	// The pre-fix anchor carried no data-heading at all; match it so the same
+	// script can measure the "before" state after a git checkout of the parser.
+	legacyHrefRe = regexp.MustCompile(`<a href="/note/([^"#]*)(#[^"]*)?" class="wiki-link" data-target="[^"]*" data-raw="([^"]*)" data-alias=`)
+)
 
 func main() {
 	vaultRoot := flag.String("vault", "", "path to the source vault")
@@ -45,57 +53,98 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Cache each target's heading ids; one target carries many links.
+	tmp, err := os.MkdirTemp("", "fragaudit")
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+
+	copyIn := func(rel string) bool {
+		body, err := os.ReadFile(filepath.Join(*vaultRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			return false
+		}
+		to := filepath.Join(tmp, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(to, body, 0o644); err != nil {
+			panic(err)
+		}
+		return true
+	}
+	if !copyIn(*notePath) {
+		fmt.Fprintln(os.Stderr, "could not stage the note itself")
+		os.Exit(1)
+	}
+	for _, wl := range parsed.WikiLinks {
+		copyIn(wl.Target + ".md")
+		copyIn(wl.Target) // pre-fix targets still carry their own ".md"
+	}
+
+	v, err := vault.New(tmp)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "load temp vault:", err)
+		os.Exit(1)
+	}
+	note, ok := v.GetNote(parser.Slugify(strings.TrimSuffix(*notePath, ".md")))
+	if !ok {
+		fmt.Fprintln(os.Stderr, "note missing from temp vault")
+		os.Exit(1)
+	}
+
+	// Every id present in each target note's rendered HTML.
 	idsFor := map[string]map[string]bool{}
-	loadIDs := func(target string) (map[string]bool, bool) {
-		if ids, ok := idsFor[target]; ok {
-			return ids, ids != nil
-		}
-		body, err := os.ReadFile(filepath.Join(*vaultRoot, filepath.FromSlash(target+".md")))
-		if err != nil {
-			idsFor[target] = nil
-			return nil, false
-		}
-		p, err := parser.Parse(body)
-		if err != nil {
-			idsFor[target] = nil
-			return nil, false
-		}
+	for _, n := range v.AllNotes() {
 		ids := map[string]bool{}
-		for _, m := range idRe.FindAllStringSubmatch(p.HTML, -1) {
+		for _, m := range idRe.FindAllStringSubmatch(n.HTML, -1) {
 			ids[m[1]] = true
 		}
-		idsFor[target] = ids
-		return ids, true
+		idsFor[n.Slug] = ids
 	}
 
-	withHeading, dangling, unreadable := 0, map[string]string{}, 0
-	for _, wl := range parsed.WikiLinks {
-		if wl.Heading == "" || wl.IsEmbed {
+	matches := hrefRe.FindAllStringSubmatch(note.HTML, -1)
+	legacy := false
+	if len(matches) == 0 {
+		matches = legacyHrefRe.FindAllStringSubmatch(note.HTML, -1)
+		legacy = true
+	}
+
+	withFragment, dangling, dropped := 0, map[string]string{}, 0
+	for _, m := range matches {
+		slug, frag, raw := m[1], m[2], m[3]
+		heading := ""
+		if !legacy && len(m) > 4 {
+			heading = m[4]
+		}
+		if frag == "" {
+			if heading != "" {
+				dropped++
+			}
 			continue
 		}
-		withHeading++
-		ids, ok := loadIDs(wl.Target)
-		if !ok {
-			unreadable++
-			continue
-		}
-		want := parser.Slugify(wl.Heading)
-		if !ids[want] {
-			dangling[wl.Target+"#"+wl.Heading] = want
+		withFragment++
+		if !idsFor[slug][frag[1:]] {
+			dangling[raw+" -> "+slug+frag] = heading
 		}
 	}
 
-	fmt.Printf("note:                 %s\n", *notePath)
-	fmt.Printf("cross-note links with a #Heading: %d\n", withHeading)
-	fmt.Printf("  target unreadable:  %d\n", unreadable)
-	fmt.Printf("  fragment dangles:   %d (opens the right note, at the top of the page)\n", len(dangling))
+	if legacy {
+		fmt.Println("(pre-fix markup: anchors carry no data-heading)")
+	}
+	fmt.Printf("note:                        %s\n", *notePath)
+	fmt.Printf("cross-note links w/ fragment: %d\n", withFragment)
+	fmt.Printf("  fragment dangles:           %d (opens the right note, at the top of the page)\n", len(dangling))
+	fmt.Printf("  fragment dropped:           %d (heading not found in the target; link still opens the note)\n", dropped)
 	keys := make([]string, 0, len(dangling))
 	for k := range dangling {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Printf("      %s\n        wiki link asks for #%s\n", k, dangling[k])
+		fmt.Printf("      %s\n", k)
+	}
+	if len(dangling) > 0 {
+		os.Exit(1)
 	}
 }

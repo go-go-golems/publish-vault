@@ -766,3 +766,187 @@ Rendered output for the four interesting cases:
 
 Before the fix, all four were `<a href="/note/#…" class="wiki-link" data-target=""
 data-raw="" data-alias=""></a>` — note the empty element content.
+
+---
+
+## Step 6: Cross-note fragments, resolved against the note they land on
+
+Step 5 fixed `[[#Heading]]` by reading heading ids back out of the rendered HTML,
+and left the cross-note case — `[[Other Note#Heading]]` — alone as a bigger job.
+It is the same defect: the parser writes a fragment with `slugify`, the target
+note's ids come from goldmark, and the two disagree on any heading containing
+punctuation. 84 of the 186 rendered cross-note fragments in the Pattern Zoo note
+pointed at an id that does not exist, so those links opened the right note at the
+top of the page.
+
+The reason it is bigger is that the fragment cannot be repaired where it is
+written. `Parse` sees only one note; the answer lives in a different one. So the
+resolution had to move to the vault layer, where every note is loaded — and,
+usefully, that also makes it re-run when a heading is renamed.
+
+### Prompt Context
+
+**User prompt (verbatim):** "fix 1."
+
+**Assistant interpretation:** Fix the first of the three items I listed as
+shipping-unfixed in the PR readiness check — cross-note `[[Note#Heading]]`
+fragments pointing at heading ids that do not exist in the target note.
+
+**Inferred user intent:** They do not want to open the PR with a known-broken
+link class in it, having just had the same bug fixed one level down.
+
+**Commit (code):** 1a91868 — "fix(PV-WIKILINK-021): resolve cross-note #Heading fragments against the target"
+
+### What I did
+
+- Factored `HeadingIndex` (+ `BuildHeadingIndex`, `Lookup`) out of
+  `resolveSelfHeadingLinks`, so one definition of "which id does this heading
+  have" serves both the same-note and cross-note paths.
+- Added `data-heading` to cross-note wiki-link anchors.
+- Added `parser.ResolveWikiLinkHeadings`, and called it from `rebuildHTML`
+  immediately after `ReplaceWikiLinksString`.
+- Heading indexes are built lazily per target slug and cached for the duration
+  of the pass; a `nil` entry caches "not a published note".
+- Rewrote `scripts/06-cross-note-fragment-audit` to read the *rendered* href
+  rather than recompute it, so it measures what the reader gets, and taught it
+  to recognise the pre-fix markup so the same script produces both columns.
+- Two parser tests and two vault tests, including a reload test.
+
+### Why
+
+`data-heading` is not redundant with the fragment: `slugify` is lossy, so
+`#9-2-kernel-k0-canonical-identity` no longer says the heading was
+`9.2 Kernel K0: canonical identity`. Without carrying the original text there is
+nothing left to look up.
+
+Resolution had to happen in `rebuildHTML` rather than in `Parse` for two
+reasons. The obvious one is that the target note is not available at parse time.
+The second is subtler and turned out to be a feature: `rebuildHTML` re-renders
+every note from its parser output on each reload, so a heading rename in one
+note automatically re-resolves every link pointing at it, in both directions —
+the fragment drops when the heading disappears and comes back when it returns.
+
+### What worked
+
+The audit on the user's note, before (`git checkout HEAD -- internal/parser/parser.go pkg/vault/vault.go`)
+and after:
+
+| | before | after |
+|---|---|---|
+| rendered cross-note fragments | 186 | 186 |
+| pointing at a non-existent id | **84** | **0** |
+| fragment dropped (heading absent in target) | 0 | 0 |
+
+Zero dropped is worth noting on its own: every heading these links name really
+does exist in its target. The links were not typos — the renderer was simply
+naming the headings by the wrong scheme.
+
+Guard check against the pre-fix source: both vault tests fail
+(`TestCrossNoteHeadingFragmentsUseTheTargetsRenderedIDs`,
+`TestCrossNoteHeadingFragmentsFollowTargetEdits`) and the parser test package
+fails to build, since `ResolveWikiLinkHeadings` does not exist there.
+
+`go test ./... -count=1` green across all 13 packages, `make lint` 0 issues.
+
+### What didn't work
+
+Nothing failed outright this time. The measurement did trip me up in one
+respect: my Step 5 note recorded "8 of 28 dangling", and this step reports "84 of
+186". Both are right — the first counts *distinct* `WikiLink` entries, the second
+counts *rendered occurrences*, and one table row can carry the same target
+several times. The occurrence count is the reader-facing number, so the rewritten
+script reports that; the discrepancy is not a change in behaviour.
+
+### What I learned
+
+The same-note fix from Step 5 turned out to be a scaled-down rehearsal for this
+one, and factoring `HeadingIndex` out cost almost nothing because the extraction
+logic was already written and tested. Had I mirrored goldmark's algorithm in
+Step 5 instead (the option I rejected), this step would have had to mirror it
+again in the vault layer, or export the mirror and hope both stayed in sync.
+
+### What was tricky to build
+
+**Deciding what to do with a heading the target does not have.** Three options:
+keep the slugified fragment (a URL we know points at nothing), drop it (link
+opens the note at the top), or mark the link broken. Marking it broken is wrong —
+the link does go somewhere useful, only not to the right place in it — and
+keeping a known-dangling fragment is dishonest markup. Dropping is what shipped,
+and the test asserts both halves: no `#no-such-heading`, but still
+`href="/note/target"`.
+
+**Not rewriting links that never resolved.** A link to an unpublished note is
+already `href="#unresolved-hidden"` by the time the fragment pass runs.
+`crossNoteHeadingLinkRe` requires a literal `/note/` href, so those are invisible
+to it — but that is a property of the regexp rather than an explicit check, so
+the vault test includes a `publish: false` target specifically to pin it.
+
+**Cost.** `rebuildHTML` already walks every note on every reload, and this adds
+another pass over each one. Most notes contain no heading link at all, so
+`ResolveWikiLinkHeadings` early-returns on a `strings.Contains` scan before the
+regexp ever runs, and heading indexes are built only for slugs that are actually
+linked to with a heading — a small minority of the vault — and cached across the
+whole pass, so a popular target is indexed once rather than once per inbound
+link. This matters here specifically because of PV-MEMORY-019.
+
+### What warrants a second pair of eyes
+
+- `crossNoteHeadingLinkRe` matches the anchor's full attribute sequence in a
+  fixed order. That is safe today because `wikiLinkHTML` generates the tag and
+  `ReplaceWikiLinksString` only rewrites values in place — but anyone adding an
+  attribute to a wiki-link anchor must update this regexp, and the failure mode
+  is silent (fragments stop being resolved, links quietly regress to opening the
+  note at the top). The tests would catch it; a reader might not.
+- A heading containing math, linked from *another* note, will not resolve. Math
+  is lifted out per note before wiki links are extracted, so the linking note's
+  `data-heading` holds its own placeholder tokens while the target's rendered
+  heading holds restored TeX. The fragment is dropped, so the link still works.
+  Same-note links are unaffected (both sides carry the same placeholders).
+- The pass runs before `ReplaceWikiLinkDisplay`, which rebuilds the anchor open
+  tag from captured groups. It preserves attributes, so the order is unchanged
+  either way, but the ordering in `rebuildHTML` is deliberate.
+
+### What should be done in the future
+
+- `![[Note#Heading]]` embeds still ignore the heading entirely: the frontend's
+  `resolveEmbeds` fetches the whole target note and injects all of it, rather
+  than the named section. `data-heading` has been on the embed div all along and
+  is unused.
+- The static TS vault still emits no heading fragments at all, cross-note
+  included, because marked v18 emits no heading ids. Unchanged by this step.
+- Block references `[[Note#^blockid]]` remain unsupported; they now cleanly drop
+  the fragment instead of producing a bogus one.
+
+### Code review instructions
+
+- `internal/parser/parser.go`: `HeadingIndex` / `BuildHeadingIndex` / `Lookup`
+  (factored out of Step 5's pass), the `data-heading` attribute added in
+  `wikiLinkHTML`, and `ResolveWikiLinkHeadings`.
+- `pkg/vault/vault.go`: the `headingIndexFor` cache at the top of `rebuildHTML`
+  and the call between `ReplaceWikiLinksString` and `ReplaceWikiLinkDisplay`.
+- `go test ./internal/parser/... ./pkg/vault/... -count=1`
+- `go run ./ttmp/2026/08/10/PV-WIKILINK-021--*/scripts/06-cross-note-fragment-audit -vault /home/manuel/code/wesen/go-go-golems/go-go-parc -note "Transcripts/Research/09 - RAG-MATHS Pattern Zoo.md"`
+  — must print `fragment dangles: 0` and exit 0.
+- Before/after: `git checkout HEAD~1 -- internal/parser/parser.go pkg/vault/vault.go`,
+  re-run the audit (it detects the pre-fix markup and says so), then
+  `git checkout HEAD -- internal/parser/parser.go pkg/vault/vault.go`.
+
+### Technical details
+
+The anchor gains one attribute, and the fragment is rewritten in place:
+
+```html
+<!-- parser output: a provisional, wrong fragment plus the text to fix it with -->
+<a href="/note/target#9-2-kernel-k0-canonical-identity" class="wiki-link"
+   data-target="target" data-raw="Target"
+   data-heading="9.2 Kernel K0: canonical identity" data-alias="">Target</a>
+
+<!-- after rebuildHTML: the id the target note actually rendered -->
+<a href="/note/target#92-kernel-k0-canonical-identity" class="wiki-link" ...>
+```
+
+Resolution order in `rebuildHTML` is now: `ReplaceWikiLinksString` (slug) →
+`ResolveWikiLinkHeadings` (fragment) → `ReplaceWikiLinkDisplay` (text) →
+`RewriteImageSources` → `ReplaceWikiEmbedImages` → `replaceUnresolvedNoteEmbeds`.
+The fragment pass has to follow the slug pass, because which note's headings to
+consult is not known until the slug is resolved.
