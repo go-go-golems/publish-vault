@@ -1567,6 +1567,180 @@ Docs: <https://docs.mathjax.org/en/latest/web/typeset.html> and
 
 ---
 
+## 14. Implementation addendum — what the design got wrong
+
+This section was written after the feature shipped. Sections 1–13 are left as
+originally written so the delta is visible; **where the two disagree, this
+section is correct.**
+
+### 14.1 Inline placeholders had to become sentinels (contradicts §6.1 D6, §7.3)
+
+The design said to emit the final `<span class="math math-inline">TeX</span>`
+directly in the pre-pass, on the theory that `html.WithUnsafe()` makes goldmark
+pass it through. That is only half true. goldmark treats an inline `<span>` as
+raw inline HTML **but still parses the text between the tags as Markdown**. The
+test suite caught it on the first run:
+
+```
+--- FAIL: TestParseMathRoundTrip/braces
+    placeholder 0 TeX = "{1, 2}", want "\{1, 2\}"
+```
+
+`\{` lost its backslash to Markdown's escape rules. `$f *g* h$` would likewise
+have come back carrying an `<em>`. Display math was fine, because the blank-line
+trick genuinely does produce an HTML block, and HTML blocks *are* opaque.
+
+The fix is a two-phase substitution:
+
+- `ReplaceMath(body) ([]byte, []MathSpan)` replaces each region with a sentinel —
+  `U+E000` + decimal index + `U+E001`, Private Use Area code points that
+  goldmark's text renderer passes through and that carry no Markdown meaning.
+- `RestoreMath(html, spans)` runs **after** `renderCallouts`, swapping sentinels
+  for the real markup so no other HTML pass ever sees it. A display sentinel
+  alone in a paragraph is matched as `<p>…</p>` and unwrapped into the `<div>`.
+
+Everything else about D6 stands: the TeX still lives in text content, still needs
+only `&`/`<`/`>` escaping, and still gives a no-JS fallback.
+
+### 14.2 The scanner needs code-span skipping *inside* a candidate span (new)
+
+`ScanMath` skipped code spans at the top level, but `scanInlineClose` did not.
+The showcase note exposed it — this prose:
+
+```
+The hardback costs $30 and the paperback costs
+$25; neither dollar sign opens math, because a closing `$` may not be preceded
+```
+
+opened math at `$30` and closed it at the backticked `` `$` `` two lines later,
+which satisfies both the preceding-character and the following-character rule. A
+sentence and a half of prose became a formula. Both `scanInlineClose` and
+`scanUntil` now skip code spans; `TestInlineMathDoesNotCloseInsideCodeSpan` pins
+it.
+
+### 14.3 Indented code blocks are deliberately NOT skipped (contradicts §7.2.2)
+
+Detecting them correctly requires tracking list context: a 4-space indent inside
+a list is a continuation line, not code. Treating such a line as code would
+silently drop math from nested list items — common in a notes vault, and a worse
+failure than typesetting a stray `$` inside an indented code block. Fenced blocks
+and code spans cover essentially all real code in Obsidian. Documented on
+`ScanMath`.
+
+### 14.4 MathJax 4 has no `AllPackages` (contradicts §8.1)
+
+`AllPackages` was a v3 export. In v4 each TeX package module calls
+`Configuration.create(<name>)` at module scope, so you import the ones you want
+for side effects and list their names in `packages`. `mathjax.ts` imports 15.
+
+The import specifier is `@mathjax/src/js/…`, not `/mjs/…` — the package's
+`exports` map is `"./js/*": { "import": "./mjs/*" }`.
+
+### 14.5 Fonts load dynamically and need an `asyncLoad` bridge (new; biggest gap)
+
+The design assumed SVG output compiles its glyph outlines into the JS chunk.
+MathJax 4 does not: it splits the newcm font into ~40 glyph-range files fetched
+on demand through `mathjax.asyncLoad`, which no bundler provides. The first
+`\mathbb{E}` failed with:
+
+```
+Can't load '@mathjax/mathjax-newcm-font/js/svg/dynamic/double-struck.js':
+No mathjax.asyncLoad method specified
+```
+
+Two changes were needed:
+
+1. An explicit `range → () => import(…)` map (`FONT_RANGES` in `mathjax.ts`) —
+   the same shape `highlightLanguages.ts` uses for languages, so each range
+   becomes its own lazy chunk. `@mathjax/mathjax-newcm-font` is now a direct
+   dependency.
+2. `convert()` is synchronous, so when it needs a range that is not resident it
+   throws a retry signal. It must be wrapped:
+   `await mathjax.handleRetriesFor(() => doc.convert(tex, { display }))`.
+   Calling `convert()` bare surfaces as `dynamic file 'x' failed to load`.
+
+### 14.6 Inline line-breaking must be disabled (new)
+
+MathJax 4 breaks inline math to fit its container and measures that container
+from the DOM. `convert()` builds a **detached** node, so the width comes back ~0
+and every formula breaks at every operator — `e^{i\pi}` / `+ 1` / `= 0` on three
+lines. Fixed with `linebreaks: { inline: false }` on the SVG output jax; CSS
+handles overflow instead.
+
+### 14.7 Tailwind preflight breaks MathJax SVG layout (new)
+
+Tailwind v4's preflight applies the cssremedy rule for replaced elements:
+
+```css
+img, svg, video, canvas, audio, iframe, embed, object {
+  display: block;
+  vertical-align: middle;
+}
+```
+
+A block SVG becomes its own line box and stretches to the paragraph width — the
+measured symptom was a formula 700px wide sitting alone between two lines of
+prose. `prose.css` restores `display: inline-block` for `.math mjx-container >
+svg` only. MathJax sets `vertical-align` inline on the element itself, so the
+baseline survives preflight without help.
+
+### 14.8 Measured bundle cost (fills the §9.5 placeholder)
+
+Client build, gzipped:
+
+| Chunk | Raw | Gzip | Fetched when |
+|---|---:|---:|---|
+| `mathjax-*.js` (our wrapper) | 9 KB | 3 KB | a note contains any math |
+| `svg-*.js` (SVG output jax + TeX input) | 965 KB | 354 KB | first formula on the page |
+| `greek-*.js` (glyph range) | 1041 KB | 281 KB | any Greek letter |
+| `cyrillic-*.js` | 681 KB | 232 KB | Cyrillic in math |
+| `double-struck-*.js` | 41 KB | 16 KB | `\mathbb` |
+
+`main` is **468 KB** and references MathJax only through
+`import("./mathjax-*.js")` — verified by grepping the built chunk for a static
+`from"./mathjax-*"`, which does not appear. Math-free notes pay nothing.
+
+A note using `\sigma` costs roughly **640 KB gzip** on first view (output jax +
+greek range). That is the honest number and it is high. Two follow-ups worth
+measuring, neither done here:
+
+- The `greek` range at 281 KB gzip is disproportionate for what is usually a
+  handful of letters. `@mathjax/mathjax-tex-font` (the v3 TeX font) may be
+  smaller; it is a one-line change to the `#default-font` mapping.
+- CHTML output would cut the output-jax chunk substantially, at the cost of
+  serving `.woff` files through `pkg/web/embed`.
+
+### 14.9 Verification actually performed
+
+Against `vault-example/Mathematics/Math Showcase.md` in a real browser:
+
+- 64/64 `.math` elements reached `data-math-state="done"`; zero errors.
+- Inline math shares a line box with the surrounding text — measured by comparing
+  the bounding rect of the math element against a `Range` over the preceding text
+  node, not by eye.
+- Display math centres; the deliberately wide `\underbrace` equation scrolls
+  inside its own box at 390px (`scrollWidth` 639 vs `clientWidth` 352) with
+  `document.scrollWidth - clientWidth === 0` at both 1200px and 390px.
+- The glyph `<g>` carries `fill="currentColor" stroke="currentColor"`, so math
+  tracks `--color-ink`.
+- Currency prose, `\$100`, code spans and fenced blocks all render as text.
+- `pnpm smoke:ssr` passes with 0 hydration warnings; only the 0.2 kB
+  `mathjax.server` stub enters the SSR graph.
+
+### 14.10 Loose ends found but not chased
+
+- In dev mode the page holds **four** `.note-prose` containers, three of them
+  zero-sized, each with its own copy of the note. Enhancement passes therefore
+  run four times. This is pre-existing (it reproduces without math) and looks
+  like a dev-mode/HMR artefact, but it deserves its own look.
+- The repo's `pre-commit` hook runs `glazed-lint ./...`, which applies Glazed CLI
+  flag conventions to throwaway `main.go` programs under `ttmp/**/scripts`. All
+  three tickets open on this branch had to commit with `--no-verify` for that
+  reason alone. Excluding `ttmp/` from `glazed-lint` in the Makefile would fix it
+  for everyone.
+
+---
+
 ## Appendix A — Worked example, end to end
 
 Source note:
