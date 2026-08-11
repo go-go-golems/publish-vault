@@ -181,9 +181,15 @@ Measured on the go-go-parc vault, 1790 notes:
 | injected markup occurrences | 341 | 0 |
 | notes affected | 69 | 0 |
 
-The branch is based on `task/publish-vault-mathjax` (PR #19) rather than on
-`main`, and the pull request targets that branch. PR #19 changed the signatures
-of both functions this ticket edits — `extractWikiLinks` and
-`replaceWikiLinks` each gained a `[]MathSpan` parameter — so a branch off `main`
-would conflict on exactly the lines being changed here. Stacking keeps this
-diff to what it is actually about.
+The branch was cut from `task/publish-vault-mathjax` (PR #19) rather than from
+`main`, because PR #19 changed the signatures of both functions this ticket
+edits — `extractWikiLinks` and `replaceWikiLinks` each gained a `[]MathSpan`
+parameter — so a branch off `main` would have conflicted on exactly the lines
+being changed here.
+
+PR #19 merged while this work was in progress, which removed the question: the
+branch was rebased onto `main` and the pull request targets `main` directly.
+Creating the stacked pull request failed with `No commits between
+task/publish-vault-mathjax and task/wiki-links-in-code, Base ref must be a
+branch`, which is what a deleted base branch looks like from `gh` — the merge
+had deleted it. Worth recognising, because the message does not say so.

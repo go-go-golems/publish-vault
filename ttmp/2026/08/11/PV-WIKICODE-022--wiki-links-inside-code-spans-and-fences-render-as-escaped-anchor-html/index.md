@@ -50,8 +50,8 @@ that ticket's changes.
 Diary: [reference/01-diary.md](./reference/01-diary.md).
 
 Branched from `task/publish-vault-mathjax` (PR #19), which changed the
-signatures of both functions edited here; a branch off `main` would conflict on
-exactly those lines.
+signatures of both functions edited here. PR #19 merged during this work, so the
+branch was rebased onto `main` and the pull request targets `main`.
 
 ## Key Links
 
