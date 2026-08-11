@@ -21,7 +21,37 @@ WhenToUse: ""
 
 ## Overview
 
-<!-- Provide a brief overview of the ticket, its goals, and current status -->
+The `[[...]]` substitution runs before goldmark, because goldmark would
+otherwise parse the link text as Markdown. That ordering also rewrote **code
+samples**: anchor HTML was injected into the source, goldmark escaped it into
+the code block, and a note documenting the syntax rendered
+
+```
+<code>&lt;a href=&quot;/note/some-note&quot; class=&quot;wiki-link&quot;...</code>
+```
+
+where its author wrote `[[Some Note]]`. The same substitution put the named note
+into `WikiLinks`, so a code sample gave it a backlink from a note that never
+linked to it.
+
+`extractWikiLinks` and `replaceWikiLinks` now skip matches inside a code span or
+a fenced block, reusing the scanners `ScanMath` already applies so the two
+pre-passes agree about what counts as code. Indented four-space blocks stay
+excluded, for the reason documented on `ScanMath`.
+
+Measured on the go-go-parc vault (1790 notes): **341 injected-markup occurrences
+across 69 notes → 0**. The audit distinguishes injected markup from HTML a note
+quotes on purpose by parsing each note twice, once with every `[[` neutralised.
+
+Found while writing a report about PV-WIKILINK-021 for that vault — the report
+could not be published without it. The defect itself is older and unrelated to
+that ticket's changes.
+
+Diary: [reference/01-diary.md](./reference/01-diary.md).
+
+Branched from `task/publish-vault-mathjax` (PR #19), which changed the
+signatures of both functions edited here; a branch off `main` would conflict on
+exactly those lines.
 
 ## Key Links
 
