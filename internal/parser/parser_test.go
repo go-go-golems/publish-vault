@@ -816,3 +816,116 @@ func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
 		}
 	}
 }
+
+// TestWikiLinksInsideCodeStayLiteral is the regression test for PV-WIKICODE-022.
+// The [[...]] substitution runs before goldmark so goldmark cannot parse the
+// link text as Markdown, and that ordering used to rewrite code samples too:
+// the anchor HTML was injected into the source and goldmark escaped it into the
+// code block, so a note documenting the syntax showed raw markup where its
+// author wrote a wiki link.
+func TestWikiLinksInsideCodeStayLiteral(t *testing.T) {
+	src := []byte("# Syntax\n\n" +
+		"Inline: `[[Some Note]]` and `![[Diagram.png]]`.\n\n" +
+		"```markdown\n" +
+		"[[Target Note#Heading]]\n" +
+		"[[Other|aliased]]\n" +
+		"```\n\n" +
+		"~~~\n[[Tilde Fenced]]\n~~~\n\n" +
+		"A real link: [[Some Note]].\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	for _, literal := range []string{
+		"<code>[[Some Note]]</code>",
+		"<code>![[Diagram.png]]</code>",
+		"[[Target Note#Heading]]",
+		"[[Other|aliased]]",
+		"[[Tilde Fenced]]",
+	} {
+		if !contains(parsed.HTML, literal) {
+			t.Errorf("expected %s to survive as text, got: %s", literal, parsed.HTML)
+		}
+	}
+	// The giveaway for the old bug: escaped anchor markup inside a code element.
+	if contains(parsed.HTML, "&lt;a href=") || contains(parsed.HTML, "&lt;img class=") {
+		t.Fatalf("anchor markup was injected into a code block: %s", parsed.HTML)
+	}
+
+	// The link outside code still has to work.
+	if !contains(parsed.HTML, `<a href="/note/some-note" class="wiki-link"`) {
+		t.Fatalf("real link stopped resolving: %s", parsed.HTML)
+	}
+
+	// And a code sample must not give the note it names a backlink.
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Some Note" {
+		t.Fatalf("WikiLinks = %#v, want only the real link", parsed.WikiLinks)
+	}
+}
+
+// TestCodeRegionsBoundaries pins the CommonMark edge cases the scanners handle,
+// since a region that ends too early re-exposes the code after it and one that
+// ends too late swallows real links.
+func TestCodeRegionsBoundaries(t *testing.T) {
+	cases := []struct {
+		name    string
+		src     string
+		literal []string // must survive as text
+		linked  []string // must become anchors (data-raw values)
+	}{
+		{
+			name:    "double backtick span containing a single backtick",
+			src:     "Use ``[[A]] ` here`` then [[B]].\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "info string on the opening fence only",
+			src:     "```go\n[[A]]\n```\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "longer closing fence still closes",
+			src:     "```\n[[A]]\n`````\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "indented three spaces still opens a fence",
+			src:     "   ```\n   [[A]]\n   ```\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "unterminated fence runs to end of document",
+			src:     "```\n[[A]]\n[[B]]\n",
+			literal: []string{"[[A]]", "[[B]]"},
+		},
+		{
+			name:   "backtick that opens nothing leaves the link alone",
+			src:    "A stray ` tick and [[B]].\n",
+			linked: []string{"B"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parsed, err := Parse([]byte("# T\n\n" + c.src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			for _, lit := range c.literal {
+				if !contains(parsed.HTML, lit) {
+					t.Errorf("%q should have stayed literal, got: %s", lit, parsed.HTML)
+				}
+			}
+			for _, raw := range c.linked {
+				if !contains(parsed.HTML, `data-raw="`+raw+`"`) {
+					t.Errorf("[[%s]] should have become a link, got: %s", raw, parsed.HTML)
+				}
+			}
+		})
+	}
+}

@@ -140,12 +140,20 @@ func Parse(src []byte) (*ParsedNote, error) {
 // back as TeX — these values reach the note JSON and the backlink graph, where
 // a sentinel is meaningless.
 func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
-	matches := wikiLinkRegex.FindAllSubmatch(src, -1)
+	matches := wikiLinkRegex.FindAllSubmatchIndex(src, -1)
+	code := newCodeCursor(src)
 	seen := map[string]bool{}
 	var links []WikiLink
 	for _, m := range matches {
-		isEmbed := string(m[1]) == "!"
-		inner := string(m[2])
+		// A [[...]] shown inside a code sample is documentation of the syntax,
+		// not a reference. Recording it would give the named note a backlink
+		// from a note that never linked to it — the same reasoning that keeps
+		// links inside a formula out of this list.
+		if code.contains(m[0]) {
+			continue
+		}
+		isEmbed := string(src[m[2]:m[3]]) == "!"
+		inner := string(src[m[4]:m[5]])
 		target, alias, heading := parseWikiLinkInner(inner)
 		target = RestoreMathText(target, spans)
 		alias = RestoreMathText(alias, spans)
@@ -227,9 +235,7 @@ func StripNoteExtension(target string) string {
 // The frontend renderer will later resolve slugs to actual paths.
 func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
 	frontmatter, body := splitFrontmatter(src)
-	replacedBody := wikiLinkRegex.ReplaceAllFunc(body, func(match []byte) []byte {
-		return wikiLinkHTML(match, spans)
-	})
+	replacedBody := replaceWikiLinksOutsideCode(body, spans)
 	if len(frontmatter) == 0 {
 		return replacedBody
 	}
@@ -237,6 +243,85 @@ func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
 	out = append(out, frontmatter...)
 	out = append(out, replacedBody...)
 	return out
+}
+
+// replaceWikiLinksOutsideCode substitutes every [[wiki link]] in body except
+// those inside a code span or a fenced code block.
+//
+// The substitution has to happen before goldmark runs, because goldmark would
+// otherwise parse the link text as Markdown. That ordering is what makes code
+// samples a problem: the anchor HTML is injected into the source, and goldmark
+// then escapes it into the code block, so a note documenting the syntax renders
+// `<a href="/note/some-note" class="wiki-link" ...>` as visible text where the
+// author wrote [[Some Note]].
+func replaceWikiLinksOutsideCode(body []byte, spans []MathSpan) []byte {
+	locs := wikiLinkRegex.FindAllIndex(body, -1)
+	if len(locs) == 0 {
+		return body
+	}
+	code := newCodeCursor(body)
+	out := make([]byte, 0, len(body))
+	last := 0
+	for _, loc := range locs {
+		if code.contains(loc[0]) {
+			continue
+		}
+		out = append(out, body[last:loc[0]]...)
+		out = append(out, wikiLinkHTML(body[loc[0]:loc[1]], spans)...)
+		last = loc[1]
+	}
+	return append(out, body[last:]...)
+}
+
+// codeCursor answers "is this offset inside code?" for offsets queried in
+// ascending order, which is how both callers walk their matches.
+type codeCursor struct {
+	regions [][2]int
+	i       int
+}
+
+func newCodeCursor(body []byte) *codeCursor {
+	return &codeCursor{regions: codeRegions(body)}
+}
+
+func (c *codeCursor) contains(off int) bool {
+	for c.i < len(c.regions) && c.regions[c.i][1] <= off {
+		c.i++
+	}
+	return c.i < len(c.regions) && off >= c.regions[c.i][0]
+}
+
+// codeRegions returns the byte ranges of body occupied by inline code spans and
+// fenced code blocks, in ascending order and non-overlapping.
+//
+// The scanners are the ones ScanMath already uses to keep `$100` in a code
+// sample from being read as math; the two passes now agree about what counts as
+// code. Indented (four-space) blocks are not treated as code here either, for
+// the reason documented on ScanMath: a four-space indent inside a list is a
+// continuation line, and dropping links from nested list items would be a worse
+// failure than rendering a link in an indented code block.
+func codeRegions(body []byte) [][2]int {
+	var regions [][2]int
+	i, n := 0, len(body)
+	for i < n {
+		if i == 0 || body[i-1] == '\n' {
+			if fenceChar, fenceLen, ok := fenceOpensAt(body, i); ok {
+				end := skipFencedBlock(body, i, fenceChar, fenceLen)
+				regions = append(regions, [2]int{i, end})
+				i = end
+				continue
+			}
+		}
+		if body[i] == '`' {
+			if end := skipCodeSpan(body, i); end > i {
+				regions = append(regions, [2]int{i, end})
+				i = end
+				continue
+			}
+		}
+		i++
+	}
+	return regions
 }
 
 // splitFrontmatter separates an initial YAML frontmatter block from the Markdown
