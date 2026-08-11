@@ -284,7 +284,7 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 	title := parsed.Title
 	if title == "" {
 		// Fall back to filename without extension
-		title = strings.TrimSuffix(info.Name(), ".md")
+		title = parser.StripNoteExtension(info.Name())
 	}
 
 	frontmatter := parsed.Frontmatter
@@ -378,13 +378,13 @@ func (v *Vault) buildWikiLinkIndex() {
 		// e.g., path "Research/KB/Tribal/App.md" → register:
 		//   "tribal/app", "kb/tribal/app"
 		parts := strings.Split(filepath.ToSlash(note.Path), "/")
-		filename := strings.TrimSuffix(parts[len(parts)-1], ".md")
+		filename := parser.StripNoteExtension(parts[len(parts)-1])
 		suffixes := []string{parser.Slugify(filename)}
 
 		// Build progressive suffixes from the end of the path
 		for i := len(parts) - 2; i >= 0; i-- {
 			shortPath := strings.Join(parts[i:], "/")
-			shortPath = strings.TrimSuffix(shortPath, ".md")
+			shortPath = parser.StripNoteExtension(shortPath)
 			suffixes = append(suffixes, parser.Slugify(shortPath))
 		}
 
@@ -481,8 +481,13 @@ func (v *Vault) ResolveAssetEmbed(target string) (string, bool) {
 
 // ResolveWikiLink maps a wiki link target (as written in the note) to the
 // actual vault slug. Returns ("", false) if no match is found.
+//
+// A trailing ".md" is stripped first because the index is keyed on
+// extension-less paths (see buildWikiLinkIndex). The parser already strips it
+// from targets it stores, but this is public API taking a target "as written",
+// so callers passing the raw [[Note.md]] form get the same answer as [[Note]].
 func (v *Vault) ResolveWikiLink(target string) (string, bool) {
-	slug := parser.Slugify(target)
+	slug := parser.Slugify(parser.StripNoteExtension(strings.TrimSpace(target)))
 	if resolved, ok := v.wikiLinkIndex[slug]; ok {
 		return resolved, true
 	}
@@ -501,12 +506,35 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 // the target became publishable, because the placeholder it was rendered from
 // would be gone.
 func (v *Vault) rebuildHTML() {
+	// Heading indexes are built on demand and cached for the length of the
+	// pass: only notes that are the target of a [[Note#Heading]] link need one,
+	// which is a small minority of the vault, but a popular target is linked
+	// many times. A nil entry caches "this slug is not a published note".
+	headingIndexes := map[string]*parser.HeadingIndex{}
+	headingIndexFor := func(slug string) *parser.HeadingIndex {
+		if idx, seen := headingIndexes[slug]; seen {
+			return idx
+		}
+		var idx *parser.HeadingIndex
+		if target, ok := v.notes[slug]; ok {
+			idx = parser.BuildHeadingIndex(target.sourceOrRenderedHTML())
+		}
+		headingIndexes[slug] = idx
+		return idx
+	}
+
 	for _, note := range v.notes {
 		note.HTML = parser.ReplaceWikiLinksString(note.sourceOrRenderedHTML(), func(target string) string {
 			if resolved, ok := v.wikiLinkIndex[target]; ok {
 				return resolved
 			}
 			return ""
+		})
+		// Must follow ReplaceWikiLinksString: the fragment is resolved against
+		// the note the link ends up at, which is only known once the slug has
+		// been. Consults v.notes directly because rebuildHTML runs under v.mu.
+		note.HTML = parser.ResolveWikiLinkHeadings(note.HTML, func(slug, heading string) (string, bool) {
+			return headingIndexFor(slug).Lookup(heading)
 		})
 		note.HTML = parser.ReplaceWikiLinkDisplay(note.HTML, func(slug string) string {
 			if n, ok := v.notes[slug]; ok {
@@ -1080,7 +1108,7 @@ func (v *Vault) FileTree() *FileNode {
 			}
 			isLast := i == len(parts)-1
 			node := &FileNode{
-				Name:     strings.TrimSuffix(part, ".md"),
+				Name:     parser.StripNoteExtension(part),
 				Path:     current,
 				IsFolder: !isLast,
 			}
@@ -1160,7 +1188,7 @@ func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
 // pathToSlug converts a relative file path to a URL slug.
 func pathToSlug(relPath string) string {
 	s := filepath.ToSlash(relPath)
-	s = strings.TrimSuffix(s, ".md")
+	s = parser.StripNoteExtension(s)
 	return parser.Slugify(s)
 }
 

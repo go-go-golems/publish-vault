@@ -522,3 +522,297 @@ func TestSlugifyTable(t *testing.T) {
 		}
 	})
 }
+
+// TestStripNoteExtension pins the exact boundary of the ".md" strip: only a
+// trailing ".md", case-insensitively, and never at the cost of an empty target.
+func TestStripNoteExtension(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"Note.md", "Note"},
+		{"Note.MD", "Note"},
+		{"Folder/Note.md", "Folder/Note"},
+		{"Note", "Note"},
+		{"Note.md.md", "Note.md"},
+		{"readme.markdown", "readme.markdown"},
+		{"pic.png", "pic.png"},
+		{"md", "md"},
+		{".md", ".md"},
+		{"", ""},
+		{"Notes on foo.md and bar", "Notes on foo.md and bar"},
+	}
+	for _, c := range cases {
+		if got := StripNoteExtension(c.in); got != c.want {
+			t.Errorf("StripNoteExtension(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestWikiLinkTargetDropsMarkdownExtension is the regression test for
+// PV-WIKILINK-021: [[X.md]] must produce the same slug, href and backlink target
+// as [[X]]. Without the strip, "…thesis.md" slugifies to "…thesis-md", which
+// matches no note — or, worse, matches an unrelated note named "… md".
+func TestWikiLinkTargetDropsMarkdownExtension(t *testing.T) {
+	src := []byte("# Zoo\n\n" +
+		"| a | [[Transcripts/2026/08/06/RAG DSL for Retrieval/thesis.md#Identity is an API decision]] |\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(parsed.WikiLinks) != 1 {
+		t.Fatalf("expected 1 wiki link, got %#v", parsed.WikiLinks)
+	}
+	wl := parsed.WikiLinks[0]
+	if want := "Transcripts/2026/08/06/RAG DSL for Retrieval/thesis"; wl.Target != want {
+		t.Errorf("WikiLink.Target = %q, want %q", wl.Target, want)
+	}
+	if want := "Identity is an API decision"; wl.Heading != want {
+		t.Errorf("WikiLink.Heading = %q, want %q", wl.Heading, want)
+	}
+
+	want := `href="/note/transcripts/2026/08/06/rag-dsl-for-retrieval/thesis#identity-is-an-api-decision"`
+	if !contains(parsed.HTML, want) {
+		t.Fatalf("expected %s in HTML, got: %s", want, parsed.HTML)
+	}
+	if contains(parsed.HTML, "thesis-md") {
+		t.Fatalf("extension leaked into the slug: %s", parsed.HTML)
+	}
+}
+
+// TestWikiLinkMarkdownExtensionVariants covers the forms the strip has to keep
+// working alongside: an explicit alias, a note embed, and an image embed whose
+// extension must survive untouched.
+func TestWikiLinkMarkdownExtensionVariants(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"[[Folder/Note.md|Custom Alias]]\n\n" +
+		"![[Folder/Embedded.MD]]\n\n" +
+		"![[Attachments/pic.png]]\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if !contains(parsed.HTML, `data-target="folder/note"`) || !contains(parsed.HTML, `>Custom Alias</a>`) {
+		t.Errorf("aliased .md link mishandled: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `<div class="wiki-embed" data-target="folder/embedded"`) {
+		t.Errorf("note embed did not lose its .MD: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `data-asset="Attachments/pic.png"`) {
+		t.Errorf("image embed target was rewritten: %s", parsed.HTML)
+	}
+
+	for _, wl := range parsed.WikiLinks {
+		if strings.HasSuffix(strings.ToLower(wl.Target), ".md") {
+			t.Errorf("extension survived into WikiLinks: %#v", wl)
+		}
+	}
+}
+
+// TestSelfHeadingLinkUsesRenderedHeadingID is the regression test for the
+// [[#Heading]] bug. These links used to render as
+// `<a href="/note/#heading"></a>`: empty text, and a destination pointing at
+// the vault root. They must become same-page anchors carrying the heading as
+// their text — and the fragment must be goldmark's *actual* id, which is not
+// what slugify would produce for any of these headings.
+func TestSelfHeadingLinkUsesRenderedHeadingID(t *testing.T) {
+	src := []byte("# Zoo\n\n" +
+		"1. [[#Pattern 1 — Semantic Identity]]\n" +
+		"2. [[#9.2 Kernel K0: canonical identity]]\n\n" +
+		"## Pattern 1 — Semantic Identity\n\n" +
+		"## 9.2 Kernel K0: canonical identity\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	// The point of resolving against the rendered HTML rather than slugifying:
+	// these two ids differ from Slugify's answer.
+	for _, want := range []string{
+		`href="#pattern-1--semantic-identity"`,
+		`href="#92-kernel-k0-canonical-identity"`,
+		`>Pattern 1 — Semantic Identity</a>`,
+		`>9.2 Kernel K0: canonical identity</a>`,
+	} {
+		if !contains(parsed.HTML, want) {
+			t.Errorf("expected %s in HTML, got: %s", want, parsed.HTML)
+		}
+	}
+	if contains(parsed.HTML, `href="/note/#`) {
+		t.Fatalf("self link still routed through /note/: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, `href="#9-2-kernel-k0-canonical-identity"`) {
+		t.Fatalf("fragment was slugified instead of read back from the heading: %s", parsed.HTML)
+	}
+	// A same-note anchor is not a link to a note, so it must stay out of the
+	// backlink graph.
+	if len(parsed.WikiLinks) != 0 {
+		t.Fatalf("self heading links leaked into WikiLinks: %#v", parsed.WikiLinks)
+	}
+}
+
+// TestSelfHeadingLinkMatchingRules covers how a target is matched against the
+// rendered headings: case- and whitespace-insensitively, first-heading-wins on
+// duplicates (as Obsidian does), with the already-slugified form accepted as a
+// fallback and no match at all rendered visibly broken.
+func TestSelfHeadingLinkMatchingRules(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"- case: [[#SOME   Heading]]\n" +
+		"- id form: [[#some-heading]]\n" +
+		"- alias: [[#Some Heading|call it that]]\n" +
+		"- dupe: [[#Notes]]\n" +
+		"- missing: [[#nowhere]]\n\n" +
+		"## Some Heading\n\n## Notes\n\n## Notes\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got := strings.Count(parsed.HTML, `href="#some-heading"`); got != 3 {
+		t.Errorf("case, id-form and aliased links should all reach #some-heading, got %d: %s", got, parsed.HTML)
+	}
+	if !contains(parsed.HTML, `>call it that</a>`) {
+		t.Errorf("alias should win over the heading text: %s", parsed.HTML)
+	}
+	// goldmark emits "notes" and "notes-1"; the link takes the first.
+	if !contains(parsed.HTML, `href="#notes"`) || contains(parsed.HTML, `href="#notes-1"`) {
+		t.Errorf("duplicate headings: first should win, got: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `href="#unresolved-nowhere" class="wiki-link wiki-link-self broken"`) {
+		t.Errorf("missing heading should render visibly broken: %s", parsed.HTML)
+	}
+	if !contains(parsed.HTML, `>nowhere</a>`) {
+		t.Errorf("a broken self link must still show its text: %s", parsed.HTML)
+	}
+}
+
+// TestSelfHeadingLinkDegenerateFormsAreLeftAlone pins that a wiki link with
+// neither a target nor a heading is passed through as source text rather than
+// turned into an empty anchor.
+func TestSelfHeadingLinkDegenerateFormsAreLeftAlone(t *testing.T) {
+	parsed, err := Parse([]byte("# T\n\nliteral [[#]] here\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, "[[#]]") {
+		t.Fatalf("degenerate [[#]] should survive as text, got: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, "wiki-link") {
+		t.Fatalf("degenerate [[#]] should not become a link, got: %s", parsed.HTML)
+	}
+}
+
+// TestResolveWikiLinkHeadings covers the fragment rewrite in isolation: the
+// provisional slugified fragment wikiLinkHTML wrote is replaced with whatever
+// the resolver says the target note actually rendered, and dropped when the
+// resolver declines rather than left pointing at an id known not to exist.
+func TestResolveWikiLinkHeadings(t *testing.T) {
+	html := `<p>` +
+		`<a href="/note/other#9-2-kernel-k0" class="wiki-link" data-target="other" data-raw="Other" data-heading="9.2 Kernel K0" data-alias="">Other</a>` +
+		`<a href="/note/gone#missing" class="wiki-link" data-target="gone" data-raw="Gone" data-heading="missing" data-alias="">Gone</a>` +
+		`<a href="/note/plain" class="wiki-link" data-target="plain" data-raw="Plain" data-heading="" data-alias="">Plain</a>` +
+		`</p>`
+
+	got := ResolveWikiLinkHeadings(html, func(slug, heading string) (string, bool) {
+		if slug == "other" && heading == "9.2 Kernel K0" {
+			return "92-kernel-k0", true
+		}
+		return "", false
+	})
+
+	if !contains(got, `href="/note/other#92-kernel-k0"`) {
+		t.Errorf("fragment not replaced with the real id: %s", got)
+	}
+	if !contains(got, `href="/note/gone"`) || contains(got, `href="/note/gone#missing"`) {
+		t.Errorf("unresolvable fragment should be dropped, not kept: %s", got)
+	}
+	if !contains(got, `href="/note/plain"`) {
+		t.Errorf("link without a heading should be untouched: %s", got)
+	}
+	// The rewrite must preserve every other attribute, since later passes key
+	// off data-raw and data-alias.
+	if !contains(got, `data-raw="Other" data-heading="9.2 Kernel K0" data-alias=""`) {
+		t.Errorf("attributes were not preserved: %s", got)
+	}
+	if !contains(got, `>Other</a>`) {
+		t.Errorf("display text was not preserved: %s", got)
+	}
+}
+
+// TestWikiLinkCarriesHeadingForLaterResolution pins that the parser hands the
+// heading text on in an attribute. The fragment alone cannot be resolved later:
+// slugify is lossy, so "#9-2-kernel-k0" no longer tells anyone that the heading
+// was "9.2 Kernel K0".
+func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
+	parsed, err := Parse([]byte("# T\n\nSee [[Other Note#9.2 Kernel K0: canonical identity]].\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, `data-heading="9.2 Kernel K0: canonical identity"`) {
+		t.Fatalf("heading text not carried on the anchor: %s", parsed.HTML)
+	}
+
+	// A link with no heading still carries the attribute, empty — the fragment
+	// pass keys off a non-empty value, so it must be there to be absent.
+	plain, err := Parse([]byte("# T\n\nSee [[Other Note]].\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(plain.HTML, `data-heading=""`) {
+		t.Fatalf("headingless link should carry an empty data-heading: %s", plain.HTML)
+	}
+}
+
+// TestWikiLinkAttributesCarryTeXNotMathSentinels is the regression test for the
+// second P2 on PR #19. Math is lifted out of the source before wiki links are
+// replaced, so a heading like `$\sigma$ bound` reaches wikiLinkHTML as a
+// sentinel. RestoreMath then rewrites every sentinel in the document — including
+// ones sitting inside an attribute value, where the injected
+// `<span class="math math-inline">` ends the attribute at its first quote and
+// leaves malformed markup behind.
+func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"- self: [[#The $\\sigma$ bound]]\n" +
+		"- cross: [[Target#The $\\sigma$ bound]]\n" +
+		"- alias: [[Target|see $\\pi$]]\n\n" +
+		"## The $\\sigma$ bound\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	// The giveaway for the old bug: markup inside an attribute value.
+	if contains(parsed.HTML, `data-heading="The <span`) || contains(parsed.HTML, `data-alias="see <span`) {
+		t.Fatalf("math markup was injected into an attribute: %s", parsed.HTML)
+	}
+	for _, want := range []string{
+		`data-heading="The \sigma bound"`,
+		`data-alias="see \pi"`,
+	} {
+		if !contains(parsed.HTML, want) {
+			t.Errorf("expected %s in HTML, got: %s", want, parsed.HTML)
+		}
+	}
+	// No sentinel may survive anywhere, attribute or not.
+	if strings.ContainsRune(parsed.HTML, '') || strings.ContainsRune(parsed.HTML, '') {
+		t.Fatalf("math sentinel leaked into the output: %q", parsed.HTML)
+	}
+
+	// The same-note link still has to reach the heading, which it can only do
+	// once both sides are expressed in TeX rather than in sentinel indices —
+	// the heading and the link naming it are separate math spans.
+	if contains(parsed.HTML, `class="wiki-link wiki-link-self broken"`) {
+		t.Fatalf("self link to a heading containing math did not resolve: %s", parsed.HTML)
+	}
+	// Display text is element content, where the math element belongs.
+	if !contains(parsed.HTML, `>The <span class="math math-inline">\sigma</span> bound</a>`) {
+		t.Errorf("display text should still render the math: %s", parsed.HTML)
+	}
+
+	// The heading and target also reach the note JSON, where a sentinel is
+	// meaningless.
+	for _, wl := range parsed.WikiLinks {
+		if strings.ContainsRune(wl.Heading, '') || strings.ContainsRune(wl.Target, '') {
+			t.Errorf("math sentinel leaked into WikiLinks: %#v", wl)
+		}
+	}
+}

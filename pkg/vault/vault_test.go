@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -1243,5 +1244,275 @@ func TestReloadNotePreservesDisambiguatedSlugs(t *testing.T) {
 		if got := v.SlugForPath(abs); got != n.Slug {
 			t.Errorf("SlugForPath(%q) = %q, want %q", n.Path, got, n.Slug)
 		}
+	}
+}
+
+// TestWikiLinkWithMarkdownExtensionResolvesToTheSameNote is the end-to-end guard
+// for PV-WIKILINK-021. The vault deliberately also contains a decoy whose own
+// slug is "…/thesis-md" — exactly what an unstripped "[[…/thesis.md]]" target
+// slugifies to — so a regression does not merely leave the link unresolved, it
+// silently points at the decoy. Both link forms must land on the real note.
+func TestWikiLinkWithMarkdownExtensionResolvesToTheSameNote(t *testing.T) {
+	root := t.TempDir()
+	const dir = "Transcripts/2026/08/06/RAG DSL for Retrieval"
+	writeVaultTestFile(t, root, dir+"/thesis.md", "# Doctoral thesis\n\n## Identity is an API decision\n\nbody\n")
+	writeVaultTestFile(t, root, dir+"/thesis md.md", "# Decoy\n\nnot the note you wanted\n")
+	writeVaultTestFile(t, root, "Research/Zoo.md",
+		"# Zoo\n\n"+
+			"- with: [["+dir+"/thesis.md#Identity is an API decision]]\n"+
+			"- without: [["+dir+"/thesis#Identity is an API decision]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	const wantSlug = "transcripts/2026/08/06/rag-dsl-for-retrieval/thesis"
+	for _, target := range []string{dir + "/thesis.md", dir + "/thesis"} {
+		got, ok := v.ResolveWikiLink(target)
+		if !ok || got != wantSlug {
+			t.Errorf("ResolveWikiLink(%q) = %q, %v; want %q, true", target, got, ok, wantSlug)
+		}
+	}
+
+	zoo, ok := v.GetNote("research/zoo")
+	if !ok {
+		t.Fatal("zoo note missing")
+	}
+	wantHref := `href="/note/` + wantSlug + `#identity-is-an-api-decision"`
+	if strings.Count(zoo.HTML, wantHref) != 2 {
+		t.Fatalf("both link forms should render %s, got: %s", wantHref, zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, "thesis-md") {
+		t.Fatalf("link leaked onto the decoy slug: %s", zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, "#unresolved-") {
+		t.Fatalf("link stayed unresolved: %s", zoo.HTML)
+	}
+
+	// The backlink graph is fed from WikiLink.Target, so it has to agree.
+	thesis, ok := v.GetNote(wantSlug)
+	if !ok {
+		t.Fatal("thesis note missing")
+	}
+	if len(thesis.Backlinks) != 1 || thesis.Backlinks[0] != "research/zoo" {
+		t.Fatalf("backlinks = %#v, want [research/zoo]", thesis.Backlinks)
+	}
+}
+
+// TestSelfHeadingLinksSurviveRebuild guards the [[#Heading]] fix against the
+// vault layer. rebuildHTML re-runs every resolution pass over the parser output
+// on each reload, so a same-note anchor that the parser got right could still be
+// rewritten back into a /note/ link — ReplaceWikiLinksString rewrites hrefs, and
+// ReplaceWikiLinkDisplay rewrites anchor text.
+func TestSelfHeadingLinksSurviveRebuild(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Zoo.md",
+		"# Zoo\n\n"+
+			"- self: [[#9.2 Kernel K0: canonical identity]]\n"+
+			"- other: [[Other]]\n\n"+
+			"## 9.2 Kernel K0: canonical identity\n")
+	writeVaultTestFile(t, root, "Other.md", "# Other\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	zoo, ok := v.GetNote("zoo")
+	if !ok {
+		t.Fatal("zoo note missing")
+	}
+
+	if !strings.Contains(zoo.HTML, `href="#92-kernel-k0-canonical-identity"`) {
+		t.Fatalf("self heading anchor did not survive the vault passes: %s", zoo.HTML)
+	}
+	if !strings.Contains(zoo.HTML, `>9.2 Kernel K0: canonical identity</a>`) {
+		t.Fatalf("self heading link lost its display text: %s", zoo.HTML)
+	}
+	if strings.Contains(zoo.HTML, `href="/note/#`) {
+		t.Fatalf("self heading link was routed back through /note/: %s", zoo.HTML)
+	}
+
+	// The ordinary link next to it must still resolve, and the self link must
+	// not have added a phantom edge to the graph.
+	if !strings.Contains(zoo.HTML, `href="/note/other"`) {
+		t.Fatalf("neighbouring note link broke: %s", zoo.HTML)
+	}
+	if len(zoo.WikiLinks) != 1 || zoo.WikiLinks[0].Target != "Other" {
+		t.Fatalf("WikiLinks = %#v, want just the Other link", zoo.WikiLinks)
+	}
+}
+
+// TestCrossNoteHeadingFragmentsUseTheTargetsRenderedIDs is the regression test
+// for the cross-note half of the fragment bug. The parser writes a provisional
+// fragment with slugify; the target note's heading ids come from goldmark, which
+// disagrees with slugify on any heading containing punctuation. Before the fix
+// these links opened the right note at the top of the page.
+func TestCrossNoteHeadingFragmentsUseTheTargetsRenderedIDs(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md",
+		"# Target\n\n"+
+			"## 9.2 Kernel K0: canonical identity\n\n"+
+			"## Entity–Derivation–Observation Separation\n\n"+
+			"## Notes\n\n## Notes\n")
+	writeVaultTestFile(t, root, "Hidden.md", "---\npublish: false\n---\n\n# Hidden\n\n## Secret Section\n")
+	writeVaultTestFile(t, root, "Source.md",
+		"# Source\n\n"+
+			"- punct: [[Target#9.2 Kernel K0: canonical identity]]\n"+
+			"- dashes: [[Target#Entity–Derivation–Observation Separation]]\n"+
+			"- dupe: [[Target#Notes]]\n"+
+			"- absent: [[Target#no such heading]]\n"+
+			"- hidden: [[Hidden#Secret Section]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	src, ok := v.GetNote("source")
+	if !ok {
+		t.Fatal("source note missing")
+	}
+
+	// goldmark deletes "." and the dashes; slugify would have hyphenated them.
+	for _, want := range []string{
+		`href="/note/target#92-kernel-k0-canonical-identity"`,
+		`href="/note/target#entityderivationobservation-separation"`,
+		`href="/note/target#notes"`,
+	} {
+		if !strings.Contains(src.HTML, want) {
+			t.Errorf("expected %s, got: %s", want, src.HTML)
+		}
+	}
+	for _, unwanted := range []string{
+		`#9-2-kernel-k0-canonical-identity`,
+		`#entity-derivation-observation-separation`,
+		`#notes-1`, // duplicate headings: the first one wins
+	} {
+		if strings.Contains(src.HTML, unwanted) {
+			t.Errorf("stale slugified fragment %s survived: %s", unwanted, src.HTML)
+		}
+	}
+	// A heading the target does not have leaves the link working, without a
+	// fragment that points at nothing.
+	if !strings.Contains(src.HTML, `href="/note/target"`) {
+		t.Errorf("absent heading should drop the fragment, not the link: %s", src.HTML)
+	}
+	if strings.Contains(src.HTML, "#no-such-heading") {
+		t.Errorf("fragment for an absent heading should be dropped: %s", src.HTML)
+	}
+	// An unpublished target is not a note at all: the link is already unresolved
+	// and must not be rewritten into a /note/ link by the fragment pass.
+	if !strings.Contains(src.HTML, `href="#unresolved-hidden"`) {
+		t.Errorf("link to an unpublished note should stay unresolved: %s", src.HTML)
+	}
+}
+
+// TestCrossNoteHeadingFragmentsFollowTargetEdits guards the reload path: the
+// fragment lives in the *linking* note's HTML but is derived from the *target*
+// note, so renaming a heading has to re-resolve every link pointing at it.
+func TestCrossNoteHeadingFragmentsFollowTargetEdits(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 1.1 First\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target#1.1 First]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	src, _ := v.GetNote("source")
+	if !strings.Contains(src.HTML, `href="/note/target#11-first"`) {
+		t.Fatalf("initial fragment wrong: %s", src.HTML)
+	}
+
+	// Rename the heading; the link now names a heading that no longer exists.
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 2.2 Second\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); err != nil {
+		t.Fatalf("ReloadNote: %v", err)
+	}
+	src, _ = v.GetNote("source")
+	if strings.Contains(src.HTML, "#11-first") {
+		t.Fatalf("stale fragment survived the target's edit: %s", src.HTML)
+	}
+	if !strings.Contains(src.HTML, `href="/note/target"`) {
+		t.Fatalf("link should still open the target: %s", src.HTML)
+	}
+
+	// Put it back: the link must recover rather than stay dropped.
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## 1.1 First\n")
+	if _, err := v.ReloadNote(filepath.Join(root, "Target.md")); err != nil {
+		t.Fatalf("ReloadNote: %v", err)
+	}
+	src, _ = v.GetNote("source")
+	if !strings.Contains(src.HTML, `href="/note/target#11-first"`) {
+		t.Fatalf("fragment did not recover after the heading came back: %s", src.HTML)
+	}
+}
+
+// TestUppercaseMarkdownExtensionIsStrippedEverywhere is the regression test for
+// the first P2 on PR #19. The vault walk accepts "Note.MD" case-insensitively,
+// but pathToSlug and buildWikiLinkIndex used to trim only a lowercase ".md" —
+// so such a note was published at the slug "note-md", and making the wiki-link
+// strip case-insensitive on its own would have turned [[Note.MD]] from a
+// working link into a broken one. All three spellings must agree.
+func TestUppercaseMarkdownExtensionIsStrippedEverywhere(t *testing.T) {
+	root := t.TempDir()
+	// A title that differs from the filename: otherwise the title-slug entry in
+	// the wiki-link index masks the bug.
+	writeVaultTestFile(t, root, "Upper.MD", "# A Different Title\n\nbody\n")
+	writeVaultTestFile(t, root, "Linker.md", "# Linker\n\n[[Upper.MD]] [[Upper.md]] [[Upper]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	upper, ok := v.GetNote("upper")
+	if !ok {
+		t.Fatalf("note should be published at 'upper', not with the extension in its slug; slugs: %v", slugsOf(v))
+	}
+	if upper.Title != "A Different Title" {
+		t.Errorf("Title = %q, want the H1", upper.Title)
+	}
+
+	linker, ok := v.GetNote("linker")
+	if !ok {
+		t.Fatal("linker note missing")
+	}
+	if got := strings.Count(linker.HTML, `href="/note/upper"`); got != 3 {
+		t.Fatalf("all three spellings should resolve, got %d: %s", got, linker.HTML)
+	}
+	if strings.Contains(linker.HTML, "#unresolved-") {
+		t.Fatalf("no link should be unresolved: %s", linker.HTML)
+	}
+}
+
+var headingIDRe = regexp.MustCompile(`<h2 id="([^"]*)"`)
+
+// TestCrossNoteHeadingFragmentWithMath pins that a heading containing math is
+// still reachable from another note. The linking note and the target hold
+// different sentinels for the same formula, so the two only become comparable
+// once both are expressed as TeX.
+func TestCrossNoteHeadingFragmentWithMath(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## The $\\sigma$ bound\n\nbody\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target#The $\\sigma$ bound]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	target, _ := v.GetNote("target")
+	source, _ := v.GetNote("source")
+
+	id := headingIDRe.FindStringSubmatch(target.HTML)
+	if len(id) < 2 {
+		t.Fatalf("target has no h2 id: %s", target.HTML)
+	}
+	want := `href="/note/target#` + id[1] + `"`
+	if !strings.Contains(source.HTML, want) {
+		t.Fatalf("expected %s, got: %s", want, source.HTML)
+	}
+	if strings.Contains(source.HTML, `data-heading="The <span`) {
+		t.Fatalf("math markup injected into an attribute: %s", source.HTML)
 	}
 }
