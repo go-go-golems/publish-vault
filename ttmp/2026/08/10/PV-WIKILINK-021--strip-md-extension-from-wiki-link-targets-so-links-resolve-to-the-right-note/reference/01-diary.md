@@ -950,3 +950,188 @@ Resolution order in `rebuildHTML` is now: `ReplaceWikiLinksString` (slug) →
 `RewriteImageSources` → `ReplaceWikiEmbedImages` → `replaceUnresolvedNoteEmbeds`.
 The fragment pass has to follow the slug pass, because which note's headings to
 consult is not known until the slug is resolved.
+
+---
+
+## Step 7: Two P2 findings from the PR review
+
+Codex left two P2 comments on PR #19. Both are real, both are mine, and both are
+the same shape as the bugs this ticket set out to fix: a value produced in one
+place, consumed in another, under an assumption the two ends did not share. I
+reproduced each against the actual code before touching anything.
+
+The second one is worse than the reviewer's description and worse than what I
+had written in Step 6's "warrants a second pair of eyes" — I had it filed as
+"math headings don't resolve", when it actually emits malformed HTML.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review comments: https://github.com/go-go-golems/publish-vault/pull/19"
+
+**Assistant interpretation:** Work through the review feedback on PR #19 and fix
+what is valid.
+
+**Inferred user intent:** Get the PR to a mergeable state.
+
+**Commit (code):** c279a21 — "fix(PV-WIKILINK-021): address PR #19 review findings (2x P2)"
+
+### What I did
+
+- Reproduced both findings in a throwaway vault before editing anything.
+- **P2 #1 — uppercase extensions.** Made `parser.StripNoteExtension` the single
+  definition of "strip a note's extension" and routed `pathToSlug`,
+  `buildWikiLinkIndex` (both the filename and the progressive path suffixes),
+  the title fallback in `loadNote`, and the `FileTree` node label through it.
+- **P2 #2 — math in attributes.** Added `parser.RestoreMathText`, used it for
+  every generated attribute value (`data-heading`, `data-raw`, `data-alias`,
+  `data-asset`, `alt`) and for the values that reach `WikiLinks`; threaded
+  `[]MathSpan` into `extractWikiLinks` and `replaceWikiLinks`/`wikiLinkHTML`;
+  moved `resolveSelfHeadingLinks` to *after* `RestoreMath`.
+- Three regression tests, each verified to fail with only its own fix reverted.
+
+### Why
+
+**#1** was a genuine regression I introduced. The vault walk accepts `Note.MD`
+(`strings.HasSuffix(strings.ToLower(name), ".md")`), but `pathToSlug` and
+`buildWikiLinkIndex` trimmed a lowercase `".md"` only, so the note was published
+at slug `note-md`. Before this PR, `[[Note.MD]]` slugified to `note-md` and
+therefore *worked by accident*. My case-insensitive strip turned the target into
+`note` and broke it.
+
+The reviewer's framing — "make extension handling consistent" — is the right
+call, and consistency in the direction of stripping is strictly better: it also
+fixes `[[Note]]`, the natural Obsidian form, which never resolved to a `.MD`
+file at all. The cost is that a `.MD` note's slug changes from `note-md` to
+`note`, which is the correct URL rather than one with the file extension baked
+into it.
+
+**#2** was live in the output all along and I had mis-diagnosed it.
+
+### What worked
+
+The repro for #1, with a `.MD` file whose title differs from its filename (the
+title-slug entry in the index masks the bug otherwise):
+
+```
+before this PR:  [[Upper.MD]] → /note/upper-md   ✓ (by accident)
+                 [[Upper.md]] → /note/upper-md   ✓
+                 [[Upper]]    → #unresolved-upper ✗
+after Step 2:    all three    → #unresolved-upper ✗   ← the regression
+after this fix:  all three    → /note/upper       ✓
+```
+
+The repro for #2 — the actual rendered output before the fix:
+
+```html
+data-heading="The <span class="math math-inline">\sigma</span> bound"
+```
+
+The `"` before `math math-inline` closes `data-heading`, so everything after it
+is parsed as further attributes on the `<a>`. After:
+
+```html
+<a href="#the-2-bound" class="wiki-link wiki-link-self" data-heading="The \sigma bound"
+   data-alias="">The <span class="math math-inline">\sigma</span> bound</a>
+```
+
+Well-formed attribute carrying TeX, math still rendering in the display text,
+and the link now resolves — it did not before.
+
+`go test ./... -count=1` green across all 13 packages, `make lint` 0 issues.
+
+### What didn't work
+
+My first instinct on #2 was to keep `resolveSelfHeadingLinks` before
+`RestoreMath` — the placement Step 5 had argued for at some length, on the
+grounds that "both sides carry the same placeholders". That reasoning was
+wrong, and the output proves it: the heading and the link naming it are
+*separate math spans*, so they carry sentinels `2` and `0` for the same formula
+and never matched. Comparing them after restoration, where both sides are the
+same TeX, is what actually works. I had written the incorrect justification into
+a code comment and into the design doc; both are now corrected.
+
+### What I learned
+
+Two things, both about the shape of my own errors.
+
+The Step 5 comment was confidently wrong in a way tests did not catch, because
+I never wrote a test with math in a heading — I reasoned about it in prose and
+filed the conclusion under "known limitation" instead of running it. The
+reviewer found in minutes what I had talked myself out of checking.
+
+And #1 is a textbook instance of the very failure this ticket is about: the
+existing behaviour depended on two functions agreeing about `.md`, they didn't,
+and the `.MD` link worked only because both sides were wrong in the same
+direction. Changing one side "correctly" broke it. Fixing the pair together is
+the only stable answer.
+
+### What was tricky to build
+
+**Which values are element content and which are attributes.** `display` must
+stay math-masked, because it is element content and `RestoreMath` turning it
+into a `<span class="math…">` is exactly what should happen — that is how math
+renders inside a link's text. Every *attribute* must be restored to TeX instead.
+So `wikiLinkHTML` now keeps both forms of the same three values side by side
+(`heading`/`attrHeading` and so on), and mixing them up would be silent: the
+attribute variant renders identically until a note happens to contain math.
+
+**The ordering constraint reversed.** Step 5 needed the self-heading pass before
+`RestoreMath`; this step needs it after. The comment at the call site now spells
+out why, because the old comment was a plausible-sounding argument for the wrong
+thing and would otherwise invite someone to move it back.
+
+**Threading spans without widening the API.** `extractWikiLinks` and
+`replaceWikiLinks` both needed `[]MathSpan`, and both are package-private, so
+the signatures changed rather than the exported surface. `RestoreMathText` is
+exported only because `Parse` and the tests need it; it is deliberately separate
+from `RestoreMath` rather than a mode flag on it, since "no markup, ever" is a
+different contract, not an option.
+
+### What warrants a second pair of eyes
+
+- **Heading ids for headings that contain math embed a sentinel index**
+  (`<h2 id="the-0-bound">` for `## The $\sigma$ bound`), because goldmark
+  generates the id while the math is still lifted out. Links now point at that
+  id correctly, so nothing is broken — but the id is not stable: adding a
+  formula *earlier* in the same note renumbers it and changes the heading's
+  permalink. Pre-existing, out of scope here, and worth its own ticket.
+- The `.MD` slug change is user-visible: a note at `Note.MD` moves from
+  `/note/note-md` to `/note/note`. That URL was wrong, but it was live.
+- `wikiLinkHTML` now escapes `data-raw` and `data-alias`, which it did not
+  before. That is a correctness fix (a target containing `"` produced broken
+  markup), but `ReplaceWikiLinkDisplay` matches `data-raw` textually, so a raw
+  target with an entity in it now compares as escaped on both sides.
+
+### What should be done in the future
+
+- File the unstable-heading-id issue above.
+- The static TS vault does none of this math handling; it has no math pre-pass
+  at all, so the question does not arise there yet.
+
+### Code review instructions
+
+- P2 #1: `parser.StripNoteExtension` and its four new call sites in
+  `pkg/vault/vault.go` (`pathToSlug`, `buildWikiLinkIndex` ×2, the `loadNote`
+  title fallback, `FileTree`).
+- P2 #2: `parser.RestoreMathText` in `internal/parser/math.go`; the
+  `attrTarget`/`attrAlias`/`attrHeading` values in `wikiLinkHTML`; the moved
+  `resolveSelfHeadingLinks` call in `Parse` and the comment explaining the
+  reversal.
+- `go test ./internal/parser/... ./pkg/vault/... -count=1`
+- To confirm the guards: revert either fix alone and re-run —
+  `TestUppercaseMarkdownExtensionIsStrippedEverywhere` for the first,
+  `TestWikiLinkAttributesCarryTeXNotMathSentinels` and
+  `TestCrossNoteHeadingFragmentWithMath` for the second.
+
+### Technical details
+
+`RestoreMathText` and `RestoreMath` are deliberately different substitutions of
+the same sentinels, and the pair is what makes matching work:
+
+| context | substitution | after tag-strip + unescape |
+|---|---|---|
+| element content (`RestoreMath`) | `<span class="math math-inline">\sigma</span>` | `\sigma` |
+| attribute / JSON (`RestoreMathText`) | `\sigma` | `\sigma` |
+
+`BuildHeadingIndex` strips tags and unescapes, so a heading rendered the first
+way and a `data-heading` written the second way reduce to the same key.

@@ -61,3 +61,14 @@ Step 6: cross-note [[Note#Heading]] fragments now resolve against the target not
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — HeadingIndex factored out of the same-note pass, plus ResolveWikiLinkHeadings
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/vault/vault.go — rebuildHTML resolves fragments against the target, with a per-pass heading-index cache
 
+
+## 2026-08-11
+
+Step 7: addressed two P2 findings from the PR #19 review. (1) The vault walk accepts 'Note.MD' but pathToSlug/buildWikiLinkIndex trimmed only lowercase '.md', so the case-insensitive wiki-link strip regressed [[Note.MD]] from working to broken; StripNoteExtension is now the single definition used by the slug, index, title fallback and file tree. (2) Math sentinels in generated attributes were rewritten by RestoreMath into malformed markup; attributes now carry TeX via RestoreMathText, and resolveSelfHeadingLinks moved after RestoreMath because a heading and its link are separate math spans (commit c279a21)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/math.go — RestoreMathText — sentinel to bare TeX, for attributes and JSON
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — attrTarget/attrAlias/attrHeading in wikiLinkHTML, and the moved self-heading pass
+- /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/pkg/vault/vault.go — pathToSlug, buildWikiLinkIndex, title fallback and FileTree all route through StripNoteExtension
+

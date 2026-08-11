@@ -103,11 +103,16 @@ beats invisibly broken.
 
 ### Placement
 
-The call sits in `Parse` between `renderCallouts` and `RestoreMath`. Not
-arbitrary: math is lifted out before wiki links are extracted and restored after
-every HTML pass, so in that window a heading and a link to it carry the *same*
-math placeholders and still match each other. After `RestoreMath` one side would
-have TeX and the other a placeholder.
+The call sits in `Parse` *after* `RestoreMath`.
+
+An earlier revision put it before, reasoning that a heading and a link to it
+would carry the same math placeholders while the math was still lifted out. That
+was wrong, and the PR review caught it: a heading and the link naming it are
+**separate math spans**, so they carry different sentinel indices for the same
+formula and never matched. Once the math is restored, the heading holds the TeX
+as its element's text content and the link holds the same TeX in `data-heading`
+(see `RestoreMathText`), and `BuildHeadingIndex` reduces both to the same key by
+stripping tags and unescaping.
 
 Resolution belongs in `Parse` rather than the vault layer because it depends only
 on the note itself. That also makes it survive `rebuildHTML`, which re-renders
@@ -143,6 +148,33 @@ Living in `rebuildHTML` also means a heading rename re-resolves every link
 pointing at it on the next reload. A heading the target does not have drops the
 fragment rather than leaving one known to dangle.
 
+## Math in headings
+
+Math is lifted out of the source before wiki links are replaced, so a heading
+like `$\sigma$ bound` reaches `wikiLinkHTML` as a sentinel — and `RestoreMath`
+rewrites every sentinel it finds anywhere in the document, *including inside an
+attribute value*, where the injected `<span class="math math-inline">` ends the
+attribute at its first quote:
+
+```html
+data-heading="The <span class="math math-inline">\sigma</span> bound"
+```
+
+`RestoreMathText` substitutes the bare TeX instead, and every generated
+attribute value goes through it. Element content still goes through
+`RestoreMath`, because that is where a math element belongs and renders. The two
+substitutions of the same sentinel are what make matching work:
+
+| context | substitution | after tag-strip + unescape |
+|---|---|---|
+| element content | `<span class="math math-inline">\sigma</span>` | `\sigma` |
+| attribute / JSON | `\sigma` | `\sigma` |
+
+Known wart, pre-existing and out of scope: goldmark generates heading ids while
+the math is still lifted out, so a heading containing math gets an id built from
+the sentinel index (`the-0-bound`). Links point at it correctly, but the id is
+not stable — adding a formula earlier in the note renumbers it.
+
 ## Not fixed here
 
 - `![[#Heading]]` and `![[Note#Heading]]` embeds ignore the heading entirely —
@@ -150,9 +182,6 @@ fragment rather than leaving one known to dangle.
   empty invisible div.
 - Block references `[[#^blockid]]` are unsupported; a same-note one renders
   visibly broken, a cross-note one drops its fragment.
-- A heading containing math, linked from another note, does not resolve: math is
-  lifted per note, so the two sides carry different placeholders. The fragment is
-  dropped and the link still opens the note.
 - The static TS vault emits no heading fragments at all, because marked v18
   emits no heading ids.
 
