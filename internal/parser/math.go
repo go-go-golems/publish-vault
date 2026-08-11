@@ -24,6 +24,7 @@ import (
 	stdhtml "html"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // MathSpan describes one math region found in Markdown source.
@@ -210,6 +211,34 @@ func RestoreMath(html string, spans []MathSpan) string {
 			return ""
 		}
 		return mathElement(s)
+	})
+}
+
+// RestoreMathText replaces math sentinels with the bare TeX they stand for, no
+// markup.
+//
+// It exists for values that end up somewhere markup cannot go: an HTML
+// attribute, or a JSON field. RestoreMath rewrites every sentinel it finds
+// anywhere in the document, and a `<span class="math math-inline">…</span>`
+// landing inside an attribute value terminates that attribute at its first
+// quote, producing garbage. Substituting the TeX keeps the value well-formed —
+// and comparable with the text content of a rendered math element, which is the
+// same TeX once tags are stripped, so a heading carrying math still matches the
+// link that names it.
+func RestoreMathText(s string, spans []MathSpan) string {
+	if len(spans) == 0 || !strings.Contains(s, mathSentinelOpen) {
+		return s
+	}
+	return mathSentinelRe.ReplaceAllStringFunc(s, func(match string) string {
+		sub := mathSentinelRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		idx, err := strconv.Atoi(sub[1])
+		if err != nil || idx < 0 || idx >= len(spans) {
+			return ""
+		}
+		return spans[idx].TeX
 	})
 }
 

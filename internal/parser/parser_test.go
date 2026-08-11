@@ -761,3 +761,58 @@ func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 		t.Fatalf("headingless link should carry an empty data-heading: %s", plain.HTML)
 	}
 }
+
+// TestWikiLinkAttributesCarryTeXNotMathSentinels is the regression test for the
+// second P2 on PR #19. Math is lifted out of the source before wiki links are
+// replaced, so a heading like `$\sigma$ bound` reaches wikiLinkHTML as a
+// sentinel. RestoreMath then rewrites every sentinel in the document — including
+// ones sitting inside an attribute value, where the injected
+// `<span class="math math-inline">` ends the attribute at its first quote and
+// leaves malformed markup behind.
+func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
+	src := []byte("# T\n\n" +
+		"- self: [[#The $\\sigma$ bound]]\n" +
+		"- cross: [[Target#The $\\sigma$ bound]]\n" +
+		"- alias: [[Target|see $\\pi$]]\n\n" +
+		"## The $\\sigma$ bound\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	// The giveaway for the old bug: markup inside an attribute value.
+	if contains(parsed.HTML, `data-heading="The <span`) || contains(parsed.HTML, `data-alias="see <span`) {
+		t.Fatalf("math markup was injected into an attribute: %s", parsed.HTML)
+	}
+	for _, want := range []string{
+		`data-heading="The \sigma bound"`,
+		`data-alias="see \pi"`,
+	} {
+		if !contains(parsed.HTML, want) {
+			t.Errorf("expected %s in HTML, got: %s", want, parsed.HTML)
+		}
+	}
+	// No sentinel may survive anywhere, attribute or not.
+	if strings.ContainsRune(parsed.HTML, '') || strings.ContainsRune(parsed.HTML, '') {
+		t.Fatalf("math sentinel leaked into the output: %q", parsed.HTML)
+	}
+
+	// The same-note link still has to reach the heading, which it can only do
+	// once both sides are expressed in TeX rather than in sentinel indices —
+	// the heading and the link naming it are separate math spans.
+	if contains(parsed.HTML, `class="wiki-link wiki-link-self broken"`) {
+		t.Fatalf("self link to a heading containing math did not resolve: %s", parsed.HTML)
+	}
+	// Display text is element content, where the math element belongs.
+	if !contains(parsed.HTML, `>The <span class="math math-inline">\sigma</span> bound</a>`) {
+		t.Errorf("display text should still render the math: %s", parsed.HTML)
+	}
+
+	// The heading and target also reach the note JSON, where a sentinel is
+	// meaningless.
+	for _, wl := range parsed.WikiLinks {
+		if strings.ContainsRune(wl.Heading, '') || strings.ContainsRune(wl.Target, '') {
+			t.Errorf("math sentinel leaked into WikiLinks: %#v", wl)
+		}
+	}
+}

@@ -65,10 +65,10 @@ func Parse(src []byte) (*ParsedNote, error) {
 	// `[[Foo]]` inside a formula is literal TeX, not a link. Scanning the raw
 	// source would still record it, and buildBacklinks would then give Foo a
 	// backlink pointing at a note that does not link to it.
-	wikiLinks := extractWikiLinks(processed)
+	wikiLinks := extractWikiLinks(processed, mathSpans)
 
 	// --- Replace [[wiki links]] with placeholder HTML so goldmark doesn't mangle them ---
-	processed = replaceWikiLinks(processed)
+	processed = replaceWikiLinks(processed, mathSpans)
 
 	// --- Build goldmark with frontmatter ---
 	md := goldmark.New(
@@ -102,14 +102,17 @@ func Parse(src []byte) (*ParsedNote, error) {
 	// --- Render callouts (admonitions) ---
 	htmlOut = renderCallouts(htmlOut)
 
-	// --- Point [[#Heading]] links at the ids goldmark actually emitted ---
-	// Runs before RestoreMath on purpose: a heading containing math carries the
-	// same placeholders on both sides of the comparison while the math is still
-	// lifted out, so `## $\sigma$ notes` and `[[#$\sigma$ notes]]` still match.
-	htmlOut = resolveSelfHeadingLinks(htmlOut)
-
-	// --- Put math back, last, so no other pass ever sees its markup ---
+	// --- Put math back, before the heading pass and after every other one ---
 	htmlOut = RestoreMath(htmlOut, mathSpans)
+
+	// --- Point [[#Heading]] links at the ids goldmark actually emitted ---
+	// Runs *after* RestoreMath. A heading and a link naming it hold different
+	// sentinels for the same formula (they are separate spans), so the two only
+	// become comparable once the math is back: the heading renders the TeX as an
+	// element's text content, and the link carries the same TeX in data-heading
+	// (see RestoreMathText). Comparing before RestoreMath matched sentinel
+	// indices against each other and never agreed.
+	htmlOut = resolveSelfHeadingLinks(htmlOut)
 
 	// --- Extract title ---
 	title := extractTitle(frontmatter, src)
@@ -131,7 +134,12 @@ func Parse(src []byte) (*ParsedNote, error) {
 }
 
 // extractWikiLinks finds all [[wiki links]] and ![[embeds]] in the source.
-func extractWikiLinks(src []byte) []WikiLink {
+//
+// src is the math-masked body (a [[Foo]] inside a formula is literal TeX, not a
+// link), so the spans are needed to put any math a target or heading contains
+// back as TeX — these values reach the note JSON and the backlink graph, where
+// a sentinel is meaningless.
+func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
 	matches := wikiLinkRegex.FindAllSubmatch(src, -1)
 	seen := map[string]bool{}
 	var links []WikiLink
@@ -139,6 +147,9 @@ func extractWikiLinks(src []byte) []WikiLink {
 		isEmbed := string(m[1]) == "!"
 		inner := string(m[2])
 		target, alias, heading := parseWikiLinkInner(inner)
+		target = RestoreMathText(target, spans)
+		alias = RestoreMathText(alias, spans)
+		heading = RestoreMathText(heading, spans)
 		// Image embeds are asset references, not note links; keeping them out
 		// of WikiLinks keeps backlinks and the wiki-link index clean. So is a
 		// [[#Heading]] link, which names an anchor in this very note: it used to
@@ -197,6 +208,11 @@ func parseWikiLinkInner(inner string) (string, string, string) {
 // Only ".md" is stripped: the vault loads no other extension, so ".markdown" is
 // part of a note's name rather than a suffix. A bare ".md" target is left as-is
 // rather than reduced to the empty string.
+//
+// The match is case-insensitive because the vault's walk accepts "Note.MD".
+// This is the single definition of "strip a note's extension" — pathToSlug and
+// buildWikiLinkIndex call it too, so a link's target and a note's slug cannot
+// disagree about whether ".MD" is an extension.
 func StripNoteExtension(target string) string {
 	if len(target) <= len(".md") {
 		return target
@@ -209,9 +225,11 @@ func StripNoteExtension(target string) string {
 
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
 // The frontend renderer will later resolve slugs to actual paths.
-func replaceWikiLinks(src []byte) []byte {
+func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
 	frontmatter, body := splitFrontmatter(src)
-	replacedBody := wikiLinkRegex.ReplaceAllFunc(body, wikiLinkHTML)
+	replacedBody := wikiLinkRegex.ReplaceAllFunc(body, func(match []byte) []byte {
+		return wikiLinkHTML(match, spans)
+	})
 	if len(frontmatter) == 0 {
 		return replacedBody
 	}
@@ -244,7 +262,7 @@ func splitFrontmatter(src []byte) ([]byte, []byte) {
 	return nil, src
 }
 
-func wikiLinkHTML(match []byte) []byte {
+func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
 	isEmbed := match[0] == '!'
 	inner := string(match)
 	if isEmbed {
@@ -253,7 +271,15 @@ func wikiLinkHTML(match []byte) []byte {
 		inner = inner[2 : len(inner)-2] // strip [[  ]]
 	}
 	target, alias, heading := parseWikiLinkInner(inner)
-	slug := slugify(target)
+	// Attribute values must carry TeX rather than math sentinels: RestoreMath
+	// runs over the whole document afterwards and would inject a <span> into the
+	// attribute, whose quotes end it early (see RestoreMathText). display is
+	// deliberately left masked — it is element content, where the math element
+	// belongs and renders.
+	attrTarget := RestoreMathText(target, spans)
+	attrAlias := RestoreMathText(alias, spans)
+	attrHeading := RestoreMathText(heading, spans)
+	slug := slugify(attrTarget)
 	display := alias
 	if display == "" {
 		display = target
@@ -262,9 +288,9 @@ func wikiLinkHTML(match []byte) []byte {
 		if isImageTarget(target) {
 			// Image embed: rendered as <img>; the vault layer resolves
 			// data-asset to a /vault-assets URL via ReplaceWikiEmbedImages.
-			return []byte(`<img class="wiki-embed-image" data-asset="` + stdhtml.EscapeString(target) + `" alt="` + stdhtml.EscapeString(display) + `" loading="lazy">`)
+			return []byte(`<img class="wiki-embed-image" data-asset="` + stdhtml.EscapeString(attrTarget) + `" alt="` + stdhtml.EscapeString(display) + `" loading="lazy">`)
 		}
-		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + heading + `" data-raw="` + target + `"></div>`)
+		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `"></div>`)
 	}
 	if target == "" {
 		// [[#Heading]] — a link to a heading in *this* note, not to another
@@ -280,7 +306,7 @@ func wikiLinkHTML(match []byte) []byte {
 		if display == "" {
 			display = heading
 		}
-		return []byte(`<a href="#" class="wiki-link wiki-link-self" data-heading="` + stdhtml.EscapeString(heading) + `" data-alias="` + stdhtml.EscapeString(alias) + `">` + stdhtml.EscapeString(display) + `</a>`)
+		return []byte(`<a href="#" class="wiki-link wiki-link-self" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + stdhtml.EscapeString(display) + `</a>`)
 	}
 	href := "/note/" + slug
 	if heading != "" {
@@ -289,9 +315,9 @@ func wikiLinkHTML(match []byte) []byte {
 		// actually rendered (ResolveWikiLinkHeadings); data-heading carries the
 		// heading text that pass needs, since the fragment alone has already
 		// lost it.
-		href += "#" + slugify(heading)
+		href += "#" + slugify(attrHeading)
 	}
-	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + target + `" data-heading="` + stdhtml.EscapeString(heading) + `" data-alias="` + alias + `">` + display + `</a>`)
+	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + display + `</a>`)
 }
 
 var (

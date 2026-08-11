@@ -284,7 +284,7 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 	title := parsed.Title
 	if title == "" {
 		// Fall back to filename without extension
-		title = strings.TrimSuffix(info.Name(), ".md")
+		title = parser.StripNoteExtension(info.Name())
 	}
 
 	frontmatter := parsed.Frontmatter
@@ -378,13 +378,13 @@ func (v *Vault) buildWikiLinkIndex() {
 		// e.g., path "Research/KB/Tribal/App.md" → register:
 		//   "tribal/app", "kb/tribal/app"
 		parts := strings.Split(filepath.ToSlash(note.Path), "/")
-		filename := strings.TrimSuffix(parts[len(parts)-1], ".md")
+		filename := parser.StripNoteExtension(parts[len(parts)-1])
 		suffixes := []string{parser.Slugify(filename)}
 
 		// Build progressive suffixes from the end of the path
 		for i := len(parts) - 2; i >= 0; i-- {
 			shortPath := strings.Join(parts[i:], "/")
-			shortPath = strings.TrimSuffix(shortPath, ".md")
+			shortPath = parser.StripNoteExtension(shortPath)
 			suffixes = append(suffixes, parser.Slugify(shortPath))
 		}
 
@@ -1108,7 +1108,7 @@ func (v *Vault) FileTree() *FileNode {
 			}
 			isLast := i == len(parts)-1
 			node := &FileNode{
-				Name:     strings.TrimSuffix(part, ".md"),
+				Name:     parser.StripNoteExtension(part),
 				Path:     current,
 				IsFolder: !isLast,
 			}
@@ -1188,7 +1188,7 @@ func (v *Vault) ReadRaw(relPath string) ([]byte, error) {
 // pathToSlug converts a relative file path to a URL slug.
 func pathToSlug(relPath string) string {
 	s := filepath.ToSlash(relPath)
-	s = strings.TrimSuffix(s, ".md")
+	s = parser.StripNoteExtension(s)
 	return parser.Slugify(s)
 }
 

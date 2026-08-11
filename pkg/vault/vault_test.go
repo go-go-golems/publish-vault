@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -1444,5 +1445,74 @@ func TestCrossNoteHeadingFragmentsFollowTargetEdits(t *testing.T) {
 	src, _ = v.GetNote("source")
 	if !strings.Contains(src.HTML, `href="/note/target#11-first"`) {
 		t.Fatalf("fragment did not recover after the heading came back: %s", src.HTML)
+	}
+}
+
+// TestUppercaseMarkdownExtensionIsStrippedEverywhere is the regression test for
+// the first P2 on PR #19. The vault walk accepts "Note.MD" case-insensitively,
+// but pathToSlug and buildWikiLinkIndex used to trim only a lowercase ".md" —
+// so such a note was published at the slug "note-md", and making the wiki-link
+// strip case-insensitive on its own would have turned [[Note.MD]] from a
+// working link into a broken one. All three spellings must agree.
+func TestUppercaseMarkdownExtensionIsStrippedEverywhere(t *testing.T) {
+	root := t.TempDir()
+	// A title that differs from the filename: otherwise the title-slug entry in
+	// the wiki-link index masks the bug.
+	writeVaultTestFile(t, root, "Upper.MD", "# A Different Title\n\nbody\n")
+	writeVaultTestFile(t, root, "Linker.md", "# Linker\n\n[[Upper.MD]] [[Upper.md]] [[Upper]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	upper, ok := v.GetNote("upper")
+	if !ok {
+		t.Fatalf("note should be published at 'upper', not with the extension in its slug; slugs: %v", slugsOf(v))
+	}
+	if upper.Title != "A Different Title" {
+		t.Errorf("Title = %q, want the H1", upper.Title)
+	}
+
+	linker, ok := v.GetNote("linker")
+	if !ok {
+		t.Fatal("linker note missing")
+	}
+	if got := strings.Count(linker.HTML, `href="/note/upper"`); got != 3 {
+		t.Fatalf("all three spellings should resolve, got %d: %s", got, linker.HTML)
+	}
+	if strings.Contains(linker.HTML, "#unresolved-") {
+		t.Fatalf("no link should be unresolved: %s", linker.HTML)
+	}
+}
+
+var headingIDRe = regexp.MustCompile(`<h2 id="([^"]*)"`)
+
+// TestCrossNoteHeadingFragmentWithMath pins that a heading containing math is
+// still reachable from another note. The linking note and the target hold
+// different sentinels for the same formula, so the two only become comparable
+// once both are expressed as TeX.
+func TestCrossNoteHeadingFragmentWithMath(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## The $\\sigma$ bound\n\nbody\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target#The $\\sigma$ bound]]\n")
+
+	v, err := New(root)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	target, _ := v.GetNote("target")
+	source, _ := v.GetNote("source")
+
+	id := headingIDRe.FindStringSubmatch(target.HTML)
+	if len(id) < 2 {
+		t.Fatalf("target has no h2 id: %s", target.HTML)
+	}
+	want := `href="/note/target#` + id[1] + `"`
+	if !strings.Contains(source.HTML, want) {
+		t.Fatalf("expected %s, got: %s", want, source.HTML)
+	}
+	if strings.Contains(source.HTML, `data-heading="The <span`) {
+		t.Fatalf("math markup injected into an attribute: %s", source.HTML)
 	}
 }
