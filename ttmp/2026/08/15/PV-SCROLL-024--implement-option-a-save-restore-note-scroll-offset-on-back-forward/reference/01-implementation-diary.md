@@ -126,3 +126,113 @@ if (isLoading) {
 }
 ```
 This early return means the `ScrollArea` (rendered only in `desktopLayout`/`mobileLayout` below) is absent from the DOM during loading. Therefore the scroller is not stable; the hook must live in persistent `NotePage` and capture offsets via a scroll listener before unmount.
+
+## Step 2: Library + tests (committed) and the innerHTML-rewrite bug (found, not yet fixed)
+
+Implemented the library and wired it into NotePage. The build/tests pass, but
+the end-to-end browser test failed for a real reason that the design did not
+anticipate: NoteHtml's resolveWikiLinks rewrites NoteBody innerHTML AFTER my
+restore, resetting scrollTop to 0.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1) — continuing the task-by-task implementation.
+
+**Assistant interpretation:** Implement the library + test, wire into NotePage, then verify end-to-end on the real vault.
+
+**Inferred user intent:** Ship working back/forward scroll restoration, proven on the real note, not just passing unit tests.
+
+### What I did
+
+- Wrote `web/src/lib/scrollRestoration.ts`: `pickScrollAction` (pure), `useScrollRestoration(containerRef, ready)`, `findVisibleScroller`. tsc clean.
+- Wrote `web/src/lib/scrollRestoration.test.ts` (8 cases, node env). All pass.
+- Committed library (`11e842f`) — lefthook `web-check` passed.
+- Wired into `NotePage.tsx`: `useScrollRestoration(layoutRef, !!note)` before the early returns; wrapped the desktop+mobile layout in `<div ref={layoutRef}>`; added `note-scroll` class to the three article `ScrollArea`s. tsc clean, vitest 34 pass, build OK. Committed (`9b84e01`).
+- End-to-end test on the real vault (CoinVault index → README → Back):
+  - Set scroller.scrollTop = 3500; scroll listener captured it (confirmed 3500 after 150ms).
+  - Clicked cross-note link → README loaded at top (correct fresh-forward behavior).
+  - Pressed Back → index reloaded but scrollTop = 0, NOT 3500. **Restore failed.**
+  - Verified `history.scrollRestoration === "manual"` (hook mount effect ran) and `resolveWikiLinks` ran (952 self-links, 0 broken → NoteBody innerHTML was rewritten).
+
+### Why it failed (root cause)
+
+The save/restore timing is correct relative to the scroller's mount, but NOT
+relative to the content's final settle. On Back, the sequence is:
+
+1. NotePage mounts; scroller (`.note-scroll`) exists.
+2. My bind/restore effect runs: rAF loop sets `scroller.scrollTop = 3500`.
+3. NoteHtml's `resolveWikiLinks` effect runs (also keyed on `html`/`slugSet`):
+   `setResolvedHtml(resolveWikiLinks(html, slugSet))` → NoteBody's
+   `dangerouslySetInnerHTML` changes → React rewrites `innerHTML` → **the
+   browser resets the scroller's `scrollTop` to 0** (a content swap resets
+   scroll position).
+4. My rAF loop had already exited (step 2 set it once and returned), so nothing
+   re-applies 3500.
+
+The design assumed the content was stable when the restore ran. It is not:
+`resolveWikiLinks` is a *client-side* rewrite that happens after first paint,
+and it destroys scroll position. This is exactly the PV-WIKILINK-022-era
+"server output looks correct but the client clobbers it" pattern, one layer
+up: here the client's own content-finalization clobbers the scroll restore.
+
+### What didn't work
+
+- Naive rAF-then-set restore: it runs before `resolveWikiLinks` finalizes, so the
+  set is undone by the innerHTML rewrite.
+
+### What I learned
+
+- The restore must be keyed on the *final* content, not just the scroller's
+  presence. `NoteHtml` is where `resolvedHtml` is known; `NotePage`'s hook does
+  not know when content is finalized.
+- Adding `useLocation` to `NoteHtml` would break its Storybook stories (they
+  are not wrapped in a Router — confirmed in `NoteHtml.stories.tsx`).
+
+### Path forward (not yet implemented)
+
+Keep the save logic + scroll listener + saved-offsets map in the persistent
+`NotePage` hook, but export a module-level store so `NoteHtml` can trigger the
+restore once its content is finalized. Two viable approaches:
+
+1. **Restore in NoteHtml, keyed on `resolvedHtml`**: `NoteHtml` reads the saved
+   offset for the current `location.key` from a shared module-level store and
+   applies it in an effect on `[resolvedHtml]` (after the innerHTML rewrite).
+   NotePage's hook still owns save + the `lastOffset` ref + `manual` declaration.
+   This keeps the pure policy testable and avoids a Router in NoteHtml stories
+   (NoteHtml would receive the saved offset via a prop or a context, OR use a
+   tiny module-level `getSavedOffset(key)` helper that NotePage populates).
+2. **MutationObserver in the hook**: observe the scroller's subtree; on
+   mutation that resets `scrollTop` below the saved offset (within the restore
+   window), re-apply. More robust to any future content-finalization pass, but
+   more complex and easier to fight user scroll.
+
+Chosen direction: **Approach 1** (restore after `resolvedHtml` in `NoteHtml`),
+because it keys on the actual content-stable signal rather than guessing with a
+timer/observer. Needs a module-level store (e.g. `scrollStore` in
+`scrollRestoration.ts` with `save(key,offset)`/`get(key)`/`use(key)`) shared by
+the NotePage hook (writer) and the NoteHtml restore (reader).
+
+### What warrants a second pair of eyes
+
+- The shared-store approach introduces module-level mutable state; ensure it is
+  keyed by `location.key` and cleared sensibly (or just grows boundedly — a Map
+  of a handful of entries per session is fine).
+- Confirm Approach 1 does not re-clobber when the user scrolls after restore:
+  the restore effect should run once per `[resolvedHtml, location.key]` and then
+  stop; user scroll updates `lastOffset` via the listener, so a later
+  save captures the user's position, not the restored one.
+
+### What should be done in the future (immediate next)
+
+- Implement Approach 1: add a module-level store to `scrollRestoration.ts`;
+  have the NotePage hook write saved offsets to it; add a restore effect in
+  `NoteHtml` keyed on `[resolvedHtml]` that reads the store for the current key
+  and applies the offset (respecting hash precedence). Re-run the end-to-end
+  test (index→README→Back must restore ~3500).
+- Then: test forward-to-cached-note restore, hash precedence, and reload→top.
+- Update diary Step 3 with results; commit; final ticket bookkeeping.
+
+### Code review instructions
+
+- Current state: `git show 11e842f` (library) and `git show 9b84e01` (wiring).
+- Reproduce the failure: `pnpm --dir web build && go run ./cmd/retro-obsidian-publish serve --vault <vault> --port 8080 --watch=false`; open the CoinVault index; in DevTools run `document.querySelectorAll('.note-scroll').forEach(e=>e.clientHeight>0&&(e.scrollTop=3500)); wait 200ms; click a /note/ link; press Back; observe scrollTop==0 (bug)`.
