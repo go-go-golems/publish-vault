@@ -132,3 +132,65 @@ history.scrollRestoration = "manual";   // we own it
 //   offset = saved.get(key) ?? 0
 //   rAF loop until scrollHeight >= offset, then mainEl.scrollTop = offset (instant)
 ```
+
+## Step 2: Correct the scroller premise (live probe) and answer the user's mechanism question
+
+The user asked whether the browser can remember inner-div scroll and whether
+most sites scroll an inner element. Answering accurately required verifying
+which element actually scrolls on the live page — which overturned the Step 1
+premise that `<main>` is the scroller.
+
+### Prompt Context
+
+**User prompt (verbatim):** "is there no option to use the browser to scroll inner divs and remember  those? don't most websites scroll the inner element or so?"
+
+**Assistant interpretation:** Explain whether any browser mechanism remembers nested-div scroll on back/forward, and whether the inner-scroll pattern is actually the norm.
+
+**Inferred user intent:** The user suspects the fix should be "just use the browser" rather than hand-rolling, and wants to know if that's possible / normal.
+
+### What I did
+
+- On the live page, measured every `.retro-scroll` element with a real `scrollTop=2000` test plus a `window.scrollTo(0,500)` test.
+- Found: `window.scrollTo` is a no-op (`window.scrollY` stays 0; body scrollHeight == innerHeight == 1745); `<main>` does NOT scroll (`clientHeight == scrollHeight == 1717`); the **real article scroller is the nested `<div class="retro-scroll h-full p-6">`** (NotePage's `ScrollArea`, scrollHeight 16495, `scrollTop` accepted). `history.scrollRestoration === "auto"`.
+- Corrected the design doc: §4.2 (scroller is the ScrollArea, not `<main>`), §6.2 (fix lives in NotePage, not VaultLayout), §8 (implementation targets the ScrollArea), and elevated "scroll the window instead" to a real Option B.
+
+### Why
+
+Reading the code (h-screen overflow-hidden + main overflow-y-auto) suggested `<main>` was the scroller, but the nested `ScrollArea` with `h-full` makes `<main>` a non-scrolling pass-through. Only a live measurement found this. Shipping a fix that targeted `<main>` would have silently done nothing — the same failure mode the PV-WIKILINK-022 investigation warned about (server output looked correct; the bug was in the browser DOM).
+
+### What worked
+
+- The per-element `scrollTop` probe unambiguously identified the one element that actually accepts scroll, among 10 `.retro-scroll` candidates.
+- It also directly answered the user: `window.scrollY` never moves, so `scrollRestoration:"auto"` (already in effect) restores 0.
+
+### What didn't work
+
+- Nothing; purely diagnostic.
+
+### What I learned
+
+- `history.scrollRestoration` is **window/document-only**; there is no browser API that remembers a div's scroll. Confirmed by spec and by the live probe (it's `"auto"` and does nothing useful here).
+- Most *content* websites scroll the **window** (so the browser restores for free); the inner-div-scroll pattern is characteristic of *app-like* SPAs, which hand-roll restoration or use a framework feature. The user's intuition reflects app-SPAs, not the web norm.
+- The genuine "use the browser" option is to **make the window scroll** (Option B) — a larger layout rework, recorded as a legitimate alternative.
+
+### What was tricky to build
+
+Diagnosis only. The trap was the nested `h-full` chain: both `<main>` and the inner `ScrollArea` have `overflow-y:auto` and `h-full`, so which one scrolls depends on whether the inner element's height is clamped to the viewport (it is, via `h-full`). The innermost clamped element with overflowing content wins. Getting this wrong means the fix targets a non-scrolling container.
+
+### What warrants a second pair of eyes
+
+- Confirm the desktop scroller is the `h-full p-6` `ScrollArea` (line 140) and mobile is `h-full p-4` (line 176); the fix must ref the active branch's ScrollArea, or walk up from `contentRef` to the nearest scrollable ancestor (robust to layout shifts).
+- If Option B (window-scroll) is ever pursued, the resizable `ResizablePanelGroup` + sticky header rework is the risky part; budget it as its own ticket.
+
+### What should be done in the future
+
+- Decide Option A (hand-rolled save/restore in NotePage, this ticket) vs Option B (restructure to window-scroll, separate larger ticket). Option A is lower-risk and preserves the app layout; Option B is more "normal website" and gets browser restoration for free.
+
+### Code review instructions
+
+- Design doc §4.2 now carries the live evidence table; §6.2/§8/§10 corrected to the ScrollArea + Option B.
+- Reproduce the probe: on a note page, DevTools console → `Array.from(document.querySelectorAll('.retro-scroll')).map(e=>({cls:e.className.slice(0,30),ch:e.clientHeight,sh:e.scrollHeight,moved:(e.scrollTop=2000,e.scrollTop)}))` and `window.scrollTo(0,500),window.scrollY`.
+
+### Technical details
+
+Live probe result (article scroller identified): `<div class="retro-scroll h-full p-6">` — `clientHeight 1717, scrollHeight 16495, scrollTop accepted 2000`. `window.scrollY` never changes; `history.scrollRestoration === "auto"`. Therefore no browser mechanism can restore the article's position; it must be saved/restored on the ScrollArea (Option A), or the layout must scroll the window (Option B).

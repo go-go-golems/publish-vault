@@ -154,21 +154,37 @@ at the top, not at the scroll position you left.
 calls `history.pushState`. There is **no full page reload**, so the browser's
 scroll-snapshot-on-navigation does not engage for note-to-note moves.
 
-### 4.2 The window does not scroll; a nested `<main>` does
+### 4.2 The window does not scroll; a nested `ScrollArea` does
 
 `web/src/components/pages/VaultLayout/VaultLayout.tsx`:
 
 - The root layout is `<div className="flex flex-col h-screen overflow-hidden …">`
   (line 121) — `overflow-hidden` means the **window never scrolls**.
-- The actual scroller is a nested `<main className="… overflow-y-auto retro-scroll">`,
+- Inside it, the content region is `<main className="… overflow-y-auto retro-scroll">`,
   rendered in three branches (desktop split, desktop no-sidebar, mobile) at
-  lines 248, 257, and 263.
-- `retro-scroll` is defined in `web/src/styles/chrome.css:227` as
-  `overflow-y: auto; overflow-x: hidden;` — that CSS is what makes `<main>` the
-  scroller.
+  lines 248, 257, and 263. `retro-scroll` is defined in `web/src/styles/chrome.css:227`
+  as `overflow-y: auto; overflow-x: hidden;`.
+- **But `<main>` is *not* the actual scroller.** `NotePage` renders a nested
+  `<ScrollArea className="h-full p-6">` (a `<div class="retro-scroll h-full p-6">`,
+  `web/src/components/pages/NotePage/NotePage.tsx:140`) *inside* `<main>`. Both
+  have `h-full`, so `<main>`'s only child is exactly `clientHeight` tall and
+  `<main>` never overflows — the `ScrollArea` is the innermost scrollable and
+  holds the real 16495 px note content.
 
-So the browser's `window.scrollY` is always `0`. `scrollRestoration: "auto"`
-restores `0`. The user sees no movement.
+**Live evidence (the published page, verified in DevTools):**
+
+| Element | clientHeight | scrollHeight | scrolls? |
+|---|---|---|---|
+| `window`/document | 1745 | 1745 | No — `window.scrollTo(0,500)` stays `0` |
+| `<main class="h-full overflow-y-auto retro-scroll">` | 1717 | 1717 | No (content == client) |
+| `<div class="retro-scroll h-full p-6">` (NotePage's `ScrollArea`) | 1717 | **16495** | **Yes** (`scrollTop=2000` accepted) |
+| `history.scrollRestoration` | — | — | `"auto"` (default; nothing here overrides it) |
+
+So `window.scrollY` is always `0`; `scrollRestoration: "auto"` restores `0`;
+the user sees no movement. **The scroller to save/restore is the `ScrollArea`
+div owned by `NotePage`, not `VaultLayout`'s `<main>`.** This corrects an earlier
+revision of this doc that assumed `<main>` was the scroller — reading the code
+alone was insufficient; measuring the live DOM showed `<main>` does not scroll.
 
 ### 4.3 The only scroll logic today is "scroll to `#heading`"
 
@@ -252,18 +268,27 @@ trivially bounded.
 
 Two candidate homes:
 
+- **`NotePage`** (`web/src/components/pages/NotePage/NotePage.tsx`) — **owns the
+  actual scroller**: the `<ScrollArea className="h-full p-6">` div (desktop,
+  line 140) and `h-full p-4` (mobile, line 176) proved to be the real scroll
+  containers (§4.2). It also owns the `/note/*` lifecycle and `slug`.
 - **`VaultLayout`** (`web/src/components/pages/VaultLayout/VaultLayout.tsx`) —
-  owns the `<main>` scroll container and is the single place all three render
-  branches meet. A ref on `<main>` gives a stable handle to the scroller.
-- **`NotePage`** (`web/src/components/pages/NotePage/NotePage.tsx`) — owns the
-  `/note/*` lifecycle and `slug`. Closer to the data, but does not own the
-  scroller element directly (it renders inside `<main>`).
+  wraps every route and owns `<main>`, but `<main>` is a non-scrolling
+  pass-through here, so a ref on it would not give a usable `scrollTop`.
 
-Chosen: **`VaultLayout`**, because it owns the scroller. It already wraps every
-route via `<AppRoutes>` children, so a `useLocation()` + scroll effect there
-covers `/note/*` (and could be scoped to it). `NotePage` continues to own
-note-level concerns (fetch, title, backlinks); the scroll-save/restore is a
-layout-level concern.
+Chosen: **`NotePage`**, because it owns the element that actually scrolls. The
+scroller handle is obtained by querying the nearest scrollable ancestor of
+`NoteHtml`'s `contentRef` (the `scrollIntoView` path already relies on that
+ancestor), or by a ref on the active `<ScrollArea>`. `NotePage` already branches
+desktop/mobile, so the same single-ref-per-branch approach as before applies. The
+`history.scrollRestoration = "manual"` declaration and the `useLocation()` +
+save/restore effect live here. (An earlier revision chose `VaultLayout` on the
+wrong premise that `<main>` was the scroller — corrected by the live probe.)
+
+If you would rather avoid coupling to which element scrolls, the helper can find
+the scroller at runtime: walk up from `contentRef` to the first ancestor whose
+`scrollHeight > clientHeight`. That is robust to the `<main>`/`ScrollArea`
+layout shifting, at the cost of a per-navigation walk.
 
 ### 6.3 Coexistence with the existing `#heading` scroll (precedence)
 
@@ -373,21 +398,22 @@ so a small timed retry is consistent with existing style.
 
 ## 8. Implementation plan (file-level)
 
-1. **`web/src/components/pages/VaultLayout/VaultLayout.tsx`**
-   - Add a ref to the scroll container `<main>` (one stable ref; point it at the
-     active branch's `<main>` — since only one branch renders at a time, a
-     single ref works).
+1. **`web/src/components/pages/NotePage/NotePage.tsx`** (owns the real scroller —
+   see §4.2 correction)
+   - Add a ref to the active `<ScrollArea>` scroll container (desktop `h-full
+     p-6` at line 140; mobile `h-full p-4` at line 176; one ref per branch, or a
+     single ref since only one branch is visible at a time).
    - `useEffect` on mount: `history.scrollRestoration = "manual"`.
    - `const location = useLocation()`; keep a `useRef<Map<string, number>>` of
      saved offsets.
    - On `location` change (cleanup of the previous effect): save the current
-     `mainEl.scrollTop` under the previous `location.key`.
+     `scrollEl.scrollTop` under the previous `location.key`.
    - On `location` change (new effect), if `pathname.startsWith("/note/")`:
      - if `location.hash` is present → do nothing (let `NoteHtml` handle it);
      - else if a saved offset exists → run a short rAF/poll loop (with a
-       ~1s timeout) that sets `mainEl.scrollTop = offset` once
-       `mainEl.scrollHeight >= offset`; restore instantly.
-     - else → `mainEl.scrollTop = 0`.
+       ~1s timeout) that sets `scrollEl.scrollTop = offset` once
+       `scrollEl.scrollHeight >= offset`; restore instantly.
+     - else → `scrollEl.scrollTop = 0`.
 2. **`web/src/components/organisms/NoteHtml/NoteHtml.tsx`**
    - No change required for the restore path. The existing `#heading` effect
      (lines 199-214) already wins for hashed URLs because the VaultLayout
@@ -498,9 +524,21 @@ pickScrollAction({pathname:"/search", hash:""},   new Map()) === "none"
   built-in restores window scroll for the data router; it still would not help
   with the nested container without a custom `<ScrollRestoration>` `getKey`,
   and the migration is a large, cross-cutting change. Not worth it for this fix.
-- **Scroll the window instead of a nested `<main>`.** Would make the browser's
-  default work, but requires reworking the whole `h-screen overflow-hidden`
-  layout (sticky header, resizable panels). Far too large.
+- **Option B — scroll the window instead of a nested container ("let the
+  browser do it for free").** The user's instinct that "the browser should
+  remember it" is correct *for window-scrolling sites*; the only reason it
+  fails here is that we deliberately scroll an inner div. Restructuring
+  `VaultLayout` so the document scrolls (`min-h-screen` instead of
+  `h-screen overflow-hidden`; `position: sticky` header and sidebar instead of
+  flex columns with `shrink-0`; main content flowing the document) would make
+  `scrollRestoration: "auto"` work unmodified, plus give native keyboard
+  scroll (Space/PgDn/Cmd+End), better mobile, and SSR-friendlier behavior. For
+  a *publishing* tool this is arguably the more principled long-term shape. It
+  is **not chosen for this ticket** because it is a large rework of the layout
+  (resizable panels, sticky header, sidebar height) and risks the existing
+  app-like chrome. It is recorded as the genuine "use the browser" option the
+  user asked about; the hand-rolled save/restore (Option A, the rest of this
+  doc) is the smaller, lower-risk path that preserves the current layout.
 
 **Open questions.**
 
