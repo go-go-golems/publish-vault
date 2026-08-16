@@ -22,9 +22,13 @@ RelatedFiles:
         hook wiring target; owns the ScrollArea; isLoading unmounts the scroller
         isLoading unmounts the ScrollArea — drives hook placement
     - Path: web/src/lib/scrollRestoration.test.ts
-      Note: vitest regression test for pickScrollAction
+      Note: |-
+        vitest regression test for pickScrollAction
+        scrollKeyOf + pickScrollAction tests
     - Path: web/src/lib/scrollRestoration.ts
-      Note: new module to implement (pickScrollAction + useScrollRestoration + findVisibleScroller)
+      Note: |-
+        new module to implement (pickScrollAction + useScrollRestoration + findVisibleScroller)
+        3 review fixes + scroller-discovery fix (commit 2e2ae67)
 ExternalSources:
     - https://developer.mozilla.org/en-US/docs/Web/API/History/scrollRestoration
 Summary: 'Diary for PV-SCROLL-024: implement Option A scroll restoration in persistent NotePage with a scroll-listener capture + rAF restore. Step 1 records ticket creation and the design, including the NotePage-loading-unmount correction.'
@@ -32,6 +36,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: Diary for the PV-SCROLL-024 implementation
 WhenToUse: Read before resuming work on the scroll-restoration implementation
 ---
+
 
 
 
@@ -236,3 +241,123 @@ the NotePage hook (writer) and the NoteHtml restore (reader).
 
 - Current state: `git show 11e842f` (library) and `git show 9b84e01` (wiring).
 - Reproduce the failure: `pnpm --dir web build && go run ./cmd/retro-obsidian-publish serve --vault <vault> --port 8080 --watch=false`; open the CoinVault index; in DevTools run `document.querySelectorAll('.note-scroll').forEach(e=>e.clientHeight>0&&(e.scrollTop=3500)); wait 200ms; click a /note/ link; press Back; observe scrollTop==0 (bug)`.
+
+## Step 3: Address the 3 PR #21 review comments (committed) and the scroller-discovery trap (found and fixed)
+
+Implemented the three GitHub review comments from the clean PR baseline,
+guided by the PV-SCROLL-REVIEW-025 fundamental review. All three browser
+scenarios pass: note-to-note Back, note-to-search Back, and same-note fragment
+Back all restore the saved offset. A fourth issue — the scroller-discovery
+trap that had regressed cross-note Back in an earlier attempt — was found
+empirically and fixed by moving the scroll listener to the document capture
+phase.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Then implement the 3 fixes. commit at appropriate intervals and keep a detailed diary as you work (using the diary format from the skill)"
+
+**Assistant interpretation:** Implement the three PR #21 review fixes from the clean baseline, verify them in the browser, commit, and record a detailed diary.
+
+**Inferred user intent:** Ship working scroll-restoration fixes for the three review comments, proven on the real vault, without regressing the cross-note flow that an earlier attempt broke.
+
+**Commit (code):** 2e2ae67 — "fix(PV-SCROLL-024): address 3 PR #21 review comments in scroll restoration"
+
+### What I did
+
+- Discarded the failed worktree experiments (`git checkout -- web/src/lib/scrollRestoration.ts web/src/lib/scrollRestoration.test.ts`) to restore the clean PR baseline (148 lines, the version with the 3 review comments).
+- Applied the three fixes to `web/src/lib/scrollRestoration.ts`:
+  1. **Persist outside NotePage:** replaced `useRef<Map>` with a module-level `const savedOffsets = new Map<string,number>()`; added an unmount cleanup that writes `lastOffset` to the store keyed by `lastKey`.
+  2. **Save on hash-only changes:** introduced `scrollKeyOf(location) = location.key + "|" + hash`; added a `hashchange` listener that re-renders so a native heading-permalink navigation (which sets `window.location.hash` directly, bypassing React Router) updates `scrollKey`.
+  3. **Wait until actually scrollable:** changed the restore predicate from `scroller.scrollHeight >= offset` to `scroller.scrollHeight - scroller.clientHeight >= offset` (the maximum valid `scrollTop`).
+- Updated `web/src/lib/scrollRestoration.test.ts` to cover `scrollKeyOf` (3 tests) and re-key `pickScrollAction` tests through `scrollKeyOf` (12 tests total).
+- Verified: `pnpm --dir web check` (tsc clean), `vitest run` (38 pass), `prettier --check` (clean), `pnpm --dir web build` (clean).
+- Built the Go binary and served `vault-example` on :8080 via a launcher script (`/tmp/pv-launch.sh`; the binary had to be launched via a script file because direct `cmd &` backgrounding in the bash tool was reaped/killed — see What was tricky).
+- Manually verified in Playwright (viewport 1200×400 to make the note scrollable, maxScroll 222): set scrollTop=150, then for each scenario navigated away and pressed Back:
+  - **Scenario 1 (same-note fragment Back, comment 2):** click `#about-this-system` heading permalink → Back → restored to 150 (was 0 before the fix).
+  - **Scenario 2 (note-to-search Back, comment 1):** SPA-navigate to `/search?q=welcome` (NotePage unmounts) → Back → restored to 150 (module store survived).
+  - **Scenario 3 (note-to-note Back, regression check):** SPA-navigate to `zettelkasten-method` → Back → restored to 150 (no regression).
+
+### Why
+
+The three comments are valid symptoms of missing abstractions (storage lifetime,
+entry identity, readiness). The PV-SCROLL-REVIEW-025 review diagnosed the
+underlying traps so this implementation could avoid the scroller-discovery
+failure that sank the earlier attempt — specifically, it predicted that
+binding the listener to `containerRef` or to a not-yet-sized scroller would
+fail, and that proved true (see What was tricky).
+
+### What worked
+
+- The module-level `savedOffsets` Map cleanly survives `NotePage` unmount; the unmount cleanup handles the no-trailing-scroll-event case.
+- `scrollKeyOf` (key + hash) plus the `hashchange` re-render makes the save effect fire on native heading-permalink navigation.
+- The `scrollHeight - clientHeight >= offset` predicate is the correct feasibility check (max valid `scrollTop`).
+- Document-level capture-phase listener: catches `.note-scroll` scrolls regardless of which React tree renders the scroller, sidestepping both the SplitPane-sizing race and the containerRef-not-an-ancestor problem.
+
+### What didn't work
+
+- **`containerRef` capture listener (first attempt):** attached the scroll listener to `containerRef.current` in the capture phase. A debug probe showed `rootIsAncestor: false` — `containerRef.current` (a `div.h-full`) was NOT an ancestor of the visible `.note-scroll`. The listener never fired, `lastOffset` stayed 0, and Back returned 0. Root cause: in this app the ref points at a `div.h-full` that is not an ancestor of the visible scroller (duplicate/transitional trees under StrictMode + lazy/eager hydration in `entry-client.tsx`). Fixed by moving the listener to `document` capture phase, filtered by the `note-scroll` class.
+- **Save-on-key-change racing the smooth scroll (second attempt):** with the document listener capturing `lastOffset` only, the save effect (keyed on `scrollKey` change) saved `lastOffset` AFTER the heading's smooth `scrollIntoView` had already advanced it to 222 (the bottom), overwriting the pre-jump 150. Debug showed `saved["default|"] = 222` instead of 150. Fixed by making the capture listener write to the store **continuously, keyed by the live `window.location.hash` read at event time** — so the jump's scroll events are attributed to the hashed identity and the unhashed identity keeps the reader's pre-click position.
+- **`findVisibleScroller(containerRef.current)` for restore:** same ancestry problem as the listener; the scroller was not found. Fixed by querying `document.documentElement`.
+- **Backgrounding the server binary:** `cmd &`, `nohup cmd &`, `( exec cmd & )`, and `setsid cmd &` all failed — the log file was never created and the process died. A plain `sleep 300 &` survived, so the reaping was specific to the server. Fixed by writing a launcher script (`/tmp/pv-launch.sh`) and running `bash /tmp/pv-launch.sh`, which detached correctly.
+
+### What I learned
+
+- The scroller-discovery trap the research predicted is real and reproducible: `containerRef.current` is not a reliable ancestor of the visible scroller in this app. A document-level capture listener filtered by class is the robust binding.
+- Save-on-key-change alone is insufficient for smooth-scroll fragment navigation: the scroll events of the animation arrive after the key changes, so they clobber the pre-jump offset. Continuous save keyed by the *live* hash (read at event time) is required.
+- The three review comments are interdependent: fixing identity (key+hash) without fixing the capture (continuous, live-hash-keyed) leaves the fragment-Back case broken, because the save races the smooth scroll.
+- A launcher script is the reliable way to background a long-running server from this bash tool environment.
+
+### What was tricky to build
+
+The hardest part was the interaction between the `hashchange` re-render and the
+heading permalink's smooth scroll. The permalink handler in
+`noteEnhancements.ts:196-200` does `window.location.hash = id;
+heading.scrollIntoView({ behavior: "smooth" })` — hash first, then an async
+smooth scroll. The naive save model (save `lastOffset` on `scrollKey` change)
+saves *after* the smooth scroll has updated `lastOffset`, so it captures the
+post-jump position, not the pre-jump one. The fix is to save continuously in
+the capture listener, keyed by the live `window.location.hash` at event time.
+Because the hash is set *before* the scroll, the jump's scroll events carry
+the hashed identity, and the unhashed identity retains the reader's pre-click
+offset. This is the one invariant that makes fragment-Back work, and it is not
+obvious from the code.
+
+The second tricky part was the scroller ancestry. `containerRef` is on
+NotePage's `<div className="h-full">`, which logically wraps the layouts, but a
+debug probe (`root.contains(visibleScroller)`) returned `false`. The visible
+scroller's actual ancestor chain goes through a SplitPane whose DOM is not a
+descendant of the `containerRef` node the effect captured. Rather than chase
+why (likely a duplicate/transitional tree from StrictMode + lazy/eager
+hydration), the robust fix is to not depend on the ref's ancestry at all:
+listen on `document` capture phase and query `document.documentElement` for
+the restore target.
+
+### What warrants a second pair of eyes
+
+- The document-level capture listener filters by `.note-scroll`; confirm no other component uses that class for a non-article scroller (a grep shows only the three NotePage article `ScrollArea`s use it).
+- The continuous save writes the module-level `Map` on every scroll event (no throttling). For a note reader this is fine (scroll events are not high-frequency during reading), but a throttled rAF write would be safer if scroll-bound work is ever added.
+- The `scrollKey = key + "|" + hash` surrogate can still collide on repeated identical fragment visits (`A -> A#x -> A -> A#x`); the robust fix is router-minted per-entry keys (see PV-SCROLL-REVIEW-025 §16.6). This is a known limitation, documented in the file header, not addressed here.
+- The "hash always beats restore" policy is still wrong for POP-to-a-fragment-after-scrolling (research T4); not addressed by these 3 fixes. Documented as a follow-up.
+- Confirm the unmount cleanup runs before the module store is read on Back (it does in the note-to-search test, but worth a Strict-Mode double-invoke check).
+
+### What should be done in the future
+
+- Port TanStack's `data-scroll-restoration-id` registration to replace `findVisibleScroller`'s class query (PV-SCROLL-REVIEW-025 §16.6) — the lightweight de-risk for the scroller-discovery dimension.
+- Route heading permalinks through React Router (`navigate({ hash })`) instead of `window.location.hash`, so every entry gets a router-minted unique key and the composite-key collision class disappears (PV-SCROLL-REVIEW-025 §8.4, §16.6).
+- Add the `useNavigationType()`-aware reducer so POP-to-a-fragment-after-scroll restores the snapshot, not the heading (PV-SCROLL-REVIEW-025 §5, T4).
+- Add Playwright browser tests for the three scenarios (the manual verification here is not regression-protected).
+
+### Code review instructions
+
+- Start at `web/src/lib/scrollRestoration.ts`: `savedOffsets` (module store), `scrollKeyOf`, the `hashchange` effect, the continuous-save capture listener, the `scrollHeight - clientHeight` restore predicate.
+- Validate: `pnpm --dir web check && pnpm --dir web test && pnpm --dir web build`.
+- Reproduce the browser scenarios: build, serve `vault-example`, open `/note/Index` at 1200×400, set `.note-scroll` scrollTop=150, and for each of (heading permalink → Back), (search → Back), (cross-note link → Back) assert scrollTop restores to 150.
+- `git show 2e2ae67` for the full diff.
+
+### Technical details
+
+- Commit: 2e2ae67.
+- Scroller maxScroll on the fixture (1200×400): 222; test offset 150.
+- `containerRef.current` ancestry: `root.contains(visible) === false` (observed via debug probe).
+- Continuous save key: `${location.key}|${window.location.hash}` read at event time.
+- Restore predicate: `scroller.scrollHeight - scroller.clientHeight >= offset`.
