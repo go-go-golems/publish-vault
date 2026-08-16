@@ -139,17 +139,31 @@ func Parse(src []byte) (*ParsedNote, error) {
 // link), so the spans are needed to put any math a target or heading contains
 // back as TeX — these values reach the note JSON and the backlink graph, where
 // a sentinel is meaningless.
+//
+// Code regions are detected on the body only — frontmatter is split off first,
+// matching replaceWikiLinks. A backtick inside a frontmatter scalar is YAML,
+// not Markdown, so it must not pair with a body backtick and swallow a body
+// link as "code": replaceWikiLinks would still render that link as an anchor,
+// so dropping it here silently removed it from WikiLinks and the backlink
+// graph. Detecting code on the body only keeps the two passes in agreement
+// about what counts as code, the property the rest of this pre-pass relies on.
+// A [[X]] in a frontmatter value is still matched (frontmatter extraction is a
+// separate, filed question — see PV-WIKICODE-022), but it is never code.
 func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
+	frontmatter, body := splitFrontmatter(src)
+	fmLen := len(frontmatter)
 	matches := wikiLinkRegex.FindAllSubmatchIndex(src, -1)
-	code := newCodeCursor(src)
+	code := newCodeCursor(body)
 	seen := map[string]bool{}
 	var links []WikiLink
 	for _, m := range matches {
 		// A [[...]] shown inside a code sample is documentation of the syntax,
 		// not a reference. Recording it would give the named note a backlink
 		// from a note that never linked to it — the same reasoning that keeps
-		// links inside a formula out of this list.
-		if code.contains(m[0]) {
+		// links inside a formula out of this list. Only body offsets can be in
+		// a code region; a match in frontmatter (m[0] < fmLen) never is, and is
+		// not even queried, so the cursor's ascending-query invariant holds.
+		if m[0] >= fmLen && code.contains(m[0]-fmLen) {
 			continue
 		}
 		isEmbed := string(src[m[2]:m[3]]) == "!"
@@ -300,6 +314,13 @@ func (c *codeCursor) contains(off int) bool {
 // the reason documented on ScanMath: a four-space indent inside a list is a
 // continuation line, and dropping links from nested list items would be a worse
 // failure than rendering a link in an indented code block.
+//
+// Escaped backticks are not code-span delimiters: a backslash immediately
+// before a backtick makes that backtick a literal character in CommonMark, so
+// a wiki link written between two escaped backticks must not be wrapped in a
+// code span. The backslash branch consumes the escape the same way ScanMath
+// does, so a backtick right after a backslash is never seen as an opener here
+// — keeping the two passes in agreement about escaped backticks as well.
 func codeRegions(body []byte) [][2]int {
 	var regions [][2]int
 	i, n := 0, len(body)
@@ -311,6 +332,15 @@ func codeRegions(body []byte) [][2]int {
 				i = end
 				continue
 			}
+		}
+		if body[i] == '\\' && i+1 < n {
+			// Consume the escaped byte, mirroring ScanMath's backslash branch.
+			// The only byte this loop acts on (other than fences at line start)
+			// is '`', so the only observable effect is that a '`' right after a
+			// '\' no longer opens a code span; a backslash before anything else
+			// would have fallen through to i++ anyway.
+			i += 2
+			continue
 		}
 		if body[i] == '`' {
 			if end := skipCodeSpan(body, i); end > i {

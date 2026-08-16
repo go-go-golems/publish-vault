@@ -908,6 +908,17 @@ func TestCodeRegionsBoundaries(t *testing.T) {
 			src:    "A stray ` tick and [[B]].\n",
 			linked: []string{"B"},
 		},
+		{
+			name:   "escaped backticks do not open a code span",
+			src:    "A \\`[[A]]\\` then [[B]].\n",
+			linked: []string{"A", "B"},
+		},
+		{
+			name:    "even backslashes before a backtick still open a code span",
+			src:     "A \\\\`[[C]]` then [[D]].\n",
+			literal: []string{"[[C]]"},
+			linked:  []string{"D"},
+		},
 	}
 
 	for _, c := range cases {
@@ -927,5 +938,87 @@ func TestCodeRegionsBoundaries(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestFrontmatterBacktickDoesNotSwallowBodyLink pins the first PR #20 review
+// finding: extractWikiLinks used to detect code regions over the whole source,
+// so a backtick in a frontmatter scalar paired with a body backtick and
+// classified the body link between them as code. replaceWikiLinks scans the
+// body only, so the link still rendered as an anchor while being silently
+// dropped from WikiLinks and the backlink graph. Both passes now detect code on
+// the body only, so the link is both rendered and indexed.
+func TestFrontmatterBacktickDoesNotSwallowBodyLink(t *testing.T) {
+	src := []byte("---\n" +
+		"title: \"a `tick\"\n" +
+		"---\n" +
+		"[[Body Link]] then `[[In Code]]` here.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	// The body link sits outside the code span, so it renders and is indexed.
+	if !contains(parsed.HTML, `data-raw="Body Link"`) {
+		t.Fatalf("body link should render, got: %s", parsed.HTML)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Body Link" {
+		t.Fatalf("WikiLinks = %#v, want exactly [Body Link] (the frontmatter "+
+			"backtick used to swallow it and leave [[In Code]] instead)", parsed.WikiLinks)
+	}
+	// The link inside the body code span stays literal and out of the graph,
+	// proving the body code span itself still works after the frontmatter fix.
+	if !contains(parsed.HTML, "<code>[[In Code]]</code>") {
+		t.Errorf("in-code link should stay literal, got: %s", parsed.HTML)
+	}
+}
+
+// TestFrontmatterWikiLinkStillIndexed guards the deliberate scope of the fix
+// above: code-region detection now excludes frontmatter, but wiki-link
+// extraction from frontmatter is unchanged (a separate, filed question — see
+// PV-WIKICODE-022 task dmoh). A [[X]] in a frontmatter value is not rendered
+// (frontmatter is not document body) yet still enters WikiLinks, so existing
+// "related:" lists keep their backlinks.
+func TestFrontmatterWikiLinkStillIndexed(t *testing.T) {
+	src := []byte("---\n" +
+		"related: \"[[Frontmatter Note]]\"\n" +
+		"---\n" +
+		"Body text with no link.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Frontmatter Note" {
+		t.Fatalf("WikiLinks = %#v, want the frontmatter link to still be indexed",
+			parsed.WikiLinks)
+	}
+	if contains(parsed.HTML, `data-raw="Frontmatter Note"`) {
+		t.Fatalf("frontmatter link must not render as document body, got: %s",
+			parsed.HTML)
+	}
+}
+
+// TestEscapedBackticksKeepLinkInBacklinkGraph pins the second PR #20 review
+// finding: a wiki link written between two escaped backticks (a backslash
+// before each backtick) is, in CommonMark, a literal backtick, then the link,
+// then a literal backtick — not a code span. The old codeRegions ignored the
+// backslash and wrapped the link in a code span, so both passes skipped it:
+// the page showed plain [[Target]] and the expected backlink was absent.
+// codeRegions now consumes backslash escapes the way ScanMath does, so an
+// escaped backtick no longer opens a code span.
+func TestEscapedBackticksKeepLinkInBacklinkGraph(t *testing.T) {
+	src := []byte("# T\n\nA \\`[[Target]]\\` link.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, `data-raw="Target"`) {
+		t.Fatalf("escaped-backtick link should render, got: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, "[[Target]]") {
+		t.Fatalf("link should have been converted, not left as [[Target]]: %s",
+			parsed.HTML)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Target" {
+		t.Fatalf("WikiLinks = %#v, want exactly [Target]", parsed.WikiLinks)
 	}
 }
