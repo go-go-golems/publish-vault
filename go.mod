@@ -2,6 +2,8 @@ module github.com/go-go-golems/publish-vault
 
 go 1.26.5
 
+toolchain go1.26.6
+
 require (
 	dagger.io/dagger v0.20.8
 	github.com/blevesearch/bleve/v2 v2.6.0

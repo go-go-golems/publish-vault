@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -814,5 +816,409 @@ func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
 		if strings.ContainsRune(wl.Heading, '') || strings.ContainsRune(wl.Target, '') {
 			t.Errorf("math sentinel leaked into WikiLinks: %#v", wl)
 		}
+	}
+}
+
+// TestWikiLinksInsideCodeStayLiteral is the regression test for PV-WIKICODE-022.
+// The [[...]] substitution runs before goldmark so goldmark cannot parse the
+// link text as Markdown, and that ordering used to rewrite code samples too:
+// the anchor HTML was injected into the source and goldmark escaped it into the
+// code block, so a note documenting the syntax showed raw markup where its
+// author wrote a wiki link.
+func TestWikiLinksInsideCodeStayLiteral(t *testing.T) {
+	src := []byte("# Syntax\n\n" +
+		"Inline: `[[Some Note]]` and `![[Diagram.png]]`.\n\n" +
+		"```markdown\n" +
+		"[[Target Note#Heading]]\n" +
+		"[[Other|aliased]]\n" +
+		"```\n\n" +
+		"~~~\n[[Tilde Fenced]]\n~~~\n\n" +
+		"A real link: [[Some Note]].\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	for _, literal := range []string{
+		"<code>[[Some Note]]</code>",
+		"<code>![[Diagram.png]]</code>",
+		"[[Target Note#Heading]]",
+		"[[Other|aliased]]",
+		"[[Tilde Fenced]]",
+	} {
+		if !contains(parsed.HTML, literal) {
+			t.Errorf("expected %s to survive as text, got: %s", literal, parsed.HTML)
+		}
+	}
+	// The giveaway for the old bug: escaped anchor markup inside a code element.
+	if contains(parsed.HTML, "&lt;a href=") || contains(parsed.HTML, "&lt;img class=") {
+		t.Fatalf("anchor markup was injected into a code block: %s", parsed.HTML)
+	}
+
+	// The link outside code still has to work.
+	if !contains(parsed.HTML, `<a href="/note/some-note" class="wiki-link"`) {
+		t.Fatalf("real link stopped resolving: %s", parsed.HTML)
+	}
+
+	// And a code sample must not give the note it names a backlink.
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Some Note" {
+		t.Fatalf("WikiLinks = %#v, want only the real link", parsed.WikiLinks)
+	}
+}
+
+// TestCodeRegionsBoundaries pins the CommonMark edge cases the scanners handle,
+// since a region that ends too early re-exposes the code after it and one that
+// ends too late swallows real links.
+func TestCodeRegionsBoundaries(t *testing.T) {
+	cases := []struct {
+		name    string
+		src     string
+		literal []string // must survive as text
+		linked  []string // must become anchors (data-raw values)
+	}{
+		{
+			name:    "double backtick span containing a single backtick",
+			src:     "Use ``[[A]] ` here`` then [[B]].\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "info string on the opening fence only",
+			src:     "```go\n[[A]]\n```\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "longer closing fence still closes",
+			src:     "```\n[[A]]\n`````\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "indented three spaces still opens a fence",
+			src:     "   ```\n   [[A]]\n   ```\n\n[[B]]\n",
+			literal: []string{"[[A]]"},
+			linked:  []string{"B"},
+		},
+		{
+			name:    "unterminated fence runs to end of document",
+			src:     "```\n[[A]]\n[[B]]\n",
+			literal: []string{"[[A]]", "[[B]]"},
+		},
+		{
+			name:   "backtick that opens nothing leaves the link alone",
+			src:    "A stray ` tick and [[B]].\n",
+			linked: []string{"B"},
+		},
+		{
+			name:   "escaped backticks do not open a code span",
+			src:    "A \\`[[A]]\\` then [[B]].\n",
+			linked: []string{"A", "B"},
+		},
+		{
+			name:    "even backslashes before a backtick still open a code span",
+			src:     "A \\\\`[[C]]` then [[D]].\n",
+			literal: []string{"[[C]]"},
+			linked:  []string{"D"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parsed, err := Parse([]byte("# T\n\n" + c.src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			for _, lit := range c.literal {
+				if !contains(parsed.HTML, lit) {
+					t.Errorf("%q should have stayed literal, got: %s", lit, parsed.HTML)
+				}
+			}
+			for _, raw := range c.linked {
+				if !contains(parsed.HTML, `data-raw="`+raw+`"`) {
+					t.Errorf("[[%s]] should have become a link, got: %s", raw, parsed.HTML)
+				}
+			}
+		})
+	}
+}
+
+// TestFrontmatterBacktickDoesNotSwallowBodyLink pins the first PR #20 review
+// finding: extractWikiLinks used to detect code regions over the whole source,
+// so a backtick in a frontmatter scalar paired with a body backtick and
+// classified the body link between them as code. replaceWikiLinks scans the
+// body only, so the link still rendered as an anchor while being silently
+// dropped from WikiLinks and the backlink graph. Both passes now detect code on
+// the body only, so the link is both rendered and indexed.
+func TestFrontmatterBacktickDoesNotSwallowBodyLink(t *testing.T) {
+	src := []byte("---\n" +
+		"title: \"a `tick\"\n" +
+		"---\n" +
+		"[[Body Link]] then `[[In Code]]` here.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	// The body link sits outside the code span, so it renders and is indexed.
+	if !contains(parsed.HTML, `data-raw="Body Link"`) {
+		t.Fatalf("body link should render, got: %s", parsed.HTML)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Body Link" {
+		t.Fatalf("WikiLinks = %#v, want exactly [Body Link] (the frontmatter "+
+			"backtick used to swallow it and leave [[In Code]] instead)", parsed.WikiLinks)
+	}
+	// The link inside the body code span stays literal and out of the graph,
+	// proving the body code span itself still works after the frontmatter fix.
+	if !contains(parsed.HTML, "<code>[[In Code]]</code>") {
+		t.Errorf("in-code link should stay literal, got: %s", parsed.HTML)
+	}
+}
+
+// TestFrontmatterWikiLinkStillIndexed guards the deliberate scope of the fix
+// above: code-region detection now excludes frontmatter, but wiki-link
+// extraction from frontmatter is unchanged (a separate, filed question — see
+// PV-WIKICODE-022 task dmoh). A [[X]] in a frontmatter value is not rendered
+// (frontmatter is not document body) yet still enters WikiLinks, so existing
+// "related:" lists keep their backlinks.
+func TestFrontmatterWikiLinkStillIndexed(t *testing.T) {
+	src := []byte("---\n" +
+		"related: \"[[Frontmatter Note]]\"\n" +
+		"---\n" +
+		"Body text with no link.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Frontmatter Note" {
+		t.Fatalf("WikiLinks = %#v, want the frontmatter link to still be indexed",
+			parsed.WikiLinks)
+	}
+	if contains(parsed.HTML, `data-raw="Frontmatter Note"`) {
+		t.Fatalf("frontmatter link must not render as document body, got: %s",
+			parsed.HTML)
+	}
+}
+
+// TestEscapedBackticksKeepLinkInBacklinkGraph pins the second PR #20 review
+// finding: a wiki link written between two escaped backticks (a backslash
+// before each backtick) is, in CommonMark, a literal backtick, then the link,
+// then a literal backtick — not a code span. The old codeRegions ignored the
+// backslash and wrapped the link in a code span, so both passes skipped it:
+// the page showed plain [[Target]] and the expected backlink was absent.
+// codeRegions now consumes backslash escapes the way ScanMath does, so an
+// escaped backtick no longer opens a code span.
+func TestEscapedBackticksKeepLinkInBacklinkGraph(t *testing.T) {
+	src := []byte("# T\n\nA \\`[[Target]]\\` link.\n")
+	parsed, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !contains(parsed.HTML, `data-raw="Target"`) {
+		t.Fatalf("escaped-backtick link should render, got: %s", parsed.HTML)
+	}
+	if contains(parsed.HTML, "[[Target]]") {
+		t.Fatalf("link should have been converted, not left as [[Target]]: %s",
+			parsed.HTML)
+	}
+	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Target" {
+		t.Fatalf("WikiLinks = %#v, want exactly [Target]", parsed.WikiLinks)
+	}
+}
+
+// TestSplitSourceMatrix pins the single frontmatter boundary that every parser
+// consumer now shares. The delimiter rule must mirror goldmark-meta exactly so
+// that any preamble the metadata parser accepts is also the boundary the
+// pre-passes protect. A four-dash (or one-/two-dash, or whitespace-wrapped)
+// preamble that goldmark-meta parses as metadata must be split off here, not
+// handed to the math or wiki pre-passes as Markdown body.
+func TestSplitSourceMatrix(t *testing.T) {
+	cases := []struct {
+		name            string
+		src             string
+		wantFrontmatter bool   // hasFrontmatter()
+		wantBody        string // body bytes (exact)
+	}{
+		{
+			name:            "no frontmatter returns the source untouched",
+			src:             "# Title\n\nBody.\n",
+			wantFrontmatter: false,
+			wantBody:        "# Title\n\nBody.\n",
+		},
+		{
+			name:            "three dashes split",
+			src:             "---\ntitle: x\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "one dash splits (goldmark-meta accepts it)",
+			src:             "-\ntitle: x\n-\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "two dashes split (goldmark-meta accepts it)",
+			src:             "--\ntitle: x\n--\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "four dashes split (the metadata-mutation defect)",
+			src:             "----\ntitle: x\n----\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "whitespace-wrapped delimiter splits",
+			src:             "  ----  \ntitle: x\n \t----\t \nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "CRLF delimiters split",
+			src:             "----\r\ntitle: x\r\n----\r\nBody\r\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\r\n",
+		},
+		{
+			name:            "dashes inside a quoted scalar do not close early",
+			src:             "---\ntitle: \"before---after\"\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "indented dash line inside a block scalar does not close",
+			src:             "---\nsummary: |\n  a --- b\npublish: true\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "closing delimiter at EOF yields an empty body",
+			src:             "---\ntitle: x\n---",
+			wantFrontmatter: true,
+			wantBody:        "",
+		},
+		{
+			name:            "body at EOF without a trailing newline is exact",
+			src:             "---\ntitle: x\n---\nBody",
+			wantFrontmatter: true,
+			wantBody:        "Body",
+		},
+		{
+			name:            "unterminated opener leaves the whole source as body",
+			src:             "---\ntitle: x\nno closing delimiter\n",
+			wantFrontmatter: false,
+			wantBody:        "---\ntitle: x\nno closing delimiter\n",
+		},
+		{
+			name:            "a thematic break after a heading is not frontmatter",
+			src:             "# Title\n\n---\n\nAfter the rule.\n",
+			wantFrontmatter: false,
+			wantBody:        "# Title\n\n---\n\nAfter the rule.\n",
+		},
+		{
+			name:            "an opener with trailing non-dash content is not frontmatter",
+			src:             "---yaml\ntitle: x\n---\nBody\n",
+			wantFrontmatter: false,
+			wantBody:        "---yaml\ntitle: x\n---\nBody\n",
+		},
+		{
+			name:            "empty input is not frontmatter",
+			src:             "",
+			wantFrontmatter: false,
+			wantBody:        "",
+		},
+		{
+			name:            "a single dash line with no newline is not an opener",
+			src:             "---",
+			wantFrontmatter: false,
+			wantBody:        "---",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parts := splitSource([]byte(c.src))
+			if parts.hasFrontmatter() != c.wantFrontmatter {
+				t.Errorf("hasFrontmatter = %v, want %v", parts.hasFrontmatter(), c.wantFrontmatter)
+			}
+			if got := string(parts.body); got != c.wantBody {
+				t.Errorf("body = %q, want %q", got, c.wantBody)
+			}
+			// The two slices must reconstruct the source byte-for-byte, and the
+			// body offset must equal the frontmatter length: extraction uses it
+			// to convert whole-source regex offsets into body-relative ones.
+			reconstructed := append(append([]byte{}, parts.frontmatter...), parts.body...)
+			if !bytes.Equal(reconstructed, []byte(c.src)) {
+				t.Errorf("frontmatter+body does not reconstruct the source:\n got  %q\n want %q", reconstructed, c.src)
+			}
+			if parts.bodyOffset != len(parts.frontmatter) {
+				t.Errorf("bodyOffset = %d, len(frontmatter) = %d", parts.bodyOffset, len(parts.frontmatter))
+			}
+		})
+	}
+}
+
+// TestParseProtectsGoldmarkCompatibleFrontmatter is the regression for
+// PV-FRONTMATTER-024. goldmark-meta accepts any non-empty dash-only separator
+// line (one, two, three, four dashes, whitespace-wrapped, CRLF), but the
+// pre-passes used to recognize only an exact "---", so a four-dash preamble
+// was parsed as metadata by goldmark while being rewritten as Markdown by the
+// math and wiki pre-passes. The parsed frontmatter then contained generated
+// anchor HTML and math sentinels instead of the author's YAML values. Every
+// delimiter form the metadata parser accepts must be the boundary the
+// pre-passes protect.
+func TestParseProtectsGoldmarkCompatibleFrontmatter(t *testing.T) {
+	tests := []struct {
+		name, open, close, newline string
+	}{
+		{"three dashes LF", "---", "---", "\n"},
+		{"one dash LF", "-", "-", "\n"},
+		{"two dashes LF", "--", "--", "\n"},
+		{"four dashes LF", "----", "----", "\n"},
+		{"whitespace wrapped", "  ----  ", " \t----\t ", "\n"},
+		{"four dashes CRLF", "----", "----", "\r\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := tt.open + tt.newline +
+				"title: Boundary" + tt.newline +
+				"related: '[[Meta Link]]'" + tt.newline +
+				"formula: '$x^2$'" + tt.newline +
+				tt.close + tt.newline +
+				"Body [[Body Link]] with $y$." + tt.newline
+
+			note, err := Parse([]byte(src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+
+			// Metadata must hold the author's literal values, not generated
+			// markup. This is the core of the defect: a four-dash preamble was
+			// rewritten before being parsed.
+			if got := note.Frontmatter["related"]; got != "[[Meta Link]]" {
+				t.Errorf("related = %#v, want literal [[Meta Link]]", got)
+			}
+			if got := note.Frontmatter["formula"]; got != "$x^2$" {
+				t.Errorf("formula = %#v, want literal $x^2$", got)
+			}
+			fmStr := fmt.Sprint(note.Frontmatter)
+			if strings.Contains(fmStr, "<a href=") {
+				t.Errorf("wiki HTML leaked into metadata: %s", fmStr)
+			}
+			if strings.Contains(fmStr, mathSentinelOpen) {
+				t.Errorf("math sentinel leaked into metadata: %s", fmStr)
+			}
+
+			// The body still has to render normally: the fix protects
+			// frontmatter, it must not silence body wiki links or math.
+			if !strings.Contains(note.HTML, `data-raw="Body Link"`) {
+				t.Errorf("body wiki link not rendered: %s", note.HTML)
+			}
+			if !strings.Contains(note.HTML, `math math-inline`) {
+				t.Errorf("body math not rendered: %s", note.HTML)
+			}
+		})
 	}
 }

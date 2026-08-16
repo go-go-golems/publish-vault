@@ -139,13 +139,35 @@ func Parse(src []byte) (*ParsedNote, error) {
 // link), so the spans are needed to put any math a target or heading contains
 // back as TeX — these values reach the note JSON and the backlink graph, where
 // a sentinel is meaningless.
+//
+// Code regions are detected on the body only — frontmatter is split off first,
+// matching replaceWikiLinks. A backtick inside a frontmatter scalar is YAML,
+// not Markdown, so it must not pair with a body backtick and swallow a body
+// link as "code": replaceWikiLinks would still render that link as an anchor,
+// so dropping it here silently removed it from WikiLinks and the backlink
+// graph. Detecting code on the body only keeps the two passes in agreement
+// about what counts as code, the property the rest of this pre-pass relies on.
+// A [[X]] in a frontmatter value is still matched (frontmatter extraction is a
+// separate, filed question — see PV-WIKICODE-022), but it is never code.
 func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
-	matches := wikiLinkRegex.FindAllSubmatch(src, -1)
+	parts := splitSource(src)
+	matches := wikiLinkRegex.FindAllSubmatchIndex(src, -1)
+	code := newCodeCursor(parts.body)
 	seen := map[string]bool{}
 	var links []WikiLink
 	for _, m := range matches {
-		isEmbed := string(m[1]) == "!"
-		inner := string(m[2])
+		// A [[...]] shown inside a code sample is documentation of the syntax,
+		// not a reference. Recording it would give the named note a backlink
+		// from a note that never linked to it — the same reasoning that keeps
+		// links inside a formula out of this list. Only body offsets can be in
+		// a code region; a match in frontmatter (m[0] < bodyOffset) never is,
+		// and is not even queried, so the cursor's ascending-query invariant
+		// holds.
+		if m[0] >= parts.bodyOffset && code.contains(m[0]-parts.bodyOffset) {
+			continue
+		}
+		isEmbed := string(src[m[2]:m[3]]) == "!"
+		inner := string(src[m[4]:m[5]])
 		target, alias, heading := parseWikiLinkInner(inner)
 		target = RestoreMathText(target, spans)
 		alias = RestoreMathText(alias, spans)
@@ -226,40 +248,169 @@ func StripNoteExtension(target string) string {
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
 // The frontend renderer will later resolve slugs to actual paths.
 func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
-	frontmatter, body := splitFrontmatter(src)
-	replacedBody := wikiLinkRegex.ReplaceAllFunc(body, func(match []byte) []byte {
-		return wikiLinkHTML(match, spans)
-	})
-	if len(frontmatter) == 0 {
+	parts := splitSource(src)
+	replacedBody := replaceWikiLinksOutsideCode(parts.body, spans)
+	if !parts.hasFrontmatter() {
 		return replacedBody
 	}
-	out := make([]byte, 0, len(frontmatter)+len(replacedBody))
-	out = append(out, frontmatter...)
+	out := make([]byte, 0, len(parts.frontmatter)+len(replacedBody))
+	out = append(out, parts.frontmatter...)
 	out = append(out, replacedBody...)
 	return out
 }
 
-// splitFrontmatter separates an initial YAML frontmatter block from the Markdown
-// body. Wiki-link placeholders must not be injected into frontmatter: doing so
-// turns valid YAML such as `"[[Note]]"` into invalid raw HTML and makes
-// goldmark-meta treat the entire preamble as visible document content.
-func splitFrontmatter(src []byte) ([]byte, []byte) {
-	if !bytes.HasPrefix(src, []byte("---\n")) && !bytes.HasPrefix(src, []byte("---\r\n")) {
-		return nil, src
+// replaceWikiLinksOutsideCode substitutes every [[wiki link]] in body except
+// those inside a code span or a fenced code block.
+//
+// The substitution has to happen before goldmark runs, because goldmark would
+// otherwise parse the link text as Markdown. That ordering is what makes code
+// samples a problem: the anchor HTML is injected into the source, and goldmark
+// then escapes it into the code block, so a note documenting the syntax renders
+// `<a href="/note/some-note" class="wiki-link" ...>` as visible text where the
+// author wrote [[Some Note]].
+func replaceWikiLinksOutsideCode(body []byte, spans []MathSpan) []byte {
+	locs := wikiLinkRegex.FindAllIndex(body, -1)
+	if len(locs) == 0 {
+		return body
 	}
+	code := newCodeCursor(body)
+	out := make([]byte, 0, len(body))
+	last := 0
+	for _, loc := range locs {
+		if code.contains(loc[0]) {
+			continue
+		}
+		out = append(out, body[last:loc[0]]...)
+		out = append(out, wikiLinkHTML(body[loc[0]:loc[1]], spans)...)
+		last = loc[1]
+	}
+	return append(out, body[last:]...)
+}
+
+// codeCursor answers "is this offset inside code?" for offsets queried in
+// ascending order, which is how both callers walk their matches.
+type codeCursor struct {
+	regions [][2]int
+	i       int
+}
+
+func newCodeCursor(body []byte) *codeCursor {
+	return &codeCursor{regions: codeRegions(body)}
+}
+
+func (c *codeCursor) contains(off int) bool {
+	for c.i < len(c.regions) && c.regions[c.i][1] <= off {
+		c.i++
+	}
+	return c.i < len(c.regions) && off >= c.regions[c.i][0]
+}
+
+// codeRegions returns the byte ranges of body occupied by inline code spans and
+// fenced code blocks, in ascending order and non-overlapping.
+//
+// The scanners are the ones ScanMath already uses to keep `$100` in a code
+// sample from being read as math; the two passes now agree about what counts as
+// code. Indented (four-space) blocks are not treated as code here either, for
+// the reason documented on ScanMath: a four-space indent inside a list is a
+// continuation line, and dropping links from nested list items would be a worse
+// failure than rendering a link in an indented code block.
+//
+// Escaped backticks are not code-span delimiters: a backslash immediately
+// before a backtick makes that backtick a literal character in CommonMark, so
+// a wiki link written between two escaped backticks must not be wrapped in a
+// code span. The backslash branch consumes the escape the same way ScanMath
+// does, so a backtick right after a backslash is never seen as an opener here
+// — keeping the two passes in agreement about escaped backticks as well.
+func codeRegions(body []byte) [][2]int {
+	var regions [][2]int
+	i, n := 0, len(body)
+	for i < n {
+		if i == 0 || body[i-1] == '\n' {
+			if fenceChar, fenceLen, ok := fenceOpensAt(body, i); ok {
+				end := skipFencedBlock(body, i, fenceChar, fenceLen)
+				regions = append(regions, [2]int{i, end})
+				i = end
+				continue
+			}
+		}
+		if body[i] == '\\' && i+1 < n {
+			// Consume the escaped byte, mirroring ScanMath's backslash branch.
+			// The only byte this loop acts on (other than fences at line start)
+			// is '`', so the only observable effect is that a '`' right after a
+			// '\' no longer opens a code span; a backslash before anything else
+			// would have fallen through to i++ anyway.
+			i += 2
+			continue
+		}
+		if body[i] == '`' {
+			if end := skipCodeSpan(body, i); end > i {
+				regions = append(regions, [2]int{i, end})
+				i = end
+				continue
+			}
+		}
+		i++
+	}
+	return regions
+}
+
+// sourceParts is the result of splitting a Markdown source into an optional
+// leading YAML frontmatter block and the document body. It is the single
+// boundary every parser consumer uses, so math masking, wiki-link
+// replacement/extraction, and plain-text stripping all agree with goldmark-meta
+// about where frontmatter ends.
+//
+// frontmatter is nil when no complete frontmatter block is present; body is
+// then the original source and bodyOffset is 0. When a block is present,
+// frontmatter and body are aliasing slices of src (frontmatter = src[:bodyOffset],
+// body = src[bodyOffset:]), so the two reconstruct the source byte-for-byte
+// without a copy. The delimiter rule is isFrontmatterDelimiter, which mirrors
+// goldmark-meta's isSeparator: a non-empty line of dashes, optionally
+// surrounded by whitespace. The opening line must be the very first line of the
+// source; an unterminated block is left as ordinary source rather than being
+// stripped, matching goldmark-meta (which only closes at a separator).
+type sourceParts struct {
+	frontmatter []byte
+	body        []byte
+	bodyOffset  int
+}
+
+func (p sourceParts) hasFrontmatter() bool {
+	return p.frontmatter != nil
+}
+
+// splitSource separates an initial YAML frontmatter block from the Markdown
+// body. The boundary mirrors goldmark-meta exactly (see isFrontmatterDelimiter)
+// so that any delimiter the metadata parser accepts is also the boundary the
+// pre-passes protect: a four-dash preamble that goldmark-meta parses as
+// metadata is not handed to the math or wiki pre-passes as Markdown body.
+//
+// No frontmatter is returned when the opening line is not a delimiter or when
+// no closing delimiter is ever reached; the source is then returned untouched
+// as the body, so an unterminated preamble is not silently deleted.
+func splitSource(src []byte) sourceParts {
 	lines := bytes.SplitAfter(src, []byte("\n"))
-	if len(lines) == 0 {
-		return nil, src
+	// No complete first line (empty input, or a single line with no newline):
+	// there can be no opening delimiter with a newline after it. This matches
+	// the previous stripFrontmatter, which required splitLine to return ok.
+	if len(lines) == 0 || !bytes.HasSuffix(lines[0], []byte("\n")) {
+		return sourceParts{body: src}
+	}
+	if !isFrontmatterDelimiter(string(lines[0])) {
+		return sourceParts{body: src}
 	}
 	offset := len(lines[0])
 	for i := 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(string(lines[i]))
 		offset += len(lines[i])
-		if trimmed == "---" {
-			return src[:offset], src[offset:]
+		if isFrontmatterDelimiter(string(lines[i])) {
+			return sourceParts{
+				frontmatter: src[:offset],
+				body:        src[offset:],
+				bodyOffset:  offset,
+			}
 		}
 	}
-	return nil, src
+	return sourceParts{body: src}
 }
 
 func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
@@ -801,45 +952,20 @@ func StripFrontmatter(src []byte) []byte {
 	return stripFrontmatter(src)
 }
 
-// stripFrontmatter removes YAML frontmatter delimited by ---.
+// stripFrontmatter removes a leading YAML frontmatter block delimited by a
+// goldmark-meta separator line. The boundary is the single splitSource every
+// parser consumer uses (see sourceParts), so what is stripped for plain-text
+// search/excerpts is exactly what the pre-passes protect and what goldmark-meta
+// parses as metadata.
 //
-// Delimiters are matched as whole lines, mirroring goldmark-meta (the extension
-// that actually parses the frontmatter): the block opens only when the very
-// first line consists of dashes, and closes at the next such line. Matching a
-// bare "---" substring instead would cut valid frontmatter short — a scalar
-// such as `title: "before---after"` would end the block mid-document and leak
-// the remaining YAML into the body.
+// Delimiters are matched as whole lines, mirroring goldmark-meta (the
+// extension that actually parses the frontmatter): the block opens only when
+// the very first line consists of dashes, and closes at the next such line.
+// Matching a bare "---" substring instead would cut valid frontmatter short —
+// a scalar such as `title: "before---after"` would end the block mid-document
+// and leak the remaining YAML into the body.
 func stripFrontmatter(src []byte) []byte {
-	s := string(src)
-	line, rest, ok := splitLine(s)
-	if !ok || !isFrontmatterDelimiter(line) {
-		return src
-	}
-	for rest != "" {
-		line, next, ok := splitLine(rest)
-		// The closing delimiter counts even as the last line of a file with no
-		// trailing newline ("---\ntitle: x\n---"), so test the line before
-		// giving up on an incomplete one — otherwise the whole source, its
-		// frontmatter included, would be returned as note body.
-		if isFrontmatterDelimiter(line) {
-			return []byte(next)
-		}
-		if !ok {
-			break
-		}
-		rest = next
-	}
-	return src
-}
-
-// splitLine returns the first line of s (without its line break), the
-// remainder, and whether s contained a complete line at all.
-func splitLine(s string) (string, string, bool) {
-	i := strings.IndexByte(s, '\n')
-	if i < 0 {
-		return s, "", false
-	}
-	return strings.TrimSuffix(s[:i], "\r"), s[i+1:], true
+	return splitSource(src).body
 }
 
 // isFrontmatterDelimiter reports whether a line delimits a frontmatter block:
