@@ -24,3 +24,8 @@ Implemented PV-FRONTMATTER-024: introduced splitSource (the single goldmark-meta
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/math.go — math pre-pass migration
 - /home/manuel/workspaces/2026-08-09/publish-vault-mathjax/publish-vault/internal/parser/parser.go — canonical boundary and consumer migration
 
+
+## 2026-08-16
+
+Ticket closed
+

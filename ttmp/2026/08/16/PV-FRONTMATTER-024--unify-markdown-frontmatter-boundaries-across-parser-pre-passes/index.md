@@ -1,7 +1,7 @@
 ---
 Title: Unify Markdown frontmatter boundaries across parser pre-passes
 Ticket: PV-FRONTMATTER-024
-Status: active
+Status: complete
 Topics:
     - parser
     - frontmatter
@@ -13,10 +13,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-08-16T18:34:17.435889989-04:00
+LastUpdated: 2026-08-16T18:47:02.66237867-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Unify Markdown frontmatter boundaries across parser pre-passes
 
