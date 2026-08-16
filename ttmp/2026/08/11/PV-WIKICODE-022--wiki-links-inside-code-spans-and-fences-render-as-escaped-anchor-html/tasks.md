@@ -6,3 +6,4 @@
 - [x] Vault-wide audit distinguishing injected markup from author-written HTML samples <!-- t:d5ig -->
 - [ ] FOLLOW-UP: web/src/vault/staticVault.ts has the same defect and no code-region scanner (preprocessWikiLinks runs a bare regex over the whole document) <!-- t:1rvt -->
 - [ ] FOLLOW-UP: extractWikiLinks scans frontmatter too, so a [[X]] in a frontmatter value still enters the backlink graph <!-- t:dmoh -->
+- [x] Address PR #20 review findings: frontmatter code-region detection + escaped-backtick code spans (commit daf23c3) <!-- t:8qtw -->

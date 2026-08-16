@@ -13,13 +13,19 @@ RelatedFiles:
     - Path: repo://internal/parser/math.go
       Note: skipCodeSpan/fenceOpensAt/skipFencedBlock — the scanners reused, and the indented-block decision inherited
     - Path: repo://internal/parser/parser.go
-      Note: codeRegions, codeCursor, replaceWikiLinksOutsideCode, and the skip in extractWikiLinks
+      Note: |-
+        codeRegions, codeCursor, replaceWikiLinksOutsideCode, and the skip in extractWikiLinks
+        extractWikiLinks splits frontmatter and shifts offsets; codeRegions consumes backslash escapes — PR #20 review fixes (commit daf23c3)
+    - Path: repo://internal/parser/parser_test.go
+      Note: 'regression tests for the two PR #20 review findings (commit daf23c3)'
 ExternalSources: []
-Summary: Wiki links inside code spans and fenced blocks were substituted before goldmark ran, so a note documenting the syntax rendered escaped anchor markup where its author wrote a wiki link — and gave the named note a phantom backlink. Fixed by reusing the code-region scanners the math pre-pass already applies.
-LastUpdated: 2026-08-11T00:00:00Z
+Summary: 'Wiki links inside code spans and fenced blocks were substituted before goldmark ran, so a note documenting the syntax rendered escaped anchor markup where its author wrote a wiki link — and gave the named note a phantom backlink. Fixed by reusing the code-region scanners the math pre-pass already applies. A follow-up commit addressed two PR #20 review findings: extractWikiLinks now detects code regions on the body only (so a frontmatter backtick cannot silently drop a body link from WikiLinks), and codeRegions no longer treats escaped backticks as code-span delimiters.'
+LastUpdated: 2026-08-16T21:37:00Z
 WhatFor: Review trail for PV-WIKICODE-022
 WhenToUse: Read before changing the wiki-link pre-pass or the code-region scanners
 ---
+
+
 
 
 # Diary
@@ -193,3 +199,185 @@ Creating the stacked pull request failed with `No commits between
 task/publish-vault-mathjax and task/wiki-links-in-code, Base ref must be a
 branch`, which is what a deleted base branch looks like from `gh` — the merge
 had deleted it. Worth recognising, because the message does not say so.
+
+## Step 2: Address the two P2 review findings on PR #20
+
+PR #20 drew a Codex review with two P2 comments, both on the code-region
+pre-pass this ticket added. Each is the same class of failure the ticket was
+written to stop — a wiki link that is rendered (or not) but silently dropped
+from `ParsedNote.WikiLinks`, so the backlink graph is wrong — just reached by a
+different path than the code-sample case Step 1 fixed.
+
+The first finding is an asymmetry Step 1's diary flagged as "worth knowing
+about" but did not treat as a bug: `extractWikiLinks` built its code cursor over
+the whole source while `replaceWikiLinks` split frontmatter off first. A
+backtick inside a frontmatter scalar therefore paired with a body backtick and
+swallowed the body link between them — but only for extraction, so the link
+still rendered as an anchor while vanishing from the backlink graph. The second
+finding is that `codeRegions` treated escaped backticks as code-span
+delimiters, so a link written between two escaped backticks was wrapped in a
+code span and skipped by both passes.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues: https://github.com/go-go-golems/publish-vault/pull/20"
+
+**Assistant interpretation:** Read the inline review comments on PR #20, fix
+the two P2 issues they raise in `internal/parser/parser.go`, add regression
+tests, and keep the ticket's diary and bookkeeping current.
+
+**Inferred user intent:** Get PR #20 to a state where the review findings are
+resolved and the change is safe to merge, without expanding scope beyond what
+the review asked for.
+
+**Commit (code):** daf23c3 — "fix(PV-WIKICODE-022): address PR #20 review findings (2x P2)"
+
+### What I did
+
+- **Finding 1 (frontmatter code regions):** `extractWikiLinks` now splits
+  frontmatter off and builds the code cursor on the body only, matching
+  `replaceWikiLinks`. Match offsets from the whole-source regex are shifted by
+  `len(frontmatter)` before the `code.contains` check; a match in frontmatter
+  (`m[0] < fmLen`) is never code and is not even queried, so the cursor's
+  ascending-query invariant still holds.
+- **Finding 2 (escaped backticks):** `codeRegions` gained a backslash branch
+  that consumes `\` + the next byte, mirroring `ScanMath`'s `case '\\'`. The
+  only byte `codeRegions` acts on (other than fences at line start) is `` ` ``,
+  so the only observable effect is that a backtick right after a backslash no
+  longer opens a code span.
+- Added regression tests: `TestFrontmatterBacktickDoesNotSwallowBodyLink`,
+  `TestFrontmatterWikiLinkStillIndexed`, `TestEscapedBackticksKeepLinkInBacklinkGraph`,
+  and two new cases in `TestCodeRegionsBoundaries` (escaped backticks; even
+  backslashes before a backtick still open a span).
+- Verified each new test fails against the pre-fix parser by stashing
+  `parser.go`, running the tests, and restoring.
+
+### Why
+
+Both findings are silent data loss in the backlink graph, which is the exact
+failure mode this ticket exists to prevent. The fix for finding 1 also removes
+the asymmetry Step 1's diary called out — the two passes now agree about what
+counts as code everywhere, not just in the body — which is the stronger
+property the pre-pass relies on.
+
+### What worked
+
+- The narrow reading of finding 1 — exclude frontmatter from *code-region
+  detection*, not from wiki-link *matching* — keeps the 123 go-go-parc notes
+  that put `[[X]]` in frontmatter "related:" lists on the backlink graph. A
+  broader fix (extract body-only) would have removed those backlinks, which is
+  the separately-filed question (task dmoh) and not what the review asked.
+  `TestFrontmatterWikiLinkStillIndexed` pins that decision.
+- Reusing `ScanMath`'s backslash-consumption rule verbatim in `codeRegions`
+  makes the "two passes agree about escaped backticks" invariant
+  self-evident, the same way reusing `skipCodeSpan`/`fenceOpensAt` did in
+  Step 1.
+- The vault audit still reports `injected markup: 0 occurrences across 0
+  notes`, so the Step 1 fix is intact.
+
+### What didn't work
+
+- A first draft of the `codeRegions` doc comment used inline backtick
+  sequences (`` `\` ``) to show "an escaped backtick"; the edit tooling turned
+  the backticks into smart double-quotes, producing `` `\“ `` in the file. Go
+  still compiled it (comments carry any bytes), but it was unreadable. Rewrote
+  both the `codeRegions` and the escaped-backtick test comments in plain prose
+  with no inline backtick characters, and grepped the changed files for
+  U+201C/U+201D to confirm none remain.
+
+### What I learned
+
+- The "two passes agree about what counts as code" property from Step 1 is
+  fragile in a useful way: it surfaces exactly the places a third behaviour
+  (here, backslash escapes) is handled in one pass but not the other. Finding
+  2 was already handled correctly by `ScanMath` (its `case '\\'` consumes the
+  escaped byte before the backtick branch ever runs); `codeRegions` had no such
+  branch, so the passes disagreed. Copying the branch over fixed both the bug
+  and the disagreement in one move.
+- A review comment's title can be a precise spec. "Exclude frontmatter when
+  detecting code regions" is about *detection*, not *matching* — following it
+  literally kept the fix narrow and avoided a 123-note behaviour change the
+  review did not request.
+
+### What was tricky to build
+
+**The offset shift in `extractWikiLinks`.** The regex still runs over the
+whole source (so frontmatter `[[X]]` stays matched), but `codeRegions` is now
+body-relative. A match in frontmatter has `m[0] < len(frontmatter)`, so the
+shift `m[0] - fmLen` would go negative; guarding with `m[0] >= fmLen &&` keeps
+frontmatter matches out of the cursor entirely. The cursor's `contains`
+advances an internal index assuming ascending queries — frontmatter matches
+arrive first and are skipped without querying, so the first body query still
+sees the cursor at index 0 and the ascending order is preserved. Getting that
+ordering argument right is what makes the shift safe rather than a latent
+off-by-one for a future caller that iterates differently (the same caveat
+Step 1 recorded about `codeCursor`).
+
+**Proving the backslash branch has no other effect.** `codeRegions` walks
+byte-by-byte and only acts on `` ` `` (and fences at line start). Consuming
+`\` + next for every backslash therefore changes exactly one thing: a `` ` ``
+immediately after a `\` is no longer an opener. A backslash before any other
+byte would have fallen through to `i++` anyway, and the line-start fence check
+runs before the backslash branch, so fence detection is unaffected — including
+after a `\<newline>` hard break, where `body[i-1]` is still the `\n` after the
+consume. `TestCodeRegionsBoundaries/even_backslashes_before_a_backtick_still_open_a_code_span`
+pins that real code spans after an even backslash run still open.
+
+### What warrants a second pair of eyes
+
+- **`extractWikiLinks` still extracts `[[X]]` from frontmatter.** This is
+  deliberate (task dmoh is the filed question of whether it should), and
+  `TestFrontmatterWikiLinkStillIndexed` pins it, but a maintainer who believes
+  frontmatter links should not backlink will want to flip that test and close
+  dmoh. The fix here does not decide that question either way.
+- **The offset shift assumes frontmatter is a prefix.** `splitFrontmatter`
+  only recognises a leading `---` block, so `len(frontmatter)` is the offset
+  of the body in `src`. If `splitFrontmatter` ever learned to strip a leading
+  BOM or shebang, `fmLen` would still be correct because it is the *byte length
+  of the split-off frontmatter*, not a hardcoded constant — but the body
+  returned must stay byte-identical to the body `replaceMathInBody` computed
+  the math spans on, or the spans' offsets would drift. Both call
+  `splitFrontmatter`, so they agree today.
+
+### What should be done in the future
+
+- Decide task dmoh: should a `[[X]]` in a frontmatter value enter the backlink
+  graph? 123 go-go-parc notes do this today. If "no", drop frontmatter from
+  `extractWikiLinks`'s regex range and update
+  `TestFrontmatterWikiLinkStillIndexed`; if "yes", close dmoh as intended and
+  leave the test as the spec. Either way it is now a deliberate decision, not
+  the accident the diary previously called out.
+- The static TypeScript vault (`web/src/vault/staticVault.ts`) still has the
+  underlying code-sample defect from Step 1 and now also lacks these two
+  fixes; it remains filed (task 1rvt).
+
+### Code review instructions
+
+- `internal/parser/parser.go` — `extractWikiLinks` (frontmatter split + offset
+  shift) and `codeRegions` (backslash branch).
+- `internal/parser/parser_test.go` — the three new tests and the two new
+  `TestCodeRegionsBoundaries` cases.
+- `go test ./internal/parser/... -count=1` — all green.
+- To confirm the tests pin the bugs: `git stash push -- internal/parser/parser.go`,
+  re-run the four targeted tests (three fail), `git stash pop`.
+- `go run ./ttmp/2026/08/11/PV-WIKICODE-022--*/scripts/02-vault-code-leak-audit -vault /home/manuel/code/wesen/go-go-golems/go-go-parc`
+  — must print `injected markup: 0 occurrences across 0 notes`.
+
+### Technical details
+
+Codex review comments (PR #20, commit 2cb4ec0, `chatgpt-codex-connector[bot]`):
+
+1. `internal/parser/parser.go:144` — "Exclude frontmatter when detecting code
+   regions": a frontmatter backtick pairs with a body backtick and the
+   intervening body link is omitted from `ParsedNote.WikiLinks` while still
+   rendered by `replaceWikiLinks`.
+2. `internal/parser/parser.go:318` — "Do not treat escaped backticks as code
+   spans": `\`[[Target]]\`` is wrapped in a code span, so both passes skip it
+   and the backlink is absent.
+
+Both are labelled P2. No other review comments were left on the PR.
+
+The narrow-vs-broad choice for finding 1, measured on the go-go-parc vault
+(1836 notes): 123 notes put `[[...]]` in frontmatter. The narrow fix
+(code-region detection only) leaves those 123 notes' backlinks unchanged; a
+broad fix (extract body-only) would have removed them.
