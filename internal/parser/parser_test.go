@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -1020,5 +1021,139 @@ func TestEscapedBackticksKeepLinkInBacklinkGraph(t *testing.T) {
 	}
 	if len(parsed.WikiLinks) != 1 || parsed.WikiLinks[0].Target != "Target" {
 		t.Fatalf("WikiLinks = %#v, want exactly [Target]", parsed.WikiLinks)
+	}
+}
+
+// TestSplitSourceMatrix pins the single frontmatter boundary that every parser
+// consumer now shares. The delimiter rule must mirror goldmark-meta exactly so
+// that any preamble the metadata parser accepts is also the boundary the
+// pre-passes protect. A four-dash (or one-/two-dash, or whitespace-wrapped)
+// preamble that goldmark-meta parses as metadata must be split off here, not
+// handed to the math or wiki pre-passes as Markdown body.
+func TestSplitSourceMatrix(t *testing.T) {
+	cases := []struct {
+		name            string
+		src             string
+		wantFrontmatter bool   // hasFrontmatter()
+		wantBody        string // body bytes (exact)
+	}{
+		{
+			name:            "no frontmatter returns the source untouched",
+			src:             "# Title\n\nBody.\n",
+			wantFrontmatter: false,
+			wantBody:        "# Title\n\nBody.\n",
+		},
+		{
+			name:            "three dashes split",
+			src:             "---\ntitle: x\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "one dash splits (goldmark-meta accepts it)",
+			src:             "-\ntitle: x\n-\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "two dashes split (goldmark-meta accepts it)",
+			src:             "--\ntitle: x\n--\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "four dashes split (the metadata-mutation defect)",
+			src:             "----\ntitle: x\n----\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "whitespace-wrapped delimiter splits",
+			src:             "  ----  \ntitle: x\n \t----\t \nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "CRLF delimiters split",
+			src:             "----\r\ntitle: x\r\n----\r\nBody\r\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\r\n",
+		},
+		{
+			name:            "dashes inside a quoted scalar do not close early",
+			src:             "---\ntitle: \"before---after\"\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "indented dash line inside a block scalar does not close",
+			src:             "---\nsummary: |\n  a --- b\npublish: true\n---\nBody\n",
+			wantFrontmatter: true,
+			wantBody:        "Body\n",
+		},
+		{
+			name:            "closing delimiter at EOF yields an empty body",
+			src:             "---\ntitle: x\n---",
+			wantFrontmatter: true,
+			wantBody:        "",
+		},
+		{
+			name:            "body at EOF without a trailing newline is exact",
+			src:             "---\ntitle: x\n---\nBody",
+			wantFrontmatter: true,
+			wantBody:        "Body",
+		},
+		{
+			name:            "unterminated opener leaves the whole source as body",
+			src:             "---\ntitle: x\nno closing delimiter\n",
+			wantFrontmatter: false,
+			wantBody:        "---\ntitle: x\nno closing delimiter\n",
+		},
+		{
+			name:            "a thematic break after a heading is not frontmatter",
+			src:             "# Title\n\n---\n\nAfter the rule.\n",
+			wantFrontmatter: false,
+			wantBody:        "# Title\n\n---\n\nAfter the rule.\n",
+		},
+		{
+			name:            "an opener with trailing non-dash content is not frontmatter",
+			src:             "---yaml\ntitle: x\n---\nBody\n",
+			wantFrontmatter: false,
+			wantBody:        "---yaml\ntitle: x\n---\nBody\n",
+		},
+		{
+			name:            "empty input is not frontmatter",
+			src:             "",
+			wantFrontmatter: false,
+			wantBody:        "",
+		},
+		{
+			name:            "a single dash line with no newline is not an opener",
+			src:             "---",
+			wantFrontmatter: false,
+			wantBody:        "---",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parts := splitSource([]byte(c.src))
+			if parts.hasFrontmatter() != c.wantFrontmatter {
+				t.Errorf("hasFrontmatter = %v, want %v", parts.hasFrontmatter(), c.wantFrontmatter)
+			}
+			if got := string(parts.body); got != c.wantBody {
+				t.Errorf("body = %q, want %q", got, c.wantBody)
+			}
+			// The two slices must reconstruct the source byte-for-byte, and the
+			// body offset must equal the frontmatter length: extraction uses it
+			// to convert whole-source regex offsets into body-relative ones.
+			reconstructed := append(append([]byte{}, parts.frontmatter...), parts.body...)
+			if !bytes.Equal(reconstructed, []byte(c.src)) {
+				t.Errorf("frontmatter+body does not reconstruct the source:\n got  %q\n want %q", reconstructed, c.src)
+			}
+			if parts.bodyOffset != len(parts.frontmatter) {
+				t.Errorf("bodyOffset = %d, len(frontmatter) = %d", parts.bodyOffset, len(parts.frontmatter))
+			}
+		})
 	}
 }

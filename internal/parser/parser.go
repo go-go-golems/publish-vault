@@ -377,6 +377,65 @@ func splitFrontmatter(src []byte) ([]byte, []byte) {
 	return nil, src
 }
 
+// sourceParts is the result of splitting a Markdown source into an optional
+// leading YAML frontmatter block and the document body. It is the single
+// boundary every parser consumer uses, so math masking, wiki-link
+// replacement/extraction, and plain-text stripping all agree with goldmark-meta
+// about where frontmatter ends.
+//
+// frontmatter is nil when no complete frontmatter block is present; body is
+// then the original source and bodyOffset is 0. When a block is present,
+// frontmatter and body are aliasing slices of src (frontmatter = src[:bodyOffset],
+// body = src[bodyOffset:]), so the two reconstruct the source byte-for-byte
+// without a copy. The delimiter rule is isFrontmatterDelimiter, which mirrors
+// goldmark-meta's isSeparator: a non-empty line of dashes, optionally
+// surrounded by whitespace. The opening line must be the very first line of the
+// source; an unterminated block is left as ordinary source rather than being
+// stripped, matching goldmark-meta (which only closes at a separator).
+type sourceParts struct {
+	frontmatter []byte
+	body        []byte
+	bodyOffset  int
+}
+
+func (p sourceParts) hasFrontmatter() bool {
+	return p.frontmatter != nil
+}
+
+// splitSource separates an initial YAML frontmatter block from the Markdown
+// body. The boundary mirrors goldmark-meta exactly (see isFrontmatterDelimiter)
+// so that any delimiter the metadata parser accepts is also the boundary the
+// pre-passes protect: a four-dash preamble that goldmark-meta parses as
+// metadata is not handed to the math or wiki pre-passes as Markdown body.
+//
+// No frontmatter is returned when the opening line is not a delimiter or when
+// no closing delimiter is ever reached; the source is then returned untouched
+// as the body, so an unterminated preamble is not silently deleted.
+func splitSource(src []byte) sourceParts {
+	lines := bytes.SplitAfter(src, []byte("\n"))
+	// No complete first line (empty input, or a single line with no newline):
+	// there can be no opening delimiter with a newline after it. This matches
+	// the previous stripFrontmatter, which required splitLine to return ok.
+	if len(lines) == 0 || !bytes.HasSuffix(lines[0], []byte("\n")) {
+		return sourceParts{body: src}
+	}
+	if !isFrontmatterDelimiter(string(lines[0])) {
+		return sourceParts{body: src}
+	}
+	offset := len(lines[0])
+	for i := 1; i < len(lines); i++ {
+		offset += len(lines[i])
+		if isFrontmatterDelimiter(string(lines[i])) {
+			return sourceParts{
+				frontmatter: src[:offset],
+				body:        src[offset:],
+				bodyOffset:  offset,
+			}
+		}
+	}
+	return sourceParts{body: src}
+}
+
 func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
 	isEmbed := match[0] == '!'
 	inner := string(match)
@@ -916,45 +975,20 @@ func StripFrontmatter(src []byte) []byte {
 	return stripFrontmatter(src)
 }
 
-// stripFrontmatter removes YAML frontmatter delimited by ---.
+// stripFrontmatter removes a leading YAML frontmatter block delimited by a
+// goldmark-meta separator line. The boundary is the single splitSource every
+// parser consumer uses (see sourceParts), so what is stripped for plain-text
+// search/excerpts is exactly what the pre-passes protect and what goldmark-meta
+// parses as metadata.
 //
-// Delimiters are matched as whole lines, mirroring goldmark-meta (the extension
-// that actually parses the frontmatter): the block opens only when the very
-// first line consists of dashes, and closes at the next such line. Matching a
-// bare "---" substring instead would cut valid frontmatter short — a scalar
-// such as `title: "before---after"` would end the block mid-document and leak
-// the remaining YAML into the body.
+// Delimiters are matched as whole lines, mirroring goldmark-meta (the
+// extension that actually parses the frontmatter): the block opens only when
+// the very first line consists of dashes, and closes at the next such line.
+// Matching a bare "---" substring instead would cut valid frontmatter short —
+// a scalar such as `title: "before---after"` would end the block mid-document
+// and leak the remaining YAML into the body.
 func stripFrontmatter(src []byte) []byte {
-	s := string(src)
-	line, rest, ok := splitLine(s)
-	if !ok || !isFrontmatterDelimiter(line) {
-		return src
-	}
-	for rest != "" {
-		line, next, ok := splitLine(rest)
-		// The closing delimiter counts even as the last line of a file with no
-		// trailing newline ("---\ntitle: x\n---"), so test the line before
-		// giving up on an incomplete one — otherwise the whole source, its
-		// frontmatter included, would be returned as note body.
-		if isFrontmatterDelimiter(line) {
-			return []byte(next)
-		}
-		if !ok {
-			break
-		}
-		rest = next
-	}
-	return src
-}
-
-// splitLine returns the first line of s (without its line break), the
-// remainder, and whether s contained a complete line at all.
-func splitLine(s string) (string, string, bool) {
-	i := strings.IndexByte(s, '\n')
-	if i < 0 {
-		return s, "", false
-	}
-	return strings.TrimSuffix(s[:i], "\r"), s[i+1:], true
+	return splitSource(src).body
 }
 
 // isFrontmatterDelimiter reports whether a line delimits a frontmatter block:
