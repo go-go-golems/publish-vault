@@ -150,10 +150,9 @@ func Parse(src []byte) (*ParsedNote, error) {
 // A [[X]] in a frontmatter value is still matched (frontmatter extraction is a
 // separate, filed question — see PV-WIKICODE-022), but it is never code.
 func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
-	frontmatter, body := splitFrontmatter(src)
-	fmLen := len(frontmatter)
+	parts := splitSource(src)
 	matches := wikiLinkRegex.FindAllSubmatchIndex(src, -1)
-	code := newCodeCursor(body)
+	code := newCodeCursor(parts.body)
 	seen := map[string]bool{}
 	var links []WikiLink
 	for _, m := range matches {
@@ -161,9 +160,10 @@ func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
 		// not a reference. Recording it would give the named note a backlink
 		// from a note that never linked to it — the same reasoning that keeps
 		// links inside a formula out of this list. Only body offsets can be in
-		// a code region; a match in frontmatter (m[0] < fmLen) never is, and is
-		// not even queried, so the cursor's ascending-query invariant holds.
-		if m[0] >= fmLen && code.contains(m[0]-fmLen) {
+		// a code region; a match in frontmatter (m[0] < bodyOffset) never is,
+		// and is not even queried, so the cursor's ascending-query invariant
+		// holds.
+		if m[0] >= parts.bodyOffset && code.contains(m[0]-parts.bodyOffset) {
 			continue
 		}
 		isEmbed := string(src[m[2]:m[3]]) == "!"
@@ -248,13 +248,13 @@ func StripNoteExtension(target string) string {
 // replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
 // The frontend renderer will later resolve slugs to actual paths.
 func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
-	frontmatter, body := splitFrontmatter(src)
-	replacedBody := replaceWikiLinksOutsideCode(body, spans)
-	if len(frontmatter) == 0 {
+	parts := splitSource(src)
+	replacedBody := replaceWikiLinksOutsideCode(parts.body, spans)
+	if !parts.hasFrontmatter() {
 		return replacedBody
 	}
-	out := make([]byte, 0, len(frontmatter)+len(replacedBody))
-	out = append(out, frontmatter...)
+	out := make([]byte, 0, len(parts.frontmatter)+len(replacedBody))
+	out = append(out, parts.frontmatter...)
 	out = append(out, replacedBody...)
 	return out
 }
@@ -352,29 +352,6 @@ func codeRegions(body []byte) [][2]int {
 		i++
 	}
 	return regions
-}
-
-// splitFrontmatter separates an initial YAML frontmatter block from the Markdown
-// body. Wiki-link placeholders must not be injected into frontmatter: doing so
-// turns valid YAML such as `"[[Note]]"` into invalid raw HTML and makes
-// goldmark-meta treat the entire preamble as visible document content.
-func splitFrontmatter(src []byte) ([]byte, []byte) {
-	if !bytes.HasPrefix(src, []byte("---\n")) && !bytes.HasPrefix(src, []byte("---\r\n")) {
-		return nil, src
-	}
-	lines := bytes.SplitAfter(src, []byte("\n"))
-	if len(lines) == 0 {
-		return nil, src
-	}
-	offset := len(lines[0])
-	for i := 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(string(lines[i]))
-		offset += len(lines[i])
-		if trimmed == "---" {
-			return src[:offset], src[offset:]
-		}
-	}
-	return nil, src
 }
 
 // sourceParts is the result of splitting a Markdown source into an optional

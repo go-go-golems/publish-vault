@@ -3,6 +3,7 @@ package parser
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -1153,6 +1154,70 @@ func TestSplitSourceMatrix(t *testing.T) {
 			}
 			if parts.bodyOffset != len(parts.frontmatter) {
 				t.Errorf("bodyOffset = %d, len(frontmatter) = %d", parts.bodyOffset, len(parts.frontmatter))
+			}
+		})
+	}
+}
+
+// TestParseProtectsGoldmarkCompatibleFrontmatter is the regression for
+// PV-FRONTMATTER-024. goldmark-meta accepts any non-empty dash-only separator
+// line (one, two, three, four dashes, whitespace-wrapped, CRLF), but the
+// pre-passes used to recognize only an exact "---", so a four-dash preamble
+// was parsed as metadata by goldmark while being rewritten as Markdown by the
+// math and wiki pre-passes. The parsed frontmatter then contained generated
+// anchor HTML and math sentinels instead of the author's YAML values. Every
+// delimiter form the metadata parser accepts must be the boundary the
+// pre-passes protect.
+func TestParseProtectsGoldmarkCompatibleFrontmatter(t *testing.T) {
+	tests := []struct {
+		name, open, close, newline string
+	}{
+		{"three dashes LF", "---", "---", "\n"},
+		{"one dash LF", "-", "-", "\n"},
+		{"two dashes LF", "--", "--", "\n"},
+		{"four dashes LF", "----", "----", "\n"},
+		{"whitespace wrapped", "  ----  ", " \t----\t ", "\n"},
+		{"four dashes CRLF", "----", "----", "\r\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := tt.open + tt.newline +
+				"title: Boundary" + tt.newline +
+				"related: '[[Meta Link]]'" + tt.newline +
+				"formula: '$x^2$'" + tt.newline +
+				tt.close + tt.newline +
+				"Body [[Body Link]] with $y$." + tt.newline
+
+			note, err := Parse([]byte(src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+
+			// Metadata must hold the author's literal values, not generated
+			// markup. This is the core of the defect: a four-dash preamble was
+			// rewritten before being parsed.
+			if got := note.Frontmatter["related"]; got != "[[Meta Link]]" {
+				t.Errorf("related = %#v, want literal [[Meta Link]]", got)
+			}
+			if got := note.Frontmatter["formula"]; got != "$x^2$" {
+				t.Errorf("formula = %#v, want literal $x^2$", got)
+			}
+			fmStr := fmt.Sprint(note.Frontmatter)
+			if strings.Contains(fmStr, "<a href=") {
+				t.Errorf("wiki HTML leaked into metadata: %s", fmStr)
+			}
+			if strings.Contains(fmStr, mathSentinelOpen) {
+				t.Errorf("math sentinel leaked into metadata: %s", fmStr)
+			}
+
+			// The body still has to render normally: the fix protects
+			// frontmatter, it must not silence body wiki links or math.
+			if !strings.Contains(note.HTML, `data-raw="Body Link"`) {
+				t.Errorf("body wiki link not rendered: %s", note.HTML)
+			}
+			if !strings.Contains(note.HTML, `math math-inline`) {
+				t.Errorf("body math not rendered: %s", note.HTML)
 			}
 		})
 	}

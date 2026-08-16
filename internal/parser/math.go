@@ -279,14 +279,19 @@ func replaceMathFunc(body []byte, fn func(MathSpan) string) []byte {
 
 // replaceMathInBody applies ReplaceMath to the Markdown body only, leaving any
 // YAML frontmatter block untouched. Mirrors replaceWikiLinks.
+// replaceMathInBody applies ReplaceMath to the Markdown body only, leaving any
+// YAML frontmatter block untouched. The boundary is splitSource, shared with
+// the wiki pre-passes and StripFrontmatter, so any delimiter goldmark-meta
+// accepts as metadata is also the boundary math is protected behind — a
+// four-dash preamble is not scanned for `$...$`.
 func replaceMathInBody(src []byte) ([]byte, []MathSpan) {
-	frontmatter, body := splitFrontmatter(src)
-	replaced, spans := ReplaceMath(body)
-	if len(frontmatter) == 0 {
+	parts := splitSource(src)
+	replaced, spans := ReplaceMath(parts.body)
+	if !parts.hasFrontmatter() {
 		return replaced, spans
 	}
-	out := make([]byte, 0, len(frontmatter)+len(replaced))
-	out = append(out, frontmatter...)
+	out := make([]byte, 0, len(parts.frontmatter)+len(replaced))
+	out = append(out, parts.frontmatter...)
 	out = append(out, replaced...)
 	return out, spans
 }
