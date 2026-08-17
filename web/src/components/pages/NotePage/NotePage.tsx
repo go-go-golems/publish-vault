@@ -4,13 +4,14 @@
  * Mobile (<768px): backlinks render inline below note body, no right panel.
  * Fetches note by slug via RTK Query.
  */
-import React, { useMemo, useCallback, useEffect } from "react";
+import React, { useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { NoteView } from "../../organisms/NoteView/NoteView";
 import { BacklinksPanel } from "../../organisms/BacklinksPanel/BacklinksPanel";
 import { ScrollArea } from "../../atoms/ScrollArea/ScrollArea";
 import { Icon } from "../../atoms/Icon/Icon";
 import { SplitPane } from "../../layout/SplitPane/SplitPane";
+import { useScrollRestoration } from "../../../lib/scrollRestoration";
 import {
   useGetConfigQuery,
   useGetNoteQuery,
@@ -55,6 +56,14 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     isError,
   } = useGetNoteQuery(slug, { skip: !slug });
   const { data: config } = useGetConfigQuery();
+
+  // Scroll restoration: save the note's scroll offset on leaving and restore it
+  // on back/forward. Lives here (the persistent /note/* route element) because
+  // the isLoading branch below unmounts the ScrollArea; the hook captures the
+  // offset via a scroll listener before that unmount. `ready` re-binds after a
+  // fetch. See lib/scrollRestoration.ts (PV-SCROLL-024).
+  const layoutRef = useRef<HTMLDivElement>(null);
+  useScrollRestoration(layoutRef, !!note);
 
   useEffect(() => {
     if (!note) return;
@@ -137,7 +146,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   const desktopLayout = rightPanelOpen ? (
     <SplitPane
       main={
-        <ScrollArea className="h-full p-6">
+        <ScrollArea className="note-scroll h-full p-6">
           <NoteView
             note={note}
             onNavigate={handleNavigate}
@@ -160,7 +169,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
     />
   ) : (
     <div className="flex h-full">
-      <ScrollArea className="flex-1 p-6">
+      <ScrollArea className="note-scroll flex-1 p-6">
         <NoteView
           note={note}
           onNavigate={handleNavigate}
@@ -173,7 +182,7 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
 
   // ── Mobile: full-width note with inline backlinks, no right panel ──
   const mobileLayout = (
-    <ScrollArea className="h-full p-4">
+    <ScrollArea className="note-scroll h-full p-4">
       <NoteView
         note={note}
         onNavigate={handleNavigate}
@@ -185,11 +194,11 @@ export const NotePage: React.FC<NotePageProps> = ({ slug }) => {
   );
 
   return (
-    <>
+    <div ref={layoutRef} className="h-full">
       {/* Desktop layout */}
       <div className="hidden md:block h-full">{desktopLayout}</div>
       {/* Mobile layout */}
       <div className="md:hidden h-full">{mobileLayout}</div>
-    </>
+    </div>
   );
 };
