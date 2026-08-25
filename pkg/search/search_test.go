@@ -170,6 +170,32 @@ func TestBatchedIndexFlushesOversizedDocumentsAlone(t *testing.T) {
 	}
 }
 
+func TestBatchedIndexClosesAfterSourceFailure(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "note.md")
+	writeTestNote(t, root, "note.md", "# Note\n\nbody")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	indexPath := filepath.Join(t.TempDir(), "index")
+	_, err = NewPersistentWithOptions(v, indexPath, Options{
+		BatchDocuments: 16,
+		BatchBytes:     1 << 20,
+		ObserveIndexed: func(progress IndexProgress) {
+			if progress.ProcessedDocuments == 0 {
+				_ = os.Remove(notePath)
+			}
+		},
+	})
+	if err == nil {
+		t.Fatal("NewPersistentWithOptions succeeded after source removal")
+	}
+	if err := os.RemoveAll(indexPath); err != nil {
+		t.Fatalf("remove failed index after constructor cleanup: %v", err)
+	}
+}
+
 func TestBatchedAndSingleDocumentIndexesHaveEquivalentSearchResults(t *testing.T) {
 	root := t.TempDir()
 	writeTestNote(t, root, "one.md", "---\ntags: [philosophy]\n---\n# Alpha Design\n\nPersistent memory indexing details.")

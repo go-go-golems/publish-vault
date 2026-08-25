@@ -51,3 +51,12 @@ Phase 2 confirmed bounded Bleve batching: selected 16 documents/1 MiB after one 
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/search/search.go — Experimental bounded batch path
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/batch-matrix/summary.json — Machine-readable variant comparison
+
+## 2026-08-25
+
+Phase 3 wired internal persistent defaults of 16 documents/1 MiB, preserved in-memory and incremental behavior, compared 20 real-vault queries across 16725 complete results, and passed generation, local CI, race, lint, security, frontend, and Darwin build gates.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/runtime.go — Accepted production integration
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/implementation/01-implementation-validation.md — Correctness and validation evidence

@@ -24,7 +24,11 @@ RelatedFiles:
     - Path: repo://pkg/search/search_test.go
       Note: Batch validation flush progress and search-equivalence tests
     - Path: repo://pkg/server/runtime.go
-      Note: Primary runtime evidence inspected during ticket design
+      Note: |-
+        Primary runtime evidence inspected during ticket design
+        Production persistent batch policy and full-snapshot wiring
+    - Path: repo://pkg/server/runtime_test.go
+      Note: Reviewed-bound pin plus persistent lifecycle coverage
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/01-attribution-report.md
       Note: Phase 1 retained heap allocation churn RSS and lifetime conclusions
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/summary.json
@@ -35,6 +39,8 @@ RelatedFiles:
       Note: Pinned clean-worktree Phase 0 baseline summary
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/batch-matrix/01-batch-matrix-report.md
       Note: Seven-variant matrix and selected 16-document candidate
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/implementation/real-vault-search-equivalence.json
+      Note: Twenty-query 16725-result equivalence proof
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh
       Note: Phase 0 reproducible persistent-index runner with cleanup and artifact checks
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/02-summarize-persistent-baseline.py
@@ -43,6 +49,8 @@ RelatedFiles:
       Note: Content-free checkpoint and pprof aggregate reducer
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/benchmark-search-index/main.go
       Note: Fresh-process search-only matrix harness
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/compare-real-search/main.go
+      Note: Content-free complete-result real-vault equivalence harness
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go
       Note: Private forced-GC checkpoint harness using measure collectors and exact search progress
 ExternalSources: []
@@ -51,6 +59,7 @@ LastUpdated: 2026-08-25T18:00:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
+
 
 
 
@@ -746,4 +755,132 @@ selected candidate heap reduction: 40.09%
 selected candidate RSS reduction: 28.24%
 selected candidate allocation reduction: 61.72%
 content audit: PASS
+```
+
+## Step 7: Phase 3 — wire reviewed persistent defaults and prove runtime correctness
+
+Phase 3 applied the reviewed 16-document and 1 MiB bounds to persistent full-snapshot construction only. In-memory indexes and incremental updates remain unchanged. The limits are named internal server constants with an evidence comment and a pinning test; they are not exposed as unsupported operator tuning flags.
+
+Correctness was tested at three levels: focused batch semantics, existing persistent snapshot/reload/failure tests, and a real-vault current-versus-candidate query corpus. The real-vault harness compared 20 queries and 16,725 results without retaining result content. After correcting a tie-at-limit issue in the proof method, all identities, stored fields, and scores matched.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Turn the selected experimental bounds into the production persistent build path, document the behavior, and pass search, snapshot, rollback, cleanup, race, lint, security, frontend, and cross-build gates before measuring the candidate repeatedly.
+
+**Inferred user intent:** Ensure the memory improvement does not trade away search results, persistent index freshness, or atomic reload safety.
+
+**Commit (code):** Pending at the time of this diary entry.
+
+### What I did
+
+- Printed and archived:
+  - `scripts/slips/06-phase-2-done.yaml` after experiment commit `c8450fa`;
+  - `scripts/slips/07-phase-3-start.yaml` before production wiring.
+- Added server-owned constants:
+
+  ```text
+  persistentSearchBatchDocuments = 16
+  persistentSearchBatchBytes = 1 << 20
+  ```
+
+- Added `persistentSearchOptions` and wired it only into `buildSearchIndex`'s persistent constructor.
+- Added a server test pinning reviewed values and runtime wiring.
+- Added a batched source-read failure test proving the failed constructor closes its index and releases the target for removal.
+- Documented batching, progress semantics, oversized documents, and unchanged in-memory/incremental behavior in README.
+- Added `scripts/compare-real-search/main.go`, which emits only query hashes, counts, score deltas, and pass state.
+- Built current and candidate indexes from the detached vault and compared exact, multi-word, fuzzy, prefix, `#tag`, and `tag:` queries.
+- Wrote `artifacts/implementation/01-implementation-validation.md` and the content-free equivalence JSON.
+- Ran generation, local CI, full race tests, lint, security, frontend typecheck/build, Darwin cross-build, and diff checks.
+
+### Why
+
+The search package owns generic batching mechanics; the server owns the workload-derived production policy. Keeping constants in `pkg/server/runtime.go` prevents a measurement from one application workload from becoming an undocumented universal Bleve default.
+
+### What worked
+
+Final real-vault equivalence:
+
+```text
+queries: 20
+total results compared: 16,725
+identities and stored fields: equal
+maximum score difference: 3.469446951953614e-18
+passed: true
+```
+
+Fresh validation:
+
+```text
+go generate ./...                         PASS
+make ci-check                             PASS
+go test -race ./... -count=1              PASS
+golangci-lint and Glazed lint             PASS
+gosec                                     0 issues
+govulncheck                               0 called vulnerabilities
+pnpm --dir web check                      PASS
+pnpm --dir web build                      PASS
+Darwin arm64 cross-build                  PASS
+git diff --check                          PASS
+```
+
+Existing tests continue to cover fresh persistent rebuild, deleted-note removal, final-path reopen, failed-load rollback, reload serialization, unchanged-symlink skips, and delayed old-index cleanup.
+
+### What didn't work
+
+The first real-vault equivalence run failed four broad tag queries. Each requested only 50 results; all matching tag results had equal scores, so different segment layouts selected different top-50 tie subsets. The content-free report showed zero score difference but unequal identities for:
+
+```text
+#project
+#article
+tag:project
+tag:article
+```
+
+This was a proof-harness limit problem, not evidence of different complete match sets. I raised the comparison limit to 10,000, above the entire 2,030-note corpus, rebuilt both indexes, and compared complete result sets. All 20 queries passed. The API still does not promise a secondary key for equal-score truncation; adding one would be a separate behavior change.
+
+The frontend build emitted its existing chunk-size warning for several Mermaid/MathJax assets. No frontend files or chunk behavior changed in this phase.
+
+### What I learned
+
+- Batch segment layout can change which equal-score documents fall at an arbitrary limit without changing matches or scores. Equivalence tests must distinguish rank semantics from unspecified tie ordering.
+- Production policy belongs at the consumer integration boundary; generic `search.Options` supports experiments without imposing one workload's constants on all callers.
+- Progress now advances in committed batches, which is both less noisy and more truthful on errors.
+- The selected implementation reduces index segments and size without changing analyzers, mapping, stored fields, query construction, or result hydration.
+
+### What was tricky to build
+
+The main review boundary is ownership. Holding `search.Index.mu` through batch construction is safe because the index is unpublished and single-owner during construction. The callback must not call back into the same index. Once opened at its final path and placed in a snapshot, query locking behavior remains unchanged.
+
+The equivalence artifact had to prove real behavior without publishing private slugs or titles. It stores only SHA-256 query identifiers, counts, maximum score differences, bounds, and pass/fail state.
+
+### What warrants a second pair of eyes
+
+- Review the complete-result equivalence rule and whether product behavior should eventually define deterministic tie-breaking.
+- Review the server/search ownership split and lock scope.
+- Review whether the runtime test's pinned literal values is appropriately strict; changing them should require new PV-MEM evidence.
+- Review generated-fixture budgets after repeated candidate runs; do not tighten them from the one-run matrix.
+
+### What should be done in the future
+
+Phase 4 must build the committed candidate binary and run three complete server startups against the pinned vault, then compare median/range heap, RSS, duration, and index bytes with Phase 0. It must also run under an isolated finite cgroup so cgroup current/limit are attributable.
+
+### Code review instructions
+
+- Start with `pkg/server/runtime.go` constants and `persistentSearchOptions`.
+- Review `pkg/search/search.go` batching and `pkg/search/search_test.go` error/equivalence coverage.
+- Review the content-free `real-vault-search-equivalence.json` and implementation validation report.
+- Run `make ci-check` and full race tests.
+- Confirm in-memory `search.NewWithOptions` calls still pass zero batching options in production.
+
+### Technical details
+
+```text
+persistent production bound: 16 documents / 1 MiB estimated fields
+real-vault equivalence queries: 20
+real-vault results compared: 16,725
+max score delta: 3.469446951953614e-18
+raw result content retained: none
+full local CI: PASS
 ```

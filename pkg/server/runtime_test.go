@@ -185,6 +185,16 @@ func TestBuildSearchIndexReopensPersistentIndexAtFinalPath(t *testing.T) {
 	}
 }
 
+func TestPersistentSearchOptionsUseReviewedMemoryBounds(t *testing.T) {
+	options := persistentSearchOptions(nil)
+	if options.BatchDocuments != persistentSearchBatchDocuments || options.BatchBytes != persistentSearchBatchBytes {
+		t.Fatalf("persistent options = %#v, want documents=%d bytes=%d", options, persistentSearchBatchDocuments, persistentSearchBatchBytes)
+	}
+	if options.BatchDocuments != 16 || options.BatchBytes != 1<<20 {
+		t.Fatalf("persistent bounds changed without updating PV-MEM-002 evidence: documents=%d bytes=%d", options.BatchDocuments, options.BatchBytes)
+	}
+}
+
 func TestRuntimeStatePersistentSearchCleansOldSnapshotIndexDir(t *testing.T) {
 	oldDelay := oldSnapshotCloseDelay
 	oldSnapshotCloseDelay = 0

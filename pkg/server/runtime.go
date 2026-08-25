@@ -270,7 +270,16 @@ func loadVaultConfig(resolvedRoot, configPath string) *vaultconfig.Config {
 // of bleve gtreap nodes on the Go heap — 84% of the live heap and, on its own,
 // more than half the container limit. Measured in PV-MEMORY-019; a vault a
 // quarter that size is already the point where an operator should know.
-const inMemoryIndexWarnNotes = 400
+const (
+	inMemoryIndexWarnNotes = 400
+
+	// PV-MEM-002 measured this pair against a 2,030-note, 76.9 MB source
+	// workload. It bounded mapped document retention while reducing peak heap,
+	// RSS, allocation traffic, build duration, and index size. Keep both bounds:
+	// document count alone does not bound a single or small set of large notes.
+	persistentSearchBatchDocuments uint64 = 16
+	persistentSearchBatchBytes     uint64 = 1 << 20
+)
 
 func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string, run *measurementRun) (*search.Index, string, error) {
 	if searchIndexPath == "" {
@@ -301,7 +310,7 @@ func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string, run *mea
 		return nil, "", err
 	}
 
-	si, err := search.NewPersistentWithOptions(v, buildIndexDir, search.Options{ObserveIndexed: run.observeSearch})
+	si, err := search.NewPersistentWithOptions(v, buildIndexDir, persistentSearchOptions(run))
 	if err != nil {
 		_ = os.RemoveAll(buildDir)
 		return nil, "", err
@@ -324,6 +333,14 @@ func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string, run *mea
 	}
 	run.setProgress(3)
 	return si, finalDir, nil
+}
+
+func persistentSearchOptions(run *measurementRun) search.Options {
+	return search.Options{
+		ObserveIndexed: run.observeSearch,
+		BatchDocuments: persistentSearchBatchDocuments,
+		BatchBytes:     persistentSearchBatchBytes,
+	}
 }
 
 func closeSnapshotAfter(snap *Snapshot, delay time.Duration, measurement *runtimeMeasurement) {
