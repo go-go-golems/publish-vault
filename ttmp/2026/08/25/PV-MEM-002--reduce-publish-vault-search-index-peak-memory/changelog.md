@@ -24,3 +24,12 @@ Validated the complete intern handoff with docmgr doctor and Markdown checks, th
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/design-doc/01-search-index-memory-analysis-design-and-implementation-guide.md — Primary uploaded implementation handoff
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/reference/01-investigation-diary.md — Chronological prompt, report, design, validation, and delivery evidence
+
+## 2026-08-25
+
+Phase 0 refreshed the clean pinned personal-vault baseline: 2030 notes and 76.9 MB source, with 826.1 MB median heap and 1.034 GB median RSS; search_index remains dominant and 4693 canonical events passed the privacy audit.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/01-baseline-report.md — Workload identity, distribution table, cgroup caveat, and audit result
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh — Three-run persistent baseline harness

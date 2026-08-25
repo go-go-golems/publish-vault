@@ -1,0 +1,89 @@
+almanach_studio_version: 1
+theme: brutalist
+paperWidth: 384
+bodyScale: 1
+feedLines: 8
+blocks:
+- id: head
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: PV-MEM-002
+      preset: micro
+    - w: 1fr
+      text: PLAN
+      preset: micro
+      align: right
+- id: r1
+  type: rule
+  data:
+    weight: heavy
+- id: gap1
+  type: space
+  data:
+    size: s
+- id: title
+  type: text
+  data:
+    text: Search Index Memory Reduction
+    preset: h1
+    lines: 3
+- id: gap2
+  type: space
+  data:
+    size: s
+- id: summary
+  type: text
+  data:
+    text: Attribute the measured search_index peak, implement one proven bounded fix, and preserve snapshot and search correctness.
+    preset: body
+- id: gap3
+  type: space
+  data:
+    size: m
+- id: planhead
+  type: text
+  data:
+    text: PLAN
+    preset: h2
+- id: plan
+  type: checks
+  data:
+    items:
+    - P0 refresh pinned baseline
+    - P1 attribute peak + lifetimes
+    - P2 test focused hypotheses
+    - P3 implement accepted design
+    - P4 prove repeated improvement
+    - P5 budgets + rollout audit
+- id: r2
+  type: rule
+  data:
+    weight: hair
+- id: facts
+  type: kv
+  data:
+    items:
+    - - PHASES
+      - '6'
+    - - NEXT
+      - P0 refresh pinned baseline
+- id: r3
+  type: rule
+  data:
+    weight: hair
+- id: decide
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: SCAN FOR REF
+      preset: caption
+    - w: 120
+      blocks:
+      - id: qr
+        type: qr
+        data:
+          value: https://github.com/go-go-golems/publish-vault/pull/25
+          size: 110

@@ -21,12 +21,21 @@ RelatedFiles:
       Note: Primary search implementation evidence inspected during ticket design
     - Path: repo://pkg/server/runtime.go
       Note: Primary runtime evidence inspected during ticket design
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/privacy-audit.json
+      Note: Structural content/privacy audit across 4693 canonical events
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/summary.json
+      Note: Pinned clean-worktree Phase 0 baseline summary
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh
+      Note: Phase 0 reproducible persistent-index runner with cleanup and artifact checks
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/02-summarize-persistent-baseline.py
+      Note: Phase 0 workload-consistency and three-run distribution reducer
 ExternalSources: []
 Summary: Chronological research and implementation diary for attributing and reducing publish-vault search-index peak memory while preserving search behavior and atomic snapshot reloads.
 LastUpdated: 2026-08-25T18:00:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
+
 
 
 # Diary
@@ -349,4 +358,125 @@ ToC depth: 2
 Upload result: OK
 Raw profiles included: no
 Private note content included: no
+```
+
+## Step 4: Phase 0 — print the plan, freeze a clean workload, and refresh the baseline
+
+Phase 0 established a new reproducible baseline before any runtime code changed. The master-plan and Phase 0 start slips were printed first. I then built one exact publish-vault binary and one exact measure binary, ran the clean personal vault three times through persistent indexing at 100 ms, summarized run and phase distributions, recorded index size, and audited every canonical event for private content.
+
+The refreshed workload differs materially from MEASURE-001. The old run used a dirty vault worktree with 3,396 candidates and 20,938,723 source bytes. The current clean commit has 2,036 candidates but 76,921,819 source bytes. The current median peak is consequently much larger: 826,146,848 bytes heap and 1,033,994,240 bytes RSS. This is not evidence that the instrumentation commit regressed memory; it is a new workload. PV-MEM-002 comparisons must use this pinned clean baseline.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Implement PV-MEM-002, commit at appropriate intervals and keep a detailed diary as you work (using the diary format from the skill). Print out a brutalist work slip with the plan / different phases for the ticket. then before stsarting a phase, plrint a split about the phase, and print one when the phase is done. [REMINDER] Output a <summary>...</summary> block at the VERY END of your response. This is mandatory."
+
+**Assistant interpretation:** Execute all six PV-MEM-002 phases with coherent commits, strict chronological evidence, and real thermal plan/start/completion slips; begin by pinning and validating a clean three-run persistent baseline.
+
+**Inferred user intent:** Complete the optimization empirically rather than selecting an implementation from intuition, while leaving enough durable operational and review evidence to reproduce every decision.
+
+**Commit (code):** Pending at the time of this diary entry; Phase 0 contains scripts and evidence only, with no runtime behavior change.
+
+### What I did
+
+- Printed and archived:
+  - `scripts/slips/00-master-plan.yaml` with Phases 0–5;
+  - `scripts/slips/01-phase-0-start.yaml` before baseline work.
+- Inspected the uncommitted MEASURE-001 runner and summarizer rather than repeating its design from memory.
+- Confirmed the personal vault is clean at commit `5f9f18ca7791ba2ddeb8a2528e3c279e6ae5f75a`.
+- Recorded `.vault-ignore` hash `d39336e4...3521`; `.publish/config.yaml` is absent, so the application uses an empty default config.
+- Added ticket-local scripts:
+  - `scripts/01-run-persistent-baseline.sh`;
+  - `scripts/02-summarize-persistent-baseline.py`.
+- Added cleanup traps, exact trace/receipt cardinality checks, index-size capture, source capture, workload consistency checks, and phase distributions.
+- Validated scripts with `bash -n` and `python3 -m py_compile`.
+- Built exact binaries with `GOWORK=off` and `-trimpath`:
+  - publish-vault SHA-256 `3d2fbb53...3966`;
+  - measure SHA-256 `9d8ae4a0...bdac`.
+- Ran three persistent-index server startups at 100 ms and waited for `/api/healthz` before graceful shutdown.
+- Produced canonical traces, receipts, measure summaries, metadata, a distribution summary, artifact hashes, privacy audit, and human-readable baseline report.
+
+### Why
+
+The existing MEASURE-001 baseline cannot be used as a strict before/after baseline because its private workload was dirty and is no longer reproducible. A clean Git commit plus ignore/config hashes, note/byte counts, exact binary hashes, and repeated runs make future candidate comparisons defensible.
+
+### What worked
+
+All three runs completed and reported the same workload:
+
+```text
+Markdown candidates: 2,036
+published notes: 2,030
+candidate source bytes: 76,921,819
+sample interval: 100 ms
+```
+
+Distributions:
+
+```text
+total duration:      130.27 / 166.42 / 172.93 s (min/median/max)
+peak heap:           805,533,208 / 826,146,848 / 857,792,960 B
+peak RSS:            958,763,008 / 1,033,994,240 / 1,051,410,432 B
+index size:          204,434,855 / 210,012,540 / 211,134,662 B
+search duration:     87.92 / 107.41 / 115.67 s
+search peak heap:    identical to run peak in every run
+search peak RSS:     identical to run peak in every run
+```
+
+The privacy audit inspected 4,693 canonical events and passed. Only `processed_notes`, `processed_bytes`, and `total_bytes` annotations exist. No path, slug, title, body, Markdown, excerpt, tags, command, environment, repository marker, or absolute home path was found.
+
+### What didn't work
+
+- The binary validation command tried `retro-obsidian-publish --version`; the root does not define that flag and returned:
+
+  ```text
+  Error: unknown flag: --version
+  ```
+
+  I did not add an unrelated compatibility flag. I validated the built binary through `help`; measure's existing `--version` returned `measure version dev`.
+
+- The first privacy-audit glob accidentally counted seven `run-*.jsonl` files because it included three derived summary JSONL files and `run-console.jsonl`. The structural scan still passed, but the reported `trace_files` count was misleading. I replaced the glob with the explicit canonical paths `run-1.jsonl` through `run-3.jsonl` and reran the audit; it now reports three traces and 4,693 events.
+
+### What I learned
+
+- Source bytes are more predictive than note count for this workload. The clean vault has 40% fewer candidates than the old baseline but 3.7 times as many candidate bytes and roughly twice the memory peak.
+- The current host cgroup is unlimited and shared. Its 7.18 GB median current peak is truthful collector output but is not attributable to publish-vault. Process RSS is the useful baseline here; later finite-cgroup Docker runs are required for isolated cgroup evidence.
+- Persistent index bytes varied by roughly 3%, so index-size comparison also needs repeated runs.
+- `search_index` remains unambiguously dominant for both heap and RSS.
+
+### What was tricky to build
+
+The central difficulty was avoiding a false regression claim. Comparing the old 483 MB median RSS to the new 1.034 GB median without workload identity would suggest a code regression. The source-byte count and clean commit show that these are different corpora. The ticket now explicitly supersedes the older baseline for optimization comparisons.
+
+The second subtlety was retaining only content-free artifacts. Server logs and temporary search directories are destroyed after each run. Canonical events, receipts, summaries, counters, and hashes are retained because their key/value domains were structurally audited.
+
+### What warrants a second pair of eyes
+
+- Review whether the clean vault commit should remain frozen for the entire ticket even as go-go-parc receives unrelated commits. Recommendation: use a detached worktree at `5f9f18c` for all candidate runs.
+- Review the 100 ms sampling cost before interpreting duration differences smaller than run-to-run variation.
+- Review why persistent index byte size varies across equivalent builds; query correctness is the acceptance gate, but deterministic index size is not currently assumed.
+- Confirm the shared unlimited cgroup caveat is prominent enough in all comparisons.
+
+### What should be done in the future
+
+Phase 1 must create a detached vault worktree at the pinned commit, capture private heap profiles aligned to fixed `search_index` progress checkpoints, capture smaps and runtime/cgroup aggregates, and retain only reviewed content-free profile tables.
+
+### Code review instructions
+
+- Review the runner's cleanup/error handling before the baseline values.
+- Verify `summary.json` workload identity and all three receipt phase totals.
+- Review `privacy-audit.json` and `artifact-manifest.json`.
+- Re-run the summarizer against the retained artifacts; it should produce the same distributions.
+- Do not compare this baseline directly to MEASURE-001 without the workload caveat.
+
+### Technical details
+
+```text
+publish-vault commit: 8648cfcd1690c086010fbc5a64d27fe0f5ad6a9c
+measure commit: a3f4b045b5d204101e17e35458de9b8955d71772
+vault commit: 5f9f18ca7791ba2ddeb8a2528e3c279e6ae5f75a
+baseline artifacts: artifacts/baseline-current/
+canonical traces: 3
+canonical events: 4,693
+privacy audit: PASS
+runtime code changes: none
 ```
