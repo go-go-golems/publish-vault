@@ -12,33 +12,44 @@ Topics:
 DocType: index
 Intent: long-term
 Owners: []
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://docker-compose.yml
+      Note: Warning-free production Compose configuration
+    - Path: repo://pkg/server/memory_budget_test.go
+      Note: Persistent generated-fixture production-path regression test
+    - Path: repo://pkg/server/testdata/generated-fixture-memory-budget.json
+      Note: Reviewed heap and race-compatible RSS thresholds
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/06-run-generated-scaling.sh
+      Note: Deterministic generated scaling harness
 ExternalSources: []
-Summary: Evidence-first profiling and implementation ticket for reducing the persistent Bleve search-index peak from its current 391 MB heap and 483 MB RSS median while preserving search behavior and atomic snapshot reloads.
-LastUpdated: 2026-08-25T18:00:00-04:00
+Summary: Evidence-backed bounded Bleve batching reduced the refreshed workload's median peak heap 34.27 percent and RSS 21.52 percent while preserving search and atomic snapshot behavior; final PR delivery remains active.
+LastUpdated: 2026-08-25T19:20:00-04:00
 WhatFor: Coordinating baseline refresh, peak attribution, bounded search-index experiments, correctness proof, regression budgets, and rollout guidance.
 WhenToUse: Start here before profiling or changing publish-vault search-document generation, Bleve construction, mapping, snapshot publication, or memory limits.
 ---
+
 
 # Reduce publish-vault search-index peak memory
 
 ## Overview
 
-MEASURE-001 established that persistent Bleve indexing is materially better than in-memory indexing for the 3,395-note personal-vault workload, but `search_index` still dominates at a median 391,219,024-byte heap peak and 482,586,624-byte RSS peak. This ticket attributes that peak to concrete types and lifetimes, tests one falsifiable optimization hypothesis at a time, and accepts a change only after repeated memory, throughput, search-equivalence, snapshot, privacy, and CI validation.
+The refreshed 2,030-note, 76.9 MB workload established a median 826,146,848-byte heap and 1,033,994,240-byte RSS peak. Aligned profiles found 51.65 GB of indexing allocation churn but only 33.7 MB post-GC retained growth, leading to a bounded Bleve batch design rather than an unsafe snapshot-lifetime change. The accepted 16-document/1 MiB persistent policy reduced repeated median heap 34.27%, RSS 21.52%, and duration 48.13% while preserving complete search results and atomic snapshot behavior.
 
-The preferred initial target is median process RSS below 400 MB. The target is not a license to weaken atomic snapshot replacement, rollback, persistent-index freshness, or query behavior.
+The preferred sub-400 MB RSS target proved unattainable through batching alone because required rendered vault state and file-backed/runtime residency remain. The evidence rejects weakening atomic snapshot replacement, rollback, persistent-index freshness, or query behavior to chase that stretch target.
 
 ## Key Links
 
 - **Primary guide**: [Search Index Memory Analysis, Design, and Implementation Guide](./design-doc/01-search-index-memory-analysis-design-and-implementation-guide.md)
 - **Diary**: [Investigation Diary](./reference/01-investigation-diary.md)
+- **Repeated candidate proof**: [Candidate proof](./artifacts/candidate-current/01-candidate-proof.md)
+- **Phase 5 validation**: [Regression and packaging evidence](./artifacts/final/01-phase-5-validation.md)
 - **Tasks**: [tasks.md](./tasks.md)
 - **Related Files**: See frontmatter RelatedFiles field
 - **External Sources**: See frontmatter ExternalSources field
 
 ## Status
 
-Current status: **active**
+Current status: **active — Phase 5 local gates passed; PR delivery and final audit pending**
 
 ## Topics
 

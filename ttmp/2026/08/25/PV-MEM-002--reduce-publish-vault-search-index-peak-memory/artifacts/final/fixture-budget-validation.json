@@ -1,0 +1,18 @@
+{
+  "all_passed": true,
+  "evaluations": 40,
+  "final_thresholds_bytes": {
+    "peak_heap": 33554432,
+    "peak_rss": 167772160
+  },
+  "initial_96_mib_rss_threshold_rejected": true,
+  "max_observed": {
+    "run:peak-heap": 20025072,
+    "run:peak-rss": 59600896,
+    "search_index:peak-heap": 16568368,
+    "search_index:peak-rss": 55934976
+  },
+  "race_suite_observed_peak_rss_bytes": 139022336,
+  "runs": 10,
+  "schema_version": 1
+}

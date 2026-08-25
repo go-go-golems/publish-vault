@@ -50,11 +50,19 @@ func TestGeneratedFixtureMemoryBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := NewRuntimeStateWithOptions(root, RuntimeOptions{measurement: measurement})
+	state, err := NewRuntimeStateWithOptions(root, RuntimeOptions{
+		SearchIndexPath: filepath.Join(t.TempDir(), "persistent-search"),
+		measurement:     measurement,
+	})
 	if err != nil {
 		t.Fatalf("load generated fixture: %v", err)
 	}
 	vault, index := state.Snapshot()
+	t.Cleanup(func() {
+		if err := index.Close(); err != nil {
+			t.Errorf("close generated fixture search index: %v", err)
+		}
+	})
 	if vault.Count() != config.Fixture.Documents {
 		t.Fatalf("notes = %d, want %d", vault.Count(), config.Fixture.Documents)
 	}

@@ -5,9 +5,9 @@
     "payload_bytes_per_document": 8192
   },
   "budgets": [
-    {"metric": "peak-heap", "condition": "<64MiB"},
-    {"metric": "peak-rss", "condition": "<192MiB"},
-    {"phase": "search_index", "metric": "peak-heap", "condition": "<64MiB"},
-    {"phase": "search_index", "metric": "peak-rss", "condition": "<192MiB"}
+    {"metric": "peak-heap", "condition": "<32MiB"},
+    {"metric": "peak-rss", "condition": "<160MiB"},
+    {"phase": "search_index", "metric": "peak-heap", "condition": "<32MiB"},
+    {"phase": "search_index", "metric": "peak-rss", "condition": "<160MiB"}
   ]
 }

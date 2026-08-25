@@ -1,0 +1,80 @@
+{
+  "cases": [
+    {
+      "documents": 100,
+      "duration_nanos": 134730448,
+      "index_bytes": 332727,
+      "payload_bytes_per_document": 1024,
+      "peak_heap_alloc_bytes": 10587880,
+      "peak_rss_bytes": 55193600,
+      "schema_version": 1,
+      "search_index": {
+        "duration_nanos": 55284142,
+        "peak_heap_alloc_bytes": 10587880,
+        "peak_rss_bytes": 55009280
+      },
+      "source_payload_bytes": 102400
+    },
+    {
+      "documents": 1000,
+      "duration_nanos": 9082394601,
+      "index_bytes": 35402180,
+      "payload_bytes_per_document": 8192,
+      "peak_heap_alloc_bytes": 72926608,
+      "peak_rss_bytes": 158937088,
+      "schema_version": 1,
+      "search_index": {
+        "duration_nanos": 5723984718,
+        "peak_heap_alloc_bytes": 72926608,
+        "peak_rss_bytes": 158937088
+      },
+      "source_payload_bytes": 8192000
+    },
+    {
+      "documents": 160,
+      "duration_nanos": 1299670278,
+      "index_bytes": 2952831,
+      "payload_bytes_per_document": 8192,
+      "peak_heap_alloc_bytes": 22936976,
+      "peak_rss_bytes": 76808192,
+      "schema_version": 1,
+      "search_index": {
+        "duration_nanos": 571610514,
+        "peak_heap_alloc_bytes": 19713504,
+        "peak_rss_bytes": 70959104
+      },
+      "source_payload_bytes": 1310720
+    },
+    {
+      "documents": 200,
+      "duration_nanos": 4855291501,
+      "index_bytes": 15631207,
+      "payload_bytes_per_document": 32768,
+      "peak_heap_alloc_bytes": 67298640,
+      "peak_rss_bytes": 137486336,
+      "schema_version": 1,
+      "search_index": {
+        "duration_nanos": 2048918156,
+        "peak_heap_alloc_bytes": 67298640,
+        "peak_rss_bytes": 137486336
+      },
+      "source_payload_bytes": 6553600
+    },
+    {
+      "documents": 500,
+      "duration_nanos": 2788319358,
+      "index_bytes": 8881044,
+      "payload_bytes_per_document": 8192,
+      "peak_heap_alloc_bytes": 46827992,
+      "peak_rss_bytes": 109006848,
+      "schema_version": 1,
+      "search_index": {
+        "duration_nanos": 1281088833,
+        "peak_heap_alloc_bytes": 34286216,
+        "peak_rss_bytes": 101371904
+      },
+      "source_payload_bytes": 4096000
+    }
+  ],
+  "schema_version": 1
+}

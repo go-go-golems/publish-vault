@@ -69,3 +69,13 @@ Phase 4 repeated proof: three complete candidate runs reduced median heap 34.27%
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/candidate-current/01-candidate-proof.md — Repeated acceptance report
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/finite-cgroup/result.json — Finite-cgroup operational boundary
+
+## 2026-08-25
+
+Phase 5 changed the generated budget to persistent production indexing, tightened heap from 64 to 32 MiB and race-compatible RSS from 192 to 160 MiB, validated five public scaling cases, built and smoked the production image under a 512 MiB cgroup, removed the obsolete Compose version key, and passed all fresh local gates.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/memory_budget_test.go — Persistent generated-fixture setup and explicit index close
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/testdata/generated-fixture-memory-budget.json — Tightened reviewed regression thresholds
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/01-phase-5-validation.md — Regression packaging failure-triage and local validation evidence

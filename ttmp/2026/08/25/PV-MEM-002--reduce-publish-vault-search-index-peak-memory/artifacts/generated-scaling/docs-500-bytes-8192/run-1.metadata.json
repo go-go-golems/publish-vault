@@ -1,0 +1,130 @@
+{
+  "duration_nanos": 2788319358,
+  "index_bytes": 8881044,
+  "mode": "persistent",
+  "notes": 500,
+  "peaks": {
+    "cgroup_current_bytes": 8483917824,
+    "heap_alloc_bytes": 46827992,
+    "process_tree_rss_sum_bytes": 0,
+    "rss_bytes": 109006848
+  },
+  "phases": [
+    {
+      "duration_nanos": 7428861,
+      "name": "resolve_root",
+      "peaks": {
+        "cgroup_current_bytes": 8411967488,
+        "heap_alloc_bytes": 3496280,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 42565632
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 1412843554,
+      "name": "vault_walk_parse",
+      "peaks": {
+        "cgroup_current_bytes": 8424689664,
+        "heap_alloc_bytes": 13980080,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 55209984
+      },
+      "processed": 500,
+      "total": 500
+    },
+    {
+      "duration_nanos": 6126890,
+      "name": "vault_normalize",
+      "peaks": {
+        "cgroup_current_bytes": 8424173568,
+        "heap_alloc_bytes": 13467584,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 55209984
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 9831983,
+      "name": "wiki_link_index",
+      "peaks": {
+        "cgroup_current_bytes": 8425107456,
+        "heap_alloc_bytes": 13868064,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 55480320
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 3070457,
+      "name": "backlinks",
+      "peaks": {
+        "cgroup_current_bytes": 8425107456,
+        "heap_alloc_bytes": 8587296,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 55541760
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 36174080,
+      "name": "render_html",
+      "peaks": {
+        "cgroup_current_bytes": 8435097600,
+        "heap_alloc_bytes": 15305240,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 66297856
+      },
+      "processed": 500,
+      "total": 500
+    },
+    {
+      "duration_nanos": 1281088833,
+      "name": "search_index",
+      "peaks": {
+        "cgroup_current_bytes": 8482156544,
+        "heap_alloc_bytes": 34286216,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 101371904
+      },
+      "processed": 500,
+      "total": 500
+    },
+    {
+      "duration_nanos": 12022143,
+      "name": "index_publish",
+      "peaks": {
+        "cgroup_current_bytes": 8482500608,
+        "heap_alloc_bytes": 36066272,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 102936576
+      },
+      "processed": 3,
+      "total": 3
+    },
+    {
+      "duration_nanos": 9234018,
+      "name": "snapshot_swap",
+      "peaks": {
+        "cgroup_current_bytes": 8483917824,
+        "heap_alloc_bytes": 43821464,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 104751104
+      },
+      "processed": 1,
+      "total": 1
+    }
+  ],
+  "run": 1,
+  "sources": {
+    "cgroup": "unlimited",
+    "process": "available",
+    "process_tree": "",
+    "runtime": "available",
+    "smaps": "available"
+  }
+}

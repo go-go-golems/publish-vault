@@ -61,9 +61,13 @@ RelatedFiles:
       Note: Content-free complete-result real-vault equivalence harness
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go
       Note: Private forced-GC checkpoint harness using measure collectors and exact search progress
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/generated-scaling/01-scaling-report.md
+      Note: Five-case public scaling matrix and reviewed regression-budget rationale
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/01-phase-5-validation.md
+      Note: Final local gates Docker Compose smoke and race-budget failure triage
 ExternalSources: []
 Summary: Chronological research and implementation diary for attributing and reducing publish-vault search-index peak memory while preserving search behavior and atomic snapshot reloads.
-LastUpdated: 2026-08-25T18:00:00-04:00
+LastUpdated: 2026-08-25T19:20:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
@@ -1022,4 +1026,132 @@ median heap reduction: 283,080,328 B
 median RSS reduction: 222,564,352 B
 finite cgroup: 1 GiB, succeeded
 candidate content audit: PASS
+```
+
+## Step 9: Phase 5 — tighten persistent regression budgets and validate packaging
+
+Phase 5 converted the generated memory budget from an in-memory search smoke into a persistent-index regression test, measured it repeatedly, added a five-case generated scaling matrix, and validated the production Docker/Compose path. The first proposed RSS threshold was deliberately rejected after fresh race evidence showed instrumentation overhead exceeded it; the corrected threshold preserves race coverage while still tightening the prior budget.
+
+### Prompt Context
+
+**User prompt (verbatim):** “Continue working toward the active thread goal.”
+
+**Assistant interpretation:** Resume PV-MEM-002 at the unfinished Phase 5 boundary, do not repeat Phases 0–4, and continue through fresh local validation, delivery, and requirement audit.
+
+**Inferred user intent:** Finish the optimization as a reviewable, regression-protected, packaged change rather than stopping after favorable benchmark results.
+
+**Commit (code):** pending Phase 5 commit
+
+### What I did
+
+- Printed and archived `scripts/slips/10-phase-4-done.yaml` only after the repeated candidate/cgroup gates passed.
+- Printed and archived `scripts/slips/11-phase-5-start.yaml` before changing regression budgets.
+- Changed `TestGeneratedFixtureMemoryBudget` to configure `SearchIndexPath`, exercise the accepted production persistent batch policy, and explicitly close the index.
+- Ran the fixture ten times and reduced the heap limits from 64 MiB to 32 MiB.
+- Tested an initial 96 MiB RSS limit, ran the complete race suite, inspected the failure, and revised the limit to 160 MiB to retain race-instrumented headroom.
+- Added and ran `scripts/06-run-generated-scaling.sh` for five document-count/payload combinations.
+- Audited all 428 generated-scaling trace events for content-bearing fields and generated body tokens; no findings.
+- Built production Docker image `sha256:6cb62f01...c9d49cc`.
+- Ran it under a 512 MiB hard cgroup with read-only fixture vault, persistent search, private metrics, health, and embedded frontend checks.
+- Removed the obsolete ignored Compose `version` key after `docker compose config` warned about it, then proved warning-free config output.
+- Ran fresh generation, `make ci-check`, full race, Linux/Darwin builds, Compose config, ten fixture repeats, 50 search-test repeats, and diff checks.
+- Wrote `artifacts/generated-scaling/01-scaling-report.md` and `artifacts/final/01-phase-5-validation.md`.
+
+### Commands run
+
+```bash
+GOWORK=off go test ./pkg/server -run '^TestGeneratedFixtureMemoryBudget$' -count=10 -v
+scripts/06-run-generated-scaling.sh /tmp/pv-mem-002-bin/publish-vault-candidate /tmp/pv-mem-002-bin/measure artifacts/generated-scaling
+docker compose config
+docker build -t publish-vault:pv-mem-002 .
+docker run --memory=512m --memory-swap=512m ... publish-vault:pv-mem-002 serve ...
+go generate ./...
+make ci-check
+GOWORK=off go test -race ./... -count=1
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOWORK=off go build ./...
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOWORK=off go build ./...
+GOWORK=off go test ./pkg/search -count=50
+git diff --check
+```
+
+### What worked
+
+Ten normal persistent-fixture runs passed. The final complete race suite also passed. Final budget limits are 32 MiB heap and 160 MiB RSS both globally and within `search_index`. The focused final race fixture observed 17,975,272 bytes heap and 124,477,440 bytes RSS.
+
+The scaling matrix completed at 100 × 1 KiB, 160 × 8 KiB, 500 × 8 KiB, 1,000 × 8 KiB, and 200 × 32 KiB. It showed expected total-snapshot growth with source payload while retaining bounded search staging.
+
+The production image returned a healthy six-note vault, exposed `measure_run*` on the private metrics listener, served embedded HTML, derived a 456,340,275-byte Go soft limit from the 512 MiB cgroup, and was not OOM-killed.
+
+The fresh final local sequence passed every listed gate.
+
+### What didn't work
+
+The first final full-race attempt failed only the new 96 MiB RSS budget:
+
+```text
+budget phase="" metric=peak-rss observed=139022336 threshold=<100663296 passed=false
+budget phase="search_index" metric=peak-rss observed=139022336 threshold=<100663296 passed=false
+```
+
+Normal runs had been around 60–77 MB RSS, but race instrumentation materially increases RSS. Skipping the budget in race builds would reduce coverage and hide an important environment dimension, so that shortcut was rejected. The limit was changed to 160 MiB: 16.7% below the old 192 MiB threshold and 20.7% above the observed race maximum. A focused race rerun passed at 124,477,440 bytes and the subsequent full race suite passed.
+
+The first Compose validation passed but warned:
+
+```text
+`version` is obsolete
+```
+
+Compose ignores this historical field. Removing only that key produced warning-free validation without altering the generated service configuration.
+
+### What I learned
+
+- A memory budget must cover supported validation instrumentation, not only optimized production binaries.
+- Persistent-fixture setup matters: the prior in-memory setup could pass while the production batch path regressed.
+- Total runtime memory scales with retained rendered vault bytes even when search staging is bounded; document count alone is an insufficient public scaling axis.
+- A 512 MiB limit is comfortable for the six-note packaging smoke but says nothing about the personal workload; the Phase 4 1 GiB finite-cgroup result remains the operational lower-bound evidence.
+
+### What was tricky to build
+
+The scaling evidence needed to remain public and content-free while varying payload size. The harness therefore creates deterministic generated Markdown only in private temporary directories, emits numeric traces/results, audits retained JSONL, and removes each temporary vault immediately.
+
+The fixture's explicit persistent index close is essential. Without it, Windows-like cleanup semantics and file-descriptor lifetime errors could remain hidden even when Linux temporary-directory cleanup appears successful.
+
+### What warrants a second pair of eyes
+
+- Review the 160 MiB RSS threshold against both normal and race observations; do not lower it from normal-run data alone.
+- Confirm the fixture now reaches `newPersistentSearchIndex` and the 16-document/1 MiB policy.
+- Inspect Docker health, metrics-listener separation, cgroup-derived soft limit, and OOM state evidence.
+- Verify the Compose edit removes only an obsolete ignored key.
+- Confirm generated-scaling traces contain no body text or private fields.
+
+### What should be done in the future
+
+- Commit and push Phase 5.
+- Wait for all fresh PR checks and review state.
+- Run the final requirement-to-evidence audit, `docmgr doctor`, artifact/privacy checks, and clean-worktree check.
+- Print the Phase 5 completion slip only after those gates pass, commit the final evidence, and merge the PR.
+
+### Code review instructions
+
+1. Inspect `pkg/server/memory_budget_test.go` and verify persistent setup plus explicit close.
+2. Compare old/new thresholds in `pkg/server/testdata/generated-fixture-memory-budget.json`.
+3. Read `artifacts/generated-scaling/01-scaling-report.md` and `artifacts/final/01-phase-5-validation.md`.
+4. Confirm `local-validation.txt` has no failed gate.
+5. Run the fixture once normally and once under `-race` if changing thresholds.
+6. Review the one-line semantic Compose cleanup separately from the memory changes.
+
+### Technical details
+
+```text
+fixture: 160 documents × 8 KiB
+heap budget: 64 -> 32 MiB
+RSS budget: 192 -> 160 MiB
+rejected RSS proposal: 96 MiB
+race failure observation: 139,022,336 B
+focused final race RSS: 124,477,440 B
+generated scaling cases: 5
+retained generated trace events audited: 428
+Docker smoke hard limit: 536,870,912 B
+Docker smoke GOMEMLIMIT: 456,340,275 B
+final local gates: all passed
 ```
