@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "documents": 160,
+    "payload_bytes_per_document": 8192
+  },
+  "budgets": [
+    {"metric": "peak-heap", "condition": "<64MiB"},
+    {"metric": "peak-rss", "condition": "<192MiB"},
+    {"phase": "search_index", "metric": "peak-heap", "condition": "<64MiB"},
+    {"phase": "search_index", "metric": "peak-rss", "condition": "<192MiB"}
+  ]
+}

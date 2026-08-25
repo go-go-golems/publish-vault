@@ -10,6 +10,9 @@ services:
         - VITE_VAULT_NAME=${VAULT_NAME:-My Vault}
     ports:
       - "8080:8080"
+      # Metrics stay loopback-only on the host; Grafana/Prometheus can also
+      # scrape app:9091 from the Compose network without public exposure.
+      - "127.0.0.1:${METRICS_PORT:-9091}:9091"
     volumes:
       - ${VAULT_PATH:-./vault-example}:/vault:ro
       # Disk for the search index. Keeping it out of the Go heap is the single
@@ -27,6 +30,10 @@ services:
       - "--serve-web"
       - "--search-index-path"
       - "/var/lib/publish-vault/search"
+      - "--metrics-addr"
+      - ":9091"
+      - "--metrics-environment"
+      - "local"
       - "--vault-name"
       - "${VAULT_NAME:-My Vault}"
       - "--page-title"

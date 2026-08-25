@@ -36,13 +36,17 @@ type Config struct {
 	Watch               bool
 	ReloadToken         string
 	ReloadAllowLoopback bool
-	SSRURL              string // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
-	FaviconPath         string // Optional: explicit path to favicon file, overrides vault-root lookup.
-	SearchIndexPath     string // Optional base directory for per-snapshot persistent bleve indexes.
-	PagesDir            string // Optional directory of widget.dsl page scripts served at /api/widget/*.
-	VaultConfigPath     string // Optional vault config file (publish blacklist). Empty = <vault>/.publish/config.yaml. Re-read on every reload.
-	PprofAddr           string // Optional listen address for net/http/pprof (e.g. 127.0.0.1:6060). Empty = disabled.
-	WebFS               fs.FS  // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
+	SSRURL              string        // URL of SSR sidecar (e.g. http://localhost:8089). Empty = no SSR.
+	FaviconPath         string        // Optional: explicit path to favicon file, overrides vault-root lookup.
+	SearchIndexPath     string        // Optional base directory for per-snapshot persistent bleve indexes.
+	PagesDir            string        // Optional directory of widget.dsl page scripts served at /api/widget/*.
+	VaultConfigPath     string        // Optional vault config file (publish blacklist). Empty = <vault>/.publish/config.yaml. Re-read on every reload.
+	PprofAddr           string        // Optional listen address for net/http/pprof (e.g. 127.0.0.1:6060). Empty = disabled.
+	MetricsAddr         string        // Optional private listener for bounded /metrics; never mounted on the public mux.
+	MetricsEnvironment  string        // Optional fixed low-cardinality environment label.
+	MeasureTraceDir     string        // Optional directory for content-free JSONL traces and receipts.
+	MeasureInterval     time.Duration // Sampling interval; zero defaults to one second.
+	WebFS               fs.FS         // Optional web bundle override. Nil = this module's embedded bundle (-tags embed).
 }
 
 // Run starts the API server and, when enabled, serves the bundled web SPA from
@@ -66,9 +70,24 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	startPprof(cfg.PprofAddr)
+	measurement, err := newRuntimeMeasurement(cfg.MeasureInterval, cfg.MeasureTraceDir, cfg.MetricsEnvironment)
+	if err != nil {
+		return err
+	}
+	shutdownMetrics, _, err := startPrivateMetrics(cfg.MetricsAddr, measurement.handler)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownMetrics(shutdownCtx); err != nil {
+			log.Printf("warning: private metrics listener stopped: %v", err)
+		}
+	}()
 
 	log.Printf("Loading vault from %s", cfg.VaultDir)
-	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfigPath: cfg.VaultConfigPath})
+	state, err := NewRuntimeStateWithOptions(cfg.VaultDir, RuntimeOptions{SearchIndexPath: cfg.SearchIndexPath, VaultConfigPath: cfg.VaultConfigPath, measurement: measurement})
 	if err != nil {
 		return err
 	}

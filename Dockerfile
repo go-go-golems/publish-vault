@@ -27,6 +27,6 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=go-builder /src/bin/retro-obsidian-publish ./retro-obsidian-publish
-EXPOSE 8080
+EXPOSE 8080 9091
 ENTRYPOINT ["./retro-obsidian-publish"]
 CMD ["serve", "--port", "8080", "--serve-web"]

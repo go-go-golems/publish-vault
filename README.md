@@ -578,6 +578,12 @@ Important flags:
 | `--watch` | `true` | Watch Markdown files and update local state as files change. |
 | `--reload-token-env` | `RETRO_RELOAD_TOKEN` | Environment variable containing the reload bearer token. |
 | `--reload-allow-loopback` | `false` | Allow unauthenticated reloads from loopback clients. Useful for same-host automation. |
+| `--search-index-path` | empty | Disk-backed per-snapshot Bleve index directory; empty uses the higher-memory in-process index. |
+| `--metrics-addr` | empty | Separate private listener for bounded Prometheus metrics; never mounted on the public mux. |
+| `--metrics-environment` | empty | Fixed low-cardinality environment label. |
+| `--measure-trace-dir` | empty | Private directory for content-free load/reload JSONL traces and receipts. |
+| `--measure-interval` | `1s` | Memory sampling interval; minimum 100ms. |
+| `--pprof-addr` | empty | Separate private pprof listener. Heap profiles can contain note content. |
 | `--config` | `<vault>/.publish/config.yaml` | Path to a vault config file (gitignore-style publish blacklist). A missing file is harmless; a malformed one is logged and ignored. |
 
 ### Environment variables
@@ -591,6 +597,48 @@ Important flags:
 | `VITE_API_URL` | API URL for Vite development mode. Leave unset for same-origin production builds. |
 | `VITE_VAULT_NAME` | Display name used by the frontend. |
 | `VITE_STATIC_VAULT=true` | Build the frontend in static demo mode instead of using the live API. |
+
+---
+
+## Private memory metrics and traces
+
+Enable metrics on a separate listener:
+
+```bash
+retro-obsidian-publish serve \
+  --vault /path/to/vault \
+  --metrics-addr 127.0.0.1:9091 \
+  --metrics-environment local
+curl -fsS http://127.0.0.1:9091/metrics | grep '^measure_'
+```
+
+Inside Kubernetes, `--metrics-addr :9091` can be scraped through a private
+Service or pod monitor. Do not route that port through the public Ingress.
+Metric dimensions are fixed: application/environment plus registered lifecycle
+phases. Paths, revisions, note names, errors, PIDs, and run IDs are never labels.
+Runtime, process, cgroup, run, and phase groups deliberately overlap standard
+collectors to keep local traces and dashboards coherent.
+
+Capture local optimization artifacts with:
+
+```bash
+retro-obsidian-publish serve \
+  --vault /path/to/vault \
+  --watch=false \
+  --measure-interval 100ms \
+  --measure-trace-dir ./private-measurements
+```
+
+The files contain counters, phase names, note/byte counts, source availability,
+and peaks, but no note content. Paths and revisions remain in existing server
+logs, not trace attributes. Keep the directory private anyway. Heap profiles
+are different: they can contain full content and require stronger handling.
+
+Instrumented phases include root resolution, Markdown walk/parse, index
+normalization, wiki links, backlinks, HTML rendering, Bleve indexing,
+persistent-index publication, snapshot swap, and trace-only delayed old-snapshot
+release. Existing `/api/healthz` memory fields retain their JSON names while
+using the shared measure runtime collector internally.
 
 ---
 
@@ -666,7 +714,7 @@ Retro Obsidian Publish is usable, but it is still a young project. The current i
 - one embedded React frontend;
 - optional reload endpoint for content automation.
 
-Good next improvements include configurable home-note selection, reload metrics, explicit ambiguity reports for wiki-link resolution, smaller frontend bundles through dynamic imports, and packaged release binaries.
+Good next improvements include configurable home-note selection, explicit ambiguity reports for wiki-link resolution, smaller frontend bundles through dynamic imports, and packaged release binaries.
 
 ---
 
