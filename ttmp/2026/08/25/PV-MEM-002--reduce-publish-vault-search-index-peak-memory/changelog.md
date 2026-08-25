@@ -33,3 +33,12 @@ Phase 0 refreshed the clean pinned personal-vault baseline: 2030 notes and 76.9 
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/01-baseline-report.md — Workload identity, distribution table, cgroup caveat, and audit result
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh — Three-run persistent baseline harness
+
+## 2026-08-25
+
+Phase 1 attributed search_index: post-GC retained heap grew only 33.7 MB while search allocated 51.65 GB, expanded HeapSys by 611.9 MB, and drove repeated one-document Scorch segment/merge work; selected bounded Bleve batches for Phase 2.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/01-attribution-report.md — Evidence and lifetime inventory
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go — Reproducible private profile harness

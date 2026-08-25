@@ -1,0 +1,776 @@
+{
+  "checkpoints": [
+    {
+      "cgroup_availability": "unlimited",
+      "elapsed_nanos": 55271500,
+      "forced_gc": true,
+      "gc_goal_bytes": 416093098,
+      "heap_alloc_bytes": 211380552,
+      "heap_sys_bytes": 402063360,
+      "indexed_bytes": 0,
+      "num_gc": 234,
+      "percent": 0,
+      "process_anonymous_bytes": 389320704,
+      "process_private_clean_bytes": 14282752,
+      "process_private_dirty_bytes": 389320704,
+      "processed_documents": 0,
+      "pss_bytes": 403609600,
+      "rss_bytes": 411865088,
+      "rss_peak_bytes": 424648704,
+      "runtime_sys_bytes": 414398824,
+      "total_alloc_bytes": 6565219928
+    },
+    {
+      "cgroup_availability": "unlimited",
+      "elapsed_nanos": 33065236944,
+      "forced_gc": true,
+      "gc_goal_bytes": 443860978,
+      "heap_alloc_bytes": 233599848,
+      "heap_sys_bytes": 913408000,
+      "indexed_bytes": 19185020,
+      "num_gc": 287,
+      "percent": 25,
+      "process_anonymous_bytes": 589631488,
+      "process_private_clean_bytes": 21975040,
+      "process_private_dirty_bytes": 589631488,
+      "processed_documents": 508,
+      "pss_bytes": 611612672,
+      "rss_bytes": 634085376,
+      "rss_peak_bytes": 803770368,
+      "runtime_sys_bytes": 931678712,
+      "total_alloc_bytes": 19716875928
+    },
+    {
+      "cgroup_availability": "unlimited",
+      "elapsed_nanos": 53338294920,
+      "forced_gc": true,
+      "gc_goal_bytes": 449599394,
+      "heap_alloc_bytes": 237871536,
+      "heap_sys_bytes": 1014071296,
+      "indexed_bytes": 39009218,
+      "num_gc": 342,
+      "percent": 50,
+      "process_anonymous_bytes": 470573056,
+      "process_private_clean_bytes": 41766912,
+      "process_private_dirty_bytes": 470573056,
+      "processed_documents": 1015,
+      "pss_bytes": 512346112,
+      "rss_bytes": 529862656,
+      "rss_peak_bytes": 1039298560,
+      "runtime_sys_bytes": 1033677304,
+      "total_alloc_bytes": 33060006184
+    },
+    {
+      "cgroup_availability": "unlimited",
+      "elapsed_nanos": 82769073173,
+      "forced_gc": true,
+      "gc_goal_bytes": 438991138,
+      "heap_alloc_bytes": 232340152,
+      "heap_sys_bytes": 1013940224,
+      "indexed_bytes": 56141273,
+      "num_gc": 392,
+      "percent": 75,
+      "process_anonymous_bytes": 424873984,
+      "process_private_clean_bytes": 20795392,
+      "process_private_dirty_bytes": 424873984,
+      "processed_documents": 1523,
+      "pss_bytes": 445674496,
+      "rss_bytes": 469188608,
+      "rss_peak_bytes": 1039298560,
+      "runtime_sys_bytes": 1033677304,
+      "total_alloc_bytes": 45741447144
+    },
+    {
+      "cgroup_availability": "unlimited",
+      "elapsed_nanos": 109196541061,
+      "forced_gc": true,
+      "gc_goal_bytes": 454139378,
+      "heap_alloc_bytes": 245074792,
+      "heap_sys_bytes": 1013940224,
+      "indexed_bytes": 72070169,
+      "num_gc": 440,
+      "percent": 100,
+      "process_anonymous_bytes": 516022272,
+      "process_private_clean_bytes": 195444736,
+      "process_private_dirty_bytes": 516022272,
+      "processed_documents": 2030,
+      "pss_bytes": 711472128,
+      "rss_bytes": 712081408,
+      "rss_peak_bytes": 1051488256,
+      "runtime_sys_bytes": 1033939448,
+      "total_alloc_bytes": 58217854832
+    }
+  ],
+  "diagnostic_perturbed_by_forced_gc": true,
+  "findings": {
+    "heap_sys_growth_0_to_100_bytes": 611876864,
+    "retained_heap_growth_0_to_100_bytes": 33694240,
+    "rss_growth_0_to_100_bytes": 300216320,
+    "selected_hypothesis": "bounded Bleve batches can reduce per-document segment and merge allocation churn",
+    "total_allocation_growth_0_to_100_bytes": 51652634904
+  },
+  "profiles": {
+    "000": {
+      "alloc_space": {
+        "top": [
+          {
+            "cumulative_bytes": 3157740157,
+            "flat_bytes": 2426551538,
+            "function": "regexp.(*Regexp).replaceAll"
+          },
+          {
+            "cumulative_bytes": 2156905900,
+            "flat_bytes": 871185723,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 2436143454,
+            "flat_bytes": 562026254,
+            "function": "regexp.(*Regexp).ReplaceAllString"
+          },
+          {
+            "cumulative_bytes": 555884713,
+            "flat_bytes": 555884713,
+            "function": "regexp.(*Regexp).expand"
+          },
+          {
+            "cumulative_bytes": 323329897,
+            "flat_bytes": 323329897,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 271102392,
+            "flat_bytes": 271102392,
+            "function": "github.com/yuin/goldmark/ast.NewTextSegment (inline)"
+          },
+          {
+            "cumulative_bytes": 165048234,
+            "flat_bytes": 165048234,
+            "function": "bytes.genSplit"
+          },
+          {
+            "cumulative_bytes": 98850202,
+            "flat_bytes": 98850202,
+            "function": "bytes.(*Buffer).String (inline)"
+          },
+          {
+            "cumulative_bytes": 77977761,
+            "flat_bytes": 77977761,
+            "function": "os.readFileContents"
+          },
+          {
+            "cumulative_bytes": 74984624,
+            "flat_bytes": 74984624,
+            "function": "github.com/yuin/goldmark/ast.NewParagraph (inline)"
+          },
+          {
+            "cumulative_bytes": 2726958405,
+            "flat_bytes": 74122669,
+            "function": "github.com/go-go-golems/publish-vault/internal/parser.stripMarkdown"
+          },
+          {
+            "cumulative_bytes": 112803215,
+            "flat_bytes": 73963663,
+            "function": "github.com/go-go-golems/publish-vault/internal/parser.replaceWikiLinksOutsideCode"
+          },
+          {
+            "cumulative_bytes": 67270620,
+            "flat_bytes": 67270620,
+            "function": "github.com/yuin/goldmark/text.(*Segments).Append (inline)"
+          },
+          {
+            "cumulative_bytes": 63486461,
+            "flat_bytes": 63486461,
+            "function": "regexp/syntax.(*compiler).inst (inline)"
+          },
+          {
+            "cumulative_bytes": 112627930,
+            "flat_bytes": 51754805,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc.func1"
+          }
+        ],
+        "total_bytes": 6603345762,
+        "type": "alloc_space"
+      },
+      "inuse_space": {
+        "top": [
+          {
+            "cumulative_bytes": 196664808,
+            "flat_bytes": 196664808,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 2621760,
+            "flat_bytes": 2621760,
+            "function": "internal/bytealg.MakeNoZero"
+          },
+          {
+            "cumulative_bytes": 2663125,
+            "flat_bytes": 1090069,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto"
+          },
+          {
+            "cumulative_bytes": 1076076,
+            "flat_bytes": 1076076,
+            "function": "html.init.func1"
+          },
+          {
+            "cumulative_bytes": 1050625,
+            "flat_bytes": 1050625,
+            "function": "runtime.mallocgc"
+          },
+          {
+            "cumulative_bytes": 100159783,
+            "flat_bytes": 1048792,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote"
+          },
+          {
+            "cumulative_bytes": 1048720,
+            "flat_bytes": 1048720,
+            "function": "github.com/go-go-golems/publish-vault/internal/parser.extractWikiLinks"
+          },
+          {
+            "cumulative_bytes": 1048664,
+            "flat_bytes": 1048664,
+            "function": "gopkg.in/yaml%2ev2.(*parser).scalar"
+          }
+        ],
+        "total_bytes": 209367845,
+        "type": "inuse_space"
+      }
+    },
+    "025": {
+      "alloc_space": {
+        "top": [
+          {
+            "cumulative_bytes": 7164040775,
+            "flat_bytes": 7164040775,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 3701278588,
+            "flat_bytes": 2786725540,
+            "function": "regexp.(*Regexp).replaceAll"
+          },
+          {
+            "cumulative_bytes": 2212989617,
+            "flat_bytes": 897511240,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 3091956830,
+            "flat_bytes": 704059399,
+            "function": "regexp.(*Regexp).ReplaceAllString"
+          },
+          {
+            "cumulative_bytes": 697833043,
+            "flat_bytes": 697833043,
+            "function": "regexp.(*Regexp).expand"
+          },
+          {
+            "cumulative_bytes": 614539537,
+            "flat_bytes": 576455042,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Write"
+          },
+          {
+            "cumulative_bytes": 523819657,
+            "flat_bytes": 523819657,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*Bitmap).Iterator (inline)"
+          },
+          {
+            "cumulative_bytes": 521451448,
+            "flat_bytes": 521451448,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Close (inline)"
+          },
+          {
+            "cumulative_bytes": 462967496,
+            "flat_bytes": 462967496,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 361794781,
+            "flat_bytes": 361794781,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 320033634,
+            "flat_bytes": 320033634,
+            "function": "github.com/blevesearch/bleve/v2/analysis.TokenFrequency"
+          },
+          {
+            "cumulative_bytes": 303061584,
+            "flat_bytes": 303061584,
+            "function": "github.com/blevesearch/zapx/v17.(*Dictionary).postingsListInit"
+          },
+          {
+            "cumulative_bytes": 276829764,
+            "flat_bytes": 276829764,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*roaringArray).readFrom"
+          },
+          {
+            "cumulative_bytes": 274747872,
+            "flat_bytes": 274747872,
+            "function": "github.com/RoaringBitmap/roaring/v2.NewBitmap (inline)"
+          },
+          {
+            "cumulative_bytes": 271102392,
+            "flat_bytes": 271102392,
+            "function": "github.com/yuin/goldmark/ast.NewTextSegment (inline)"
+          }
+        ],
+        "total_bytes": 19858597684,
+        "type": "alloc_space"
+      },
+      "inuse_space": {
+        "top": [
+          {
+            "cumulative_bytes": 197205650,
+            "flat_bytes": 196664808,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 8612506,
+            "flat_bytes": 6464547,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          },
+          {
+            "cumulative_bytes": 2820337,
+            "flat_bytes": 2820337,
+            "function": "github.com/blevesearch/vellum.newRegistry (inline)"
+          },
+          {
+            "cumulative_bytes": 2621760,
+            "flat_bytes": 2621760,
+            "function": "internal/bytealg.MakeNoZero"
+          },
+          {
+            "cumulative_bytes": 2097184,
+            "flat_bytes": 2097184,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*roaringArray).insertNewKeyValueAt (inline)"
+          },
+          {
+            "cumulative_bytes": 1572984,
+            "flat_bytes": 1572984,
+            "function": "github.com/RoaringBitmap/roaring/v2.New (inline)"
+          },
+          {
+            "cumulative_bytes": 2663125,
+            "flat_bytes": 1090069,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto"
+          },
+          {
+            "cumulative_bytes": 100159783,
+            "flat_bytes": 1048792,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote"
+          }
+        ],
+        "total_bytes": 227634154,
+        "type": "inuse_space"
+      }
+    },
+    "050": {
+      "alloc_space": {
+        "top": [
+          {
+            "cumulative_bytes": 13870618834,
+            "flat_bytes": 13870618834,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 4208514268,
+            "flat_bytes": 3111657177,
+            "function": "regexp.(*Regexp).replaceAll"
+          },
+          {
+            "cumulative_bytes": 1332933945,
+            "flat_bytes": 1253717571,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Write"
+          },
+          {
+            "cumulative_bytes": 1126612168,
+            "flat_bytes": 1126612168,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Close (inline)"
+          },
+          {
+            "cumulative_bytes": 1010410890,
+            "flat_bytes": 1010410890,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*Bitmap).Iterator (inline)"
+          },
+          {
+            "cumulative_bytes": 2271024529,
+            "flat_bytes": 924306372,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 918594624,
+            "flat_bytes": 918594624,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 3723502684,
+            "flat_bytes": 859609353,
+            "function": "regexp.(*Regexp).ReplaceAllString"
+          },
+          {
+            "cumulative_bytes": 846537492,
+            "flat_bytes": 846537492,
+            "function": "regexp.(*Regexp).expand"
+          },
+          {
+            "cumulative_bytes": 705232272,
+            "flat_bytes": 705232272,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 639112907,
+            "flat_bytes": 639112907,
+            "function": "github.com/blevesearch/bleve/v2/analysis.TokenFrequency"
+          },
+          {
+            "cumulative_bytes": 586723033,
+            "flat_bytes": 586723033,
+            "function": "github.com/blevesearch/zapx/v17.(*Dictionary).postingsListInit"
+          },
+          {
+            "cumulative_bytes": 570993193,
+            "flat_bytes": 570993193,
+            "function": "github.com/RoaringBitmap/roaring/v2.NewBitmap (inline)"
+          },
+          {
+            "cumulative_bytes": 523774496,
+            "flat_bytes": 523774496,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*roaringArray).readFrom"
+          },
+          {
+            "cumulative_bytes": 888878866,
+            "flat_bytes": 490073061,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          }
+        ],
+        "total_bytes": 33122805110,
+        "type": "alloc_space"
+      },
+      "inuse_space": {
+        "top": [
+          {
+            "cumulative_bytes": 196664808,
+            "flat_bytes": 196664808,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 4230507,
+            "flat_bytes": 4230507,
+            "function": "github.com/blevesearch/vellum.newRegistry (inline)"
+          },
+          {
+            "cumulative_bytes": 2621760,
+            "flat_bytes": 2621760,
+            "function": "internal/bytealg.MakeNoZero"
+          },
+          {
+            "cumulative_bytes": 3413696,
+            "flat_bytes": 2365040,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          },
+          {
+            "cumulative_bytes": 1572984,
+            "flat_bytes": 1572984,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 1572936,
+            "flat_bytes": 1572936,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 1495648,
+            "flat_bytes": 1495648,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 1212696,
+            "flat_bytes": 1212696,
+            "function": "bufio.NewWriterSize (inline)"
+          },
+          {
+            "cumulative_bytes": 2663125,
+            "flat_bytes": 1090069,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto"
+          },
+          {
+            "cumulative_bytes": 100159783,
+            "flat_bytes": 1048792,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote"
+          }
+        ],
+        "total_bytes": 225509538,
+        "type": "inuse_space"
+      }
+    },
+    "075": {
+      "alloc_space": {
+        "top": [
+          {
+            "cumulative_bytes": 20191823038,
+            "flat_bytes": 20191823038,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 4677949636,
+            "flat_bytes": 3409187137,
+            "function": "regexp.(*Regexp).replaceAll"
+          },
+          {
+            "cumulative_bytes": 2066451753,
+            "flat_bytes": 1956655085,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Write"
+          },
+          {
+            "cumulative_bytes": 1768647310,
+            "flat_bytes": 1768647310,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Close (inline)"
+          },
+          {
+            "cumulative_bytes": 1505391629,
+            "flat_bytes": 1505391629,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*Bitmap).Iterator (inline)"
+          },
+          {
+            "cumulative_bytes": 1333325416,
+            "flat_bytes": 1333325416,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 1002008801,
+            "flat_bytes": 1002008801,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 4283033011,
+            "flat_bytes": 979844799,
+            "function": "regexp.(*Regexp).ReplaceAllString"
+          },
+          {
+            "cumulative_bytes": 976462497,
+            "flat_bytes": 976462497,
+            "function": "regexp.(*Regexp).expand"
+          },
+          {
+            "cumulative_bytes": 2323702520,
+            "flat_bytes": 946843876,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 890884256,
+            "flat_bytes": 890884256,
+            "function": "github.com/blevesearch/bleve/v2/analysis.TokenFrequency"
+          },
+          {
+            "cumulative_bytes": 842070769,
+            "flat_bytes": 842070769,
+            "function": "github.com/blevesearch/zapx/v17.(*Dictionary).postingsListInit"
+          },
+          {
+            "cumulative_bytes": 839449129,
+            "flat_bytes": 839449129,
+            "function": "github.com/RoaringBitmap/roaring/v2.NewBitmap (inline)"
+          },
+          {
+            "cumulative_bytes": 760233204,
+            "flat_bytes": 760233204,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*roaringArray).readFrom"
+          },
+          {
+            "cumulative_bytes": 1271571577,
+            "flat_bytes": 684248666,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          }
+        ],
+        "total_bytes": 45703312221,
+        "type": "alloc_space"
+      },
+      "inuse_space": {
+        "top": [
+          {
+            "cumulative_bytes": 196664808,
+            "flat_bytes": 196664808,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 2621760,
+            "flat_bytes": 2621760,
+            "function": "internal/bytealg.MakeNoZero"
+          },
+          {
+            "cumulative_bytes": 2115252,
+            "flat_bytes": 2115252,
+            "function": "github.com/blevesearch/vellum.newRegistry (inline)"
+          },
+          {
+            "cumulative_bytes": 3095031,
+            "flat_bytes": 2025669,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          },
+          {
+            "cumulative_bytes": 1212696,
+            "flat_bytes": 1212696,
+            "function": "bufio.NewWriterSize (inline)"
+          },
+          {
+            "cumulative_bytes": 2663125,
+            "flat_bytes": 1090069,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto"
+          },
+          {
+            "cumulative_bytes": 100159783,
+            "flat_bytes": 1048792,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote"
+          }
+        ],
+        "total_bytes": 217888976,
+        "type": "inuse_space"
+      }
+    },
+    "100": {
+      "alloc_space": {
+        "top": [
+          {
+            "cumulative_bytes": 26472389047,
+            "flat_bytes": 26472389047,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 5119828889,
+            "flat_bytes": 3697797800,
+            "function": "regexp.(*Regexp).replaceAll"
+          },
+          {
+            "cumulative_bytes": 2942029238,
+            "flat_bytes": 2794942377,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Write"
+          },
+          {
+            "cumulative_bytes": 2516590040,
+            "flat_bytes": 2516590040,
+            "function": "github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Close (inline)"
+          },
+          {
+            "cumulative_bytes": 1962095254,
+            "flat_bytes": 1962095254,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*Bitmap).Iterator (inline)"
+          },
+          {
+            "cumulative_bytes": 1717646112,
+            "flat_bytes": 1717646112,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 1294066765,
+            "flat_bytes": 1294066765,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 1133860906,
+            "flat_bytes": 1133860906,
+            "function": "github.com/blevesearch/bleve/v2/analysis.TokenFrequency"
+          },
+          {
+            "cumulative_bytes": 1087383716,
+            "flat_bytes": 1087383716,
+            "function": "regexp.(*Regexp).expand"
+          },
+          {
+            "cumulative_bytes": 4805999988,
+            "flat_bytes": 1086461435,
+            "function": "regexp.(*Regexp).ReplaceAllString"
+          },
+          {
+            "cumulative_bytes": 1070153450,
+            "flat_bytes": 1070153450,
+            "function": "github.com/RoaringBitmap/roaring/v2.NewBitmap (inline)"
+          },
+          {
+            "cumulative_bytes": 1070153450,
+            "flat_bytes": 1070153450,
+            "function": "github.com/blevesearch/zapx/v17.(*Dictionary).postingsListInit"
+          },
+          {
+            "cumulative_bytes": 2368580808,
+            "flat_bytes": 966193252,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 957893800,
+            "flat_bytes": 957893800,
+            "function": "github.com/RoaringBitmap/roaring/v2.(*roaringArray).readFrom"
+          },
+          {
+            "cumulative_bytes": 27359014167,
+            "flat_bytes": 886625120,
+            "function": "bytes.(*Buffer).grow"
+          }
+        ],
+        "total_bytes": 58170879896,
+        "type": "alloc_space"
+      },
+      "inuse_space": {
+        "top": [
+          {
+            "cumulative_bytes": 196664808,
+            "flat_bytes": 196664808,
+            "function": "regexp.(*Regexp).ReplaceAllStringFunc"
+          },
+          {
+            "cumulative_bytes": 4230506,
+            "flat_bytes": 4230506,
+            "function": "github.com/blevesearch/vellum.newRegistry (inline)"
+          },
+          {
+            "cumulative_bytes": 5216714,
+            "flat_bytes": 4147352,
+            "function": "github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc"
+          },
+          {
+            "cumulative_bytes": 2621760,
+            "flat_bytes": 2621760,
+            "function": "internal/bytealg.MakeNoZero"
+          },
+          {
+            "cumulative_bytes": 2136279,
+            "flat_bytes": 2136279,
+            "function": "bytes.growSlice"
+          },
+          {
+            "cumulative_bytes": 1573692,
+            "flat_bytes": 1573692,
+            "function": "github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)"
+          },
+          {
+            "cumulative_bytes": 1572936,
+            "flat_bytes": 1572936,
+            "function": "github.com/blevesearch/vellum.(*builderNodePool).Get (inline)"
+          },
+          {
+            "cumulative_bytes": 1212696,
+            "flat_bytes": 1212696,
+            "function": "bufio.NewWriterSize (inline)"
+          },
+          {
+            "cumulative_bytes": 2663125,
+            "flat_bytes": 1090069,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto"
+          },
+          {
+            "cumulative_bytes": 100159783,
+            "flat_bytes": 1048792,
+            "function": "github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote"
+          }
+        ],
+        "total_bytes": 227408012,
+        "type": "inuse_space"
+      }
+    }
+  },
+  "raw_profiles_retained": false,
+  "schema_version": 1
+}

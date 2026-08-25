@@ -1,0 +1,48 @@
+File: profile-search-index
+Build ID: fd5262f3941cbda6adf3447b0957105e8c91f22c
+Type: alloc_space
+Time: 2026-08-25 18:06:15 EDT
+Showing nodes accounting for 18015265739B, 90.72% of 19858597684B total
+Dropped 531 nodes (cum <= 99292988B)
+Showing top 40 nodes out of 136
+      flat  flat%   sum%        cum   cum%
+7164040775B 36.08% 36.08% 7164040775B 36.08%  bytes.growSlice
+2786725540B 14.03% 50.11% 3701278588B 18.64%  regexp.(*Regexp).replaceAll
+897511240B  4.52% 54.63% 2212989617B 11.14%  regexp.(*Regexp).ReplaceAllStringFunc
+704059399B  3.55% 58.17% 3091956830B 15.57%  regexp.(*Regexp).ReplaceAllString
+697833043B  3.51% 61.69% 697833043B  3.51%  regexp.(*Regexp).expand
+576455042B  2.90% 64.59% 614539537B  3.09%  github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Write
+523819657B  2.64% 67.23% 523819657B  2.64%  github.com/RoaringBitmap/roaring/v2.(*Bitmap).Iterator (inline)
+521451448B  2.63% 69.85% 521451448B  2.63%  github.com/blevesearch/zapx/v17.(*chunkedIntCoder).Close (inline)
+462967496B  2.33% 72.18% 462967496B  2.33%  github.com/blevesearch/vellum.(*builderNodePool).Get (inline)
+361794781B  1.82% 74.01% 361794781B  1.82%  github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)
+320033634B  1.61% 75.62% 320033634B  1.61%  github.com/blevesearch/bleve/v2/analysis.TokenFrequency
+303061584B  1.53% 77.14% 303061584B  1.53%  github.com/blevesearch/zapx/v17.(*Dictionary).postingsListInit
+276829764B  1.39% 78.54% 276829764B  1.39%  github.com/RoaringBitmap/roaring/v2.(*roaringArray).readFrom
+274747872B  1.38% 79.92% 274747872B  1.38%  github.com/RoaringBitmap/roaring/v2.NewBitmap (inline)
+271102392B  1.37% 81.29% 271102392B  1.37%  github.com/yuin/goldmark/ast.NewTextSegment (inline)
+250066000B  1.26% 82.55% 437998074B  2.21%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc
+247479040B  1.25% 83.79% 7411519815B 37.32%  bytes.(*Buffer).grow
+228530084B  1.15% 84.94% 228530084B  1.15%  github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode.(*UnicodeTokenizer).Tokenize
+177391670B  0.89% 85.84% 177391670B  0.89%  bytes.genSplit
+176693144B  0.89% 86.73% 491808816B  2.48%  github.com/RoaringBitmap/roaring/v2.(*roaringArray).toBytes
+152298267B  0.77% 87.49% 152298267B  0.77%  github.com/blevesearch/vellum.newRegistry (inline)
+143888522B  0.72% 88.22% 143888522B  0.72%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc.func1
+ 90463365B  0.46% 88.67% 3473583010B 17.49%  github.com/go-go-golems/publish-vault/internal/parser.stripMarkdown
+ 73963663B  0.37% 89.05% 112803215B  0.57%  github.com/go-go-golems/publish-vault/internal/parser.replaceWikiLinksOutsideCode
+ 53478192B  0.27% 89.31% 315115672B  1.59%  github.com/RoaringBitmap/roaring/v2.(*roaringArray).writeTo
+ 52279861B  0.26% 89.58% 113152986B  0.57%  regexp.(*Regexp).ReplaceAllStringFunc.func1
+ 50358936B  0.25% 89.83% 205000693B  1.03%  github.com/go-go-golems/publish-vault/internal/parser.replaceWikiLinks
+ 48264156B  0.24% 90.07% 125821292B  0.63%  github.com/go-go-golems/publish-vault/internal/parser.replaceMathInBody
+ 36262165B  0.18% 90.26% 100455959B  0.51%  github.com/blevesearch/zapx/v17.(*chunkedContentCoder).flushContents
+ 22989907B  0.12% 90.37% 455900893B  2.30%  github.com/yuin/goldmark/parser.(*parser).parseBlocks
+ 20709012B   0.1% 90.48% 712986945B  3.59%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).writeDicts
+ 16779560B 0.084% 90.56% 150528309B  0.76%  regexp.compile
+ 11534688B 0.058% 90.62% 131552986B  0.66%  regexp.(*Regexp).doExecute
+  9962024B  0.05% 90.67% 110393193B  0.56%  regexp.(*Regexp).backtrack
+  3145944B 0.016% 90.69% 179488942B   0.9%  github.com/go-go-golems/publish-vault/internal/parser.splitSource
+  1574272B 0.0079% 90.69% 151064021B  0.76%  github.com/blevesearch/zapx/v17.(*chunkedContentCoder).Add
+  1573592B 0.0079% 90.70% 5089774481B 25.63%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+  1572968B 0.0079% 90.71% 5003357169B 25.19%  github.com/go-go-golems/publish-vault/internal/parser.Parse
+  1048624B 0.0053% 90.72% 3843876751B 19.36%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).planMergeAtSnapshot
+   524416B 0.0026% 90.72% 177255337B  0.89%  github.com/yuin/goldmark/parser.(*parser).openBlocks

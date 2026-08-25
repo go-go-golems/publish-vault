@@ -21,6 +21,10 @@ RelatedFiles:
       Note: Primary search implementation evidence inspected during ticket design
     - Path: repo://pkg/server/runtime.go
       Note: Primary runtime evidence inspected during ticket design
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/01-attribution-report.md
+      Note: Phase 1 retained heap allocation churn RSS and lifetime conclusions
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/summary.json
+      Note: Machine-readable aligned attribution and selected hypothesis
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/privacy-audit.json
       Note: Structural content/privacy audit across 4693 canonical events
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/summary.json
@@ -29,12 +33,17 @@ RelatedFiles:
       Note: Phase 0 reproducible persistent-index runner with cleanup and artifact checks
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/02-summarize-persistent-baseline.py
       Note: Phase 0 workload-consistency and three-run distribution reducer
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/03-summarize-attribution.py
+      Note: Content-free checkpoint and pprof aggregate reducer
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go
+      Note: Private forced-GC checkpoint harness using measure collectors and exact search progress
 ExternalSources: []
 Summary: Chronological research and implementation diary for attributing and reducing publish-vault search-index peak memory while preserving search behavior and atomic snapshot reloads.
 LastUpdated: 2026-08-25T18:00:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
+
 
 
 
@@ -479,4 +488,129 @@ canonical traces: 3
 canonical events: 4,693
 privacy audit: PASS
 runtime code changes: none
+```
+
+## Step 5: Phase 1 — attribute reachable heap, allocation churn, arenas, and RSS
+
+Phase 1 used a private diagnostic harness against a detached clean vault worktree. Five checkpoints aligned exact search progress with measure events, forced-GC heap profiles, runtime counters, procfs RSS/PSS/anonymous/private-clean values, and cgroup availability. Raw profiles remained mode `0600` under a mode-`0700` `/tmp` directory, were reduced to aggregate pprof tables, passed a content audit, and were deleted.
+
+The evidence changes the optimization hypothesis. Search does not retain an additional 600 MB Go object graph. After forced GC, `HeapAlloc` rises only 33.7 MB from 0% to 100%. The unperturbed 826 MB median peak comes from 51.65 GB of allocation traffic, 611.9 MB of heap-arena expansion, and persistent-index residency. Scorch performs one backend batch/update per document and repeatedly builds and merges segments. Bounded multi-document Bleve batches are therefore the first controlled experiment.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Complete the attribution phase before modifying production code, preserve only content-free evidence, and select one falsifiable implementation hypothesis from measured allocation and lifetime data.
+
+**Inferred user intent:** Ensure the eventual optimization removes a proven source of memory pressure rather than hiding peaks with GC or capacity changes.
+
+**Commit (code):** Pending at the time of this diary entry; Phase 1 adds only a private diagnostic harness and content-free evidence.
+
+### What I did
+
+- Printed and archived `scripts/slips/03-phase-1-start.yaml` before profiling.
+- Created a detached, clean vault worktree at `5f9f18c`.
+- Added `scripts/profile-search-index/main.go`, which:
+  - loads the real vault;
+  - starts a schema-v1 measure run and `search_index` phase;
+  - captures exact 0/25/50/75/100% progress;
+  - forces GC only in this explicitly perturbed diagnostic;
+  - writes raw profiles privately;
+  - reads runtime/procfs/smaps/cgroup state through `measure/pkg/collector`;
+  - writes content-free checkpoints, trace, and receipt.
+- Built and ran the harness against all 2,030 published notes.
+- Generated in-use-space and alloc-space top tables with `go tool pprof` for all five checkpoints.
+- Added `scripts/03-summarize-attribution.py` and machine-readable `summary.json`.
+- Wrote `artifacts/attribution/01-attribution-report.md` with method, limitations, aligned table, retained/cumulative analysis, representation lifetime inventory, hypothesis decisions, and Phase 2 matrix.
+- Audited aggregate artifacts for raw profiles, private paths, and content-bearing event fields.
+- Deleted the raw profiles and temporary index after accepting the aggregates.
+
+### Why
+
+The phase-level baseline proves where the peak occurs but cannot distinguish reachable objects, garbage between collections, runtime arenas, and file-backed residency. Heap profiles after a controlled GC establish reachable ownership; cumulative allocation profiles identify churn; smaps and runtime values explain why RSS remains high after live heap falls.
+
+### What worked
+
+Checkpoint deltas from 0% to 100%:
+
+```text
+post-GC retained HeapAlloc:       +33,694,240 bytes
+HeapSys:                          +611,876,864 bytes
+RSS:                              +300,216,320 bytes
+cumulative allocation:         +51,652,634,904 bytes
+```
+
+At 0%, before search:
+
+```text
+profile total: 209.4 MB
+regexp.ReplaceAllStringFunc flat: 196.7 MB (93.9%)
+```
+
+The retained strings belong to vault parse/render paths and represent snapshot HTML. At 100%, the profile total is 227.4 MB and the same 196.7 MB remains. Active Bleve retained structures are comparatively small.
+
+At 100%, cumulative allocation evidence includes:
+
+```text
+bytes.growSlice flat:                   26.47 GB
+Scorch.Batch cumulative:                29.80 GB
+Scorch planMergeAtSnapshot cumulative:  15.61 GB
+zapx mergeToWriter cumulative:           15.34 GB
+parser.stripMarkdown cumulative:          5.46 GB
+```
+
+Cumulative call paths overlap and are not added together. They show that one-document Scorch updates and repeated segment merges are the largest controllable path.
+
+The attribution privacy audit passed: five checkpoint files, 18 diagnostic events, no raw `.pprof`, and no content-bearing event fields. Raw profiles were then deleted.
+
+### What didn't work
+
+No harness or profile command failed. One pprof source listing attributed the inlined `replaceUnresolvedNoteEmbeds` allocation to a nearby line after inlining rather than the exact source expression. I used cumulative call paths and function identity, not the displayed neighboring line, for the conclusion.
+
+The diagnostic cgroup remained an unlimited shared user scope. Its values are retained as availability evidence but excluded from process attribution. A finite isolated container run remains required during candidate proof.
+
+### What I learned
+
+- The high natural `HeapAlloc` peak is transient allocation pressure, not a permanently reachable search graph.
+- Forcing GC lowers live heap but leaves `HeapSys` around 1.014 GB and substantial RSS; forced GC is a diagnostic, not the selected fix.
+- Rendered HTML contributes approximately 196.7 MB of required steady snapshot heap before search begins. It is not caused by Bleve and is not the first target of this ticket.
+- Search adds only about 34 MB retained heap after GC but allocates roughly 51.65 GB over the phase.
+- `Index.Index` maps one document and calls Scorch `Update`, which implements a one-document backend batch. Repeating that 2,030 times creates avoidable segment/merge traffic.
+- Plain-text extraction is also allocation-heavy, but its 5.46 GB cumulative path is smaller than Scorch batch/merge work and is deferred until batching is measured.
+
+### What was tricky to build
+
+Heap and RSS numbers describe different lifetimes. At 100%, `HeapAlloc` is 245 MB after GC, `HeapSys` is 1.014 GB, RSS is 712 MB, anonymous RSS is 516 MB, and private-clean RSS is 195 MB. A statement such as “the process retains 712 MB of Go objects” would be false. The attribution report keeps these categories separate.
+
+The second challenge was security. Heap profiles can include note text even when the summary does not. The workflow therefore permits raw profiles only in a private temporary directory and commits only aggregate function names and byte counts after scanning.
+
+### What warrants a second pair of eyes
+
+- Review whether `regexp.ReplaceAllStringFunc` output is indeed required final HTML in both parse and rebuild paths; it is large steady state but outside the selected search optimization.
+- Review the interpretation of Scorch cumulative paths against Bleve v2.6.0 source.
+- Review batch limits by both document count and estimated bytes; document-only limits are not content bounds.
+- Review whether search-result scores/order can vary with segment layout and define the equivalence contract before accepting batches.
+
+### What should be done in the future
+
+Phase 2 should implement an experimental bounded batch path with explicit document and estimated-byte ceilings, compare several limits against the current one-document path, and select the best trade-off using generated and real workloads before changing the default.
+
+### Code review instructions
+
+- Begin with `artifacts/attribution/01-attribution-report.md` and `summary.json`.
+- Inspect `scripts/profile-search-index/main.go` for private-path modes, forced-GC disclosure, exact thresholds, and measure collector reuse.
+- Confirm no `.pprof` exists anywhere under the ticket.
+- Compare 0% and 100% in-use tables; do not use alloc-space as retained heap.
+- Cross-check `Index.Index -> Scorch.Update -> Scorch.Batch` against Bleve v2.6.0.
+
+### Technical details
+
+```text
+diagnostic vault: detached clean 5f9f18c
+checkpoints: 0, 25, 50, 75, 100 percent
+forced collections: 5 (diagnostic only)
+raw profile retention: none
+aggregate artifacts: artifacts/attribution/
+selected Phase 2 hypothesis: bounded Bleve batches
+production behavior changes: none
 ```

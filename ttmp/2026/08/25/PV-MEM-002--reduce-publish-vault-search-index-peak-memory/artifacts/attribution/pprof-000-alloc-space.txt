@@ -1,0 +1,48 @@
+File: profile-search-index
+Build ID: fd5262f3941cbda6adf3447b0957105e8c91f22c
+Type: alloc_space
+Time: 2026-08-25 18:05:42 EDT
+Showing nodes accounting for 6206840609B, 94.00% of 6603345762B total
+Dropped 293 nodes (cum <= 33016728B)
+Showing top 40 nodes out of 106
+      flat  flat%   sum%        cum   cum%
+2426551538B 36.75% 36.75% 3157740157B 47.82%  regexp.(*Regexp).replaceAll
+871185723B 13.19% 49.94% 2156905900B 32.66%  regexp.(*Regexp).ReplaceAllStringFunc
+562026254B  8.51% 58.45% 2436143454B 36.89%  regexp.(*Regexp).ReplaceAllString
+555884713B  8.42% 66.87% 555884713B  8.42%  regexp.(*Regexp).expand
+323329897B  4.90% 71.77% 323329897B  4.90%  bytes.growSlice
+271102392B  4.11% 75.87% 271102392B  4.11%  github.com/yuin/goldmark/ast.NewTextSegment (inline)
+165048234B  2.50% 78.37% 165048234B  2.50%  bytes.genSplit
+ 98850202B  1.50% 79.87%  98850202B  1.50%  bytes.(*Buffer).String (inline)
+ 77977761B  1.18% 81.05%  77977761B  1.18%  os.readFileContents
+ 74984624B  1.14% 82.18%  74984624B  1.14%  github.com/yuin/goldmark/ast.NewParagraph (inline)
+ 74122669B  1.12% 83.31% 2726958405B 41.30%  github.com/go-go-golems/publish-vault/internal/parser.stripMarkdown
+ 73963663B  1.12% 84.43% 112803215B  1.71%  github.com/go-go-golems/publish-vault/internal/parser.replaceWikiLinksOutsideCode
+ 67270620B  1.02% 85.45%  67270620B  1.02%  github.com/yuin/goldmark/text.(*Segments).Append (inline)
+ 63486461B  0.96% 86.41%  63486461B  0.96%  regexp/syntax.(*compiler).inst (inline)
+ 51754805B  0.78% 87.19% 112627930B  1.71%  regexp.(*Regexp).ReplaceAllStringFunc.func1
+ 50372222B  0.76% 87.95%  50372222B  0.76%  regexp.(*bitState).push (inline)
+ 50358936B  0.76% 88.72% 205000693B  3.10%  github.com/go-go-golems/publish-vault/internal/parser.replaceWikiLinks
+ 48264156B  0.73% 89.45% 125821292B  1.91%  github.com/go-go-golems/publish-vault/internal/parser.replaceMathInBody
+ 46666616B  0.71% 90.15%  46666616B  0.71%  github.com/yuin/goldmark/text.NewBlockReader
+ 38803824B  0.59% 90.74%  38803824B  0.59%  github.com/yuin/goldmark/ast.NewListItem (inline)
+ 35052680B  0.53% 91.27%  35577088B  0.54%  github.com/yuin/goldmark/parser.NewParser
+ 34610400B  0.52% 91.80%  34610400B  0.52%  github.com/yuin/goldmark/parser.NewDelimiter (inline)
+ 33567744B  0.51% 92.31%  33567744B  0.51%  github.com/yuin/goldmark/ast.(*BaseNode).SetAttribute (inline)
+ 33033672B   0.5% 92.81%  33033672B   0.5%  regexp/syntax.(*parser).newRegexp (inline)
+ 22989907B  0.35% 93.15% 455900893B  6.90%  github.com/yuin/goldmark/parser.(*parser).parseBlocks
+ 15730824B  0.24% 93.39% 142137733B  2.15%  regexp.compile
+ 11010384B  0.17% 93.56%  90137079B  1.37%  regexp.(*Regexp).doExecute
+  9437720B  0.14% 93.70%  70026454B  1.06%  regexp.(*Regexp).backtrack
+  7865280B  0.12% 93.82%  49812216B  0.75%  regexp/syntax.parse
+  2622336B  0.04% 93.86%  38313793B  0.58%  github.com/go-go-golems/publish-vault/internal/parser.ReplaceWikiLinkDisplay.func1
+  2621632B  0.04% 93.90% 166621194B  2.52%  github.com/go-go-golems/publish-vault/internal/parser.splitSource
+  2097352B 0.032% 93.93%  57586187B  0.87%  github.com/go-go-golems/publish-vault/internal/parser.extractWikiLinks
+  1573592B 0.024% 93.96% 5089774481B 77.08%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+  1572968B 0.024% 93.98% 5003357169B 75.77%  github.com/go-go-golems/publish-vault/internal/parser.Parse
+   524416B 0.0079% 93.99% 177255337B  2.68%  github.com/yuin/goldmark/parser.(*parser).openBlocks
+   524392B 0.0079% 94.00% 2771751024B 41.97%  github.com/go-go-golems/publish-vault/internal/parser.extractExcerpt
+         0     0% 94.00% 265261854B  4.02%  bufio.(*Writer).Flush
+         0     0% 94.00% 209073777B  3.17%  bufio.(*Writer).Write
+         0     0% 94.00%  55139736B  0.84%  bytes.(*Buffer).Grow (inline)
+         0     0% 94.00% 268190161B  4.06%  bytes.(*Buffer).Write
