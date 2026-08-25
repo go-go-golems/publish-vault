@@ -18,7 +18,11 @@ RelatedFiles:
     - Path: abs:///home/manuel/code/wesen/go-go-golems/go-go-parc/Projects/2026/08/25/ARTICLE - Publish Vault Memory Optimization - From OOM Incidents to Phase-Attributed Baselines.md
       Note: Durable optimization-process report and baseline narrative
     - Path: repo://pkg/search/search.go
-      Note: Primary search implementation evidence inspected during ticket design
+      Note: |-
+        Primary search implementation evidence inspected during ticket design
+        Opt-in byte-and-document bounded Bleve batch experiment
+    - Path: repo://pkg/search/search_test.go
+      Note: Batch validation flush progress and search-equivalence tests
     - Path: repo://pkg/server/runtime.go
       Note: Primary runtime evidence inspected during ticket design
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/01-attribution-report.md
@@ -29,12 +33,16 @@ RelatedFiles:
       Note: Structural content/privacy audit across 4693 canonical events
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/baseline-current/summary.json
       Note: Pinned clean-worktree Phase 0 baseline summary
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/batch-matrix/01-batch-matrix-report.md
+      Note: Seven-variant matrix and selected 16-document candidate
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh
       Note: Phase 0 reproducible persistent-index runner with cleanup and artifact checks
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/02-summarize-persistent-baseline.py
       Note: Phase 0 workload-consistency and three-run distribution reducer
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/03-summarize-attribution.py
       Note: Content-free checkpoint and pprof aggregate reducer
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/benchmark-search-index/main.go
+      Note: Fresh-process search-only matrix harness
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go
       Note: Private forced-GC checkpoint harness using measure collectors and exact search progress
 ExternalSources: []
@@ -43,6 +51,7 @@ LastUpdated: 2026-08-25T18:00:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
+
 
 
 
@@ -613,4 +622,128 @@ raw profile retention: none
 aggregate artifacts: artifacts/attribution/
 selected Phase 2 hypothesis: bounded Bleve batches
 production behavior changes: none
+```
+
+## Step 6: Phase 2 — test bounded Bleve batches and select the 16-document candidate
+
+Phase 2 added an opt-in experimental batch path while leaving the zero-value production behavior unchanged. Seven fresh-process variants measured the same detached 2,030-note workload. Every explicit batch reduced cumulative allocation and index size. A 16-document, 1 MiB estimated-field bound produced the best observed heap/RSS combination and also reduced duration, allocations, GC cycles, and index size.
+
+The experiment confirms the Phase 1 hypothesis. Larger batches reduce total allocation further but retain more mapped/analyzed documents at each commit; the fastest 128-document variant remained close to the current memory peak. Batch 16 is selected for production wiring and three-run proof, not because one run is sufficient evidence, but because it is the strongest candidate from the controlled matrix.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Test the evidence-backed batching hypothesis across explicit document and byte bounds, preserve current behavior by default, and select a candidate only after memory, allocation, time, index-size, and correctness evidence agree.
+
+**Inferred user intent:** Avoid replacing one unbounded behavior with an arbitrary tuning knob; establish an explicit bounded algorithm and a reviewed default.
+
+**Commit (code):** Pending at the time of this diary entry.
+
+### What I did
+
+- Printed and archived:
+  - `scripts/slips/04-phase-1-done.yaml` after attribution commit `ceddf95`;
+  - `scripts/slips/05-phase-2-start.yaml` before batch implementation.
+- Extended `search.Options` with opt-in `BatchDocuments` and `BatchBytes` bounds.
+- Required both bounds to be zero or both positive; validation happens before a persistent target directory is removed.
+- Kept the existing one-document path for zero values.
+- Added `indexVaultBatched`, which:
+  - maps documents into a Bleve batch;
+  - flushes before a next document would cross the estimated byte bound;
+  - flushes at the document bound;
+  - commits an indivisible oversized document alone;
+  - reports progress only after successful batch commit;
+  - flushes the final partial batch.
+- Replaced manual tag concatenation with `strings.Join`, preserving the stored field value.
+- Added focused tests for validation, target preservation, progress, partial/oversized flush, and baseline/batched search equivalence.
+- Added `scripts/benchmark-search-index/main.go` to measure only search construction in a fresh process.
+- Ran current, 4, 8, 16, 32, 64, and 128-document variants with proportionate byte bounds.
+- Added the batch matrix reducer, report, summary JSON, traces, metadata, receipts, and privacy audit.
+
+### Why
+
+Bleve v2.6.0's `Index` maps one document and calls backend `Update`; Scorch implements that update through a one-document backend batch. Repeating this for 2,030 documents creates many small segments and repeated merges. Explicit batches let Scorch construct fewer segments while the document and byte ceilings bound application-held batch content.
+
+### What worked
+
+The selected batch 16 / 1 MiB result versus the current exploratory run:
+
+```text
+peak heap:       869,712,904 -> 521,084,376 B  (-40.09%)
+peak RSS:      1,068,277,760 -> 766,619,648 B  (-28.24%)
+duration:             89.73 -> 61.78 s         (-31.15%)
+allocation:      50,352,073,512 -> 19,273,219,336 B (-61.72%)
+GC cycles:             192 -> 83
+index size:      233,101,871 -> 199,028,353 B  (-14.62%)
+```
+
+All seven variants processed exactly 2,030 documents and 72,070,169 indexed field bytes. The matrix privacy audit inspected 4,784 events across seven variants and found no content-bearing fields.
+
+Focused unit, race, vet, and gosec checks passed after fixes.
+
+### What didn't work
+
+- The initial baseline/batched equivalence test compared result array positions. The query `memory` produced two equal-score results in opposite order:
+
+  ```text
+  Search("memory")[0] got slug "one", want "two"
+  Search("memory")[1] got slug "two", want "one"
+  ```
+
+  The existing API specifies score ranking but no secondary key for exact ties. I changed equivalence to compare result sets by slug, stored fields, and score tolerance. Non-tied score semantics remain checked.
+
+- The first matrix shell completed the current run but its print helper expected lowercase `phases`; Go's direct `report.Summary` JSON uses `Phases`. It failed with:
+
+  ```text
+  KeyError: 'phases'
+  ```
+
+  The measurement artifacts were valid. I inspected `metadata.json`, corrected the helper to the actual schema, cleaned the temporary index, and continued the remaining variants.
+
+- Gosec rejected two validated `int -> uint64` conversions for document limits as potential G115 overflow. Rather than suppressing warnings, I changed `BatchDocuments` and the harness flag to `uint64`, removing an impossible negative state and the conversions. Gosec then reported zero issues.
+
+### What I learned
+
+- Batch size creates a real throughput/memory curve, not a monotonic improvement. Batch 128 was fastest and allocated least overall but peaked at 801 MB heap and 980 MB RSS.
+- Batch 16 gave the lowest observed heap and RSS. Batch 32 was faster but used 64 MB more heap and 77 MB more RSS.
+- Batch 64's single-run duration exceeded current despite lower allocations, showing merge scheduling and system variance. Final proof needs repeated runs.
+- Explicit batches reduce on-disk index size by approximately 15%, likely because they produce fewer initial segments and a different merge shape.
+- Progress must mean committed documents. Reporting staged documents would overstate successful work on batch failure.
+
+### What was tricky to build
+
+The byte limit is based on the search document's slug, title, body, excerpt, and tag bytes before Bleve mapping. Bleve's analyzed representation can be larger. The limit is therefore an explicit input-size bound, not a promise about backend allocation. Pairing it with a document limit prevents many tiny documents from accumulating without bound.
+
+Search equivalence also needed a precise tie rule. Segment layout can change tie ordering without changing scores or result content. The ticket now treats equal-score ordering as unspecified while preserving all result identities, stored fields, and score values.
+
+### What warrants a second pair of eyes
+
+- Review whether 16 documents / 1 MiB should remain internal constants rather than operator flags. Recommendation: internal defaults until a second workload needs tuning.
+- Review whether estimated fields should include tag separator bytes; the omission is at most `len(tags)-1` bytes per document and does not alter the safety model materially, but could be included for exact accounting.
+- Review lock scope: batched construction holds the wrapper mutex for the build, but the index is unpublished and single-owner during construction.
+- Review whether progress callbacks should expose batch commit count; current numeric progress is sufficient and bounded.
+
+### What should be done in the future
+
+Phase 3 should wire 16 documents and 1 MiB into persistent full-snapshot construction as named internal constants, preserve in-memory behavior, add real-vault query equivalence, and validate every persistent publication/reload/failure path before repeated candidate measurement.
+
+### Code review instructions
+
+- Review `Options.validate`, `indexVaultBatched`, and flush ordering in `pkg/search/search.go`.
+- Review tests for invalid target preservation, oversized documents, final partial flush, and tie-aware equivalence.
+- Review `artifacts/batch-matrix/01-batch-matrix-report.md` and `summary.json`.
+- Treat all matrix values as exploratory single runs; use Phase 4 for acceptance medians.
+- Re-run focused tests, race, vet, and gosec.
+
+### Technical details
+
+```text
+variants: current, batch 4, 8, 16, 32, 64, 128
+selected: 16 documents / 1 MiB estimated fields
+current default behavior: unchanged (zero/zero)
+selected candidate heap reduction: 40.09%
+selected candidate RSS reduction: 28.24%
+selected candidate allocation reduction: 61.72%
+content audit: PASS
 ```

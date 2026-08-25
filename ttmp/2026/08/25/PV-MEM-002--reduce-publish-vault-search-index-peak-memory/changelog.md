@@ -42,3 +42,12 @@ Phase 1 attributed search_index: post-GC retained heap grew only 33.7 MB while s
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/attribution/01-attribution-report.md — Evidence and lifetime inventory
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/profile-search-index/main.go — Reproducible private profile harness
+
+## 2026-08-25
+
+Phase 2 confirmed bounded Bleve batching: selected 16 documents/1 MiB after one exploratory run reduced heap 40%, RSS 28%, allocation 62%, duration 31%, and index bytes 15% versus one-document updates; production defaults remain unchanged pending implementation proof.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/search/search.go — Experimental bounded batch path
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/batch-matrix/summary.json — Machine-readable variant comparison

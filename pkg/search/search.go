@@ -42,9 +42,21 @@ type IndexProgress struct {
 	IndexedBytes       uint64
 }
 
-// Options configures bounded search-index progress observation.
+// Options configures search-index construction and bounded progress
+// observation. BatchDocuments and BatchBytes must either both be zero (the
+// legacy one-document update path) or both be positive. A document larger than
+// BatchBytes is committed alone because documents are indivisible.
 type Options struct {
 	ObserveIndexed func(IndexProgress)
+	BatchDocuments uint64
+	BatchBytes     uint64
+}
+
+func (o Options) validate() error {
+	if (o.BatchDocuments == 0) != (o.BatchBytes == 0) {
+		return errors.New("search batch documents and bytes must both be zero or both be positive")
+	}
+	return nil
 }
 
 // noteDoc is the document shape stored in bleve.
@@ -62,6 +74,9 @@ func New(v *vault.Vault) (*Index, error) {
 
 // NewWithOptions creates an in-memory index with bounded progress callbacks.
 func NewWithOptions(v *vault.Vault, options Options) (*Index, error) {
+	if err := options.validate(); err != nil {
+		return nil, err
+	}
 	idx, err := bleve.NewMemOnly(buildMapping())
 	if err != nil {
 		return nil, err
@@ -83,6 +98,9 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 
 // NewPersistentWithOptions creates a persistent index with bounded progress callbacks.
 func NewPersistentWithOptions(v *vault.Vault, indexPath string, options Options) (*Index, error) {
+	if err := options.validate(); err != nil {
+		return nil, err
+	}
 	if err := os.RemoveAll(indexPath); err != nil {
 		return nil, err
 	}
@@ -105,23 +123,80 @@ func NewPersistentWithOptions(v *vault.Vault, indexPath string, options Options)
 func indexVault(index *Index, v *vault.Vault, options Options) error {
 	// #nosec G115 -- Count is map len: nonnegative and int fits uint64 on supported architectures.
 	progress := IndexProgress{TotalDocuments: uint64(v.Count())}
-	if options.ObserveIndexed != nil {
-		options.ObserveIndexed(progress)
+	observeIndexProgress(options.ObserveIndexed, progress)
+	if options.BatchDocuments > 0 {
+		return indexVaultBatched(index, v, options, progress)
 	}
 	return v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
 		if err := index.Index(doc); err != nil {
 			return err
 		}
 		progress.ProcessedDocuments++
-		progress.IndexedBytes += uint64(len(doc.Slug) + len(doc.Title) + len(doc.Body) + len(doc.Excerpt))
-		for _, tag := range doc.Tags {
-			progress.IndexedBytes += uint64(len(tag))
+		progress.IndexedBytes += searchDocumentBytes(doc)
+		observeIndexProgress(options.ObserveIndexed, progress)
+		return nil
+	})
+}
+
+func indexVaultBatched(index *Index, v *vault.Vault, options Options, progress IndexProgress) error {
+	index.mu.Lock()
+	defer index.mu.Unlock()
+	if index.idx == nil {
+		return ErrClosed
+	}
+
+	batch := index.idx.NewBatch()
+	var pendingDocuments, pendingBytes uint64
+	flush := func() error {
+		if pendingDocuments == 0 {
+			return nil
 		}
-		if options.ObserveIndexed != nil {
-			options.ObserveIndexed(progress)
+		if err := index.idx.Batch(batch); err != nil {
+			return err
+		}
+		progress.ProcessedDocuments += pendingDocuments
+		progress.IndexedBytes += pendingBytes
+		observeIndexProgress(options.ObserveIndexed, progress)
+		batch = index.idx.NewBatch()
+		pendingDocuments, pendingBytes = 0, 0
+		return nil
+	}
+
+	err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		docBytes := searchDocumentBytes(doc)
+		if pendingDocuments > 0 && (pendingDocuments >= options.BatchDocuments || pendingBytes+docBytes > options.BatchBytes) {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+		if err := batch.Index(doc.Slug, toNoteDoc(doc)); err != nil {
+			return err
+		}
+		pendingDocuments++
+		pendingBytes += docBytes
+		if pendingDocuments >= options.BatchDocuments || pendingBytes >= options.BatchBytes {
+			return flush()
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return flush()
+}
+
+func observeIndexProgress(observer func(IndexProgress), progress IndexProgress) {
+	if observer != nil {
+		observer(progress)
+	}
+}
+
+func searchDocumentBytes(doc vault.SearchDocument) uint64 {
+	bytes := uint64(len(doc.Slug) + len(doc.Title) + len(doc.Body) + len(doc.Excerpt))
+	for _, tag := range doc.Tags {
+		bytes += uint64(len(tag))
+	}
+	return bytes
 }
 
 // OpenPersistent opens an existing persistent bleve index at indexPath.
@@ -142,21 +217,16 @@ func (si *Index) Index(doc vault.SearchDocument) error {
 		return ErrClosed
 	}
 
-	// Flatten tags to space-separated string for indexing
-	tags := ""
-	for i, t := range doc.Tags {
-		if i > 0 {
-			tags += " "
-		}
-		tags += t
-	}
-	bleveDoc := noteDoc{
+	return si.idx.Index(doc.Slug, toNoteDoc(doc))
+}
+
+func toNoteDoc(doc vault.SearchDocument) noteDoc {
+	return noteDoc{
 		Title:   doc.Title,
 		Body:    doc.Body,
-		Tags:    tags,
+		Tags:    strings.Join(doc.Tags, " "),
 		Excerpt: doc.Excerpt,
 	}
-	return si.idx.Index(doc.Slug, bleveDoc)
 }
 
 // Delete removes a note from the search index.

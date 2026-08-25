@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "batch_documents": 32,
+  "batch_bytes": 2097152,
+  "documents": 2030,
+  "indexed_bytes": 72070169,
+  "index_bytes": 198617238,
+  "duration_nanos": 57814382196,
+  "peaks": {
+    "heap_alloc_bytes": 585288968,
+    "rss_bytes": 843472896,
+    "process_tree_rss_sum_bytes": 0,
+    "cgroup_current_bytes": 8085893120
+  },
+  "sources": {
+    "runtime": "available",
+    "process": "available",
+    "smaps": "available",
+    "process_tree": "",
+    "cgroup": "unlimited"
+  },
+  "summary": {
+    "RunID": "e8c8f5f128ca1f2e86e5333331e75ff6",
+    "StartedAt": "2026-08-25T22:29:45.124602264Z",
+    "DurationNanos": 57860762473,
+    "SampleCount": 570,
+    "Result": {
+      "status": "succeeded"
+    },
+    "Peaks": {
+      "heap_alloc_bytes": 585288968,
+      "rss_bytes": 843472896,
+      "process_tree_rss_sum_bytes": 0,
+      "cgroup_current_bytes": 8085893120
+    },
+    "FirstMemory": {
+      "runtime_availability": "available",
+      "heap_alloc_bytes": 350278688,
+      "heap_inuse_bytes": 364527616,
+      "heap_sys_bytes": 393707520,
+      "runtime_sys_bytes": 404437352,
+      "stack_inuse_bytes": 557056,
+      "mspan_inuse_bytes": 1410880,
+      "mcache_inuse_bytes": 18368,
+      "total_alloc_bytes": 6554254864,
+      "mallocs_total": 10281250,
+      "frees_total": 10115047,
+      "num_gc": 227,
+      "gc_pause_total_nanos": 27707639,
+      "gc_goal_bytes": 404037458,
+      "go_memory_limit_bytes": 9223372036854775807,
+      "process_availability": "available",
+      "rss_bytes": 410726400,
+      "rss_peak_bytes": 410726400,
+      "virtual_memory_bytes": 2472566784,
+      "threads": 11,
+      "smaps_availability": "available",
+      "pss_bytes": 409135104,
+      "process_anonymous_bytes": 396054528,
+      "process_private_dirty_bytes": 396054528,
+      "process_private_clean_bytes": 13074432,
+      "process_shared_clean_bytes": 1597440,
+      "process_tree_availability": "",
+      "cgroup_availability": "unlimited",
+      "cgroup_version": "v2",
+      "cgroup_path": "/user.slice/user-1000.slice/user@1000.service/kitty-1124221-0.scope",
+      "cgroup_current_bytes": 7445712896,
+      "cgroup_peak_bytes": 8796110848,
+      "cgroup_anonymous_bytes": 799944704,
+      "cgroup_file_bytes": 6292824064,
+      "cgroup_kernel_bytes": 351694848,
+      "cgroup_slab_bytes": 339812320
+    },
+    "LastMemory": {
+      "runtime_availability": "available",
+      "heap_alloc_bytes": 90557752,
+      "heap_inuse_bytes": 116514816,
+      "heap_sys_bytes": 657489920,
+      "runtime_sys_bytes": 674957736,
+      "stack_inuse_bytes": 983040,
+      "mspan_inuse_bytes": 1272480,
+      "mcache_inuse_bytes": 18368,
+      "total_alloc_bytes": 24761928272,
+      "mallocs_total": 173145583,
+      "frees_total": 172355208,
+      "num_gc": 304,
+      "gc_pause_total_nanos": 60350097,
+      "gc_goal_bytes": 107759730,
+      "go_memory_limit_bytes": 9223372036854775807,
+      "process_availability": "available",
+      "rss_bytes": 615698432,
+      "rss_peak_bytes": 851058688,
+      "virtual_memory_bytes": 3096928256,
+      "threads": 13,
+      "smaps_availability": "available",
+      "pss_bytes": 612534272,
+      "process_anonymous_bytes": 593104896,
+      "process_private_dirty_bytes": 593104896,
+      "process_private_clean_bytes": 19423232,
+      "process_shared_clean_bytes": 1597440,
+      "process_tree_availability": "",
+      "cgroup_availability": "unlimited",
+      "cgroup_version": "v2",
+      "cgroup_path": "/user.slice/user-1000.slice/user@1000.service/kitty-1124221-0.scope",
+      "cgroup_current_bytes": 7852220416,
+      "cgroup_peak_bytes": 8796110848,
+      "cgroup_anonymous_bytes": 997060608,
+      "cgroup_file_bytes": 6494633984,
+      "cgroup_kernel_bytes": 358428672,
+      "cgroup_slab_bytes": 345875720
+    },
+    "CounterDelta": {
+      "heap_alloc_bytes": 0,
+      "rss_bytes": 0,
+      "process_tree_rss_sum_bytes": 0,
+      "cgroup_current_bytes": 0,
+      "total_alloc_bytes": 18207673408,
+      "mallocs_total": 162864333,
+      "frees_total": 162240161,
+      "num_gc": 77,
+      "gc_pause_total_nanos": 32642458
+    },
+    "LargestIntervalIncrease": {
+      "heap_alloc_bytes": 92251920,
+      "rss_bytes": 54169600,
+      "process_tree_rss_sum_bytes": 0,
+      "cgroup_current_bytes": 58519552,
+      "total_alloc_bytes": 92251920,
+      "mallocs_total": 700801,
+      "frees_total": 2913618,
+      "num_gc": 1,
+      "gc_pause_total_nanos": 4779420
+    },
+    "SampleIntervalNanos": 99984541,
+    "Warnings": [
+      "source_unavailable:process_tree"
+    ],
+    "Sources": {
+      "runtime": "available",
+      "process": "available",
+      "smaps": "available",
+      "process_tree": "unavailable",
+      "cgroup": "available"
+    },
+    "Phases": [
+      {
+        "Name": "search_index",
+        "DurationNanos": 57832963748,
+        "Progress": {
+          "processed": 2030,
+          "total": 2030,
+          "unit": "documents"
+        },
+        "Result": {
+          "status": "succeeded"
+        },
+        "Peaks": {
+          "heap_alloc_bytes": 585288968,
+          "rss_bytes": 843472896,
+          "process_tree_rss_sum_bytes": 0,
+          "cgroup_current_bytes": 8085893120
+        },
+        "Sources": {
+          "runtime": "available",
+          "process": "available",
+          "smaps": "available",
+          "process_tree": "unavailable",
+          "cgroup": "available"
+        }
+      }
+    ]
+  }
+}
