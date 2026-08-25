@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -163,6 +164,48 @@ func readReceipt(t *testing.T, path string) measuretrace.Receipt {
 		t.Fatalf("DecodeReceipt: %v", err)
 	}
 	return receipt
+}
+
+func TestPrivateMetricsShutdownHonorsExpiredContext(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(started)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	})
+	shutdown, address, err := startPrivateMetrics("127.0.0.1:0", handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestDone := make(chan struct{})
+	go func() {
+		response, _ := http.Get("http://" + address + "/metrics")
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		close(requestDone)
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("metrics handler did not start")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	before := time.Now()
+	err = shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("shutdown error = %v", err)
+	}
+	if elapsed := time.Since(before); elapsed > time.Second {
+		t.Fatalf("shutdown ignored deadline: %s", elapsed)
+	}
+	close(release)
+	select {
+	case <-requestDone:
+	case <-time.After(time.Second):
+		t.Fatal("blocked request did not exit after release")
+	}
 }
 
 func TestPrivateMetricsListenerIsSeparateAndServesExporter(t *testing.T) {

@@ -33,11 +33,21 @@ func startPrivateMetrics(address string, handler http.Handler) (func(context.Con
 	}()
 	shutdown := func(ctx context.Context) error {
 		shutdownErr := server.Shutdown(ctx)
-		serveErr := <-done
-		if errors.Is(serveErr, http.ErrServerClosed) {
-			serveErr = nil
+		if shutdownErr != nil {
+			// Shutdown does not force active handlers to exit after its context
+			// expires. Close listeners/connections so waiting below cannot turn
+			// the caller's deadline into an unbounded shutdown.
+			shutdownErr = errors.Join(shutdownErr, server.Close())
 		}
-		return errors.Join(shutdownErr, serveErr)
+		select {
+		case serveErr := <-done:
+			if errors.Is(serveErr, http.ErrServerClosed) {
+				serveErr = nil
+			}
+			return errors.Join(shutdownErr, serveErr)
+		case <-ctx.Done():
+			return errors.Join(shutdownErr, ctx.Err())
+		}
 	}
 	return shutdown, listener.Addr().String(), nil
 }
