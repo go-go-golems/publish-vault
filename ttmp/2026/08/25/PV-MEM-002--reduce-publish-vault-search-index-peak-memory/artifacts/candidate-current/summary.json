@@ -1,0 +1,275 @@
+{
+  "dominant_phase_by_median_heap": "search_index",
+  "dominant_phase_by_median_rss": "search_index",
+  "instrumentation": {
+    "measure_commit": "a3f4b045b5d204101e17e35458de9b8955d71772",
+    "publish_vault_commit": "34ec4b9eb19440f8749971d28f9bf943bcce5a31",
+    "sample_interval_nanos": 100000000
+  },
+  "kind": "pv-mem-002-persistent-baseline",
+  "persistent": {
+    "duration_nanos": {
+      "max": 95117089946,
+      "median": 86316401629,
+      "min": 75693019603
+    },
+    "index_bytes": {
+      "max": 207081006,
+      "median": 205077678,
+      "min": 205035119
+    },
+    "peak_cgroup_current_bytes": {
+      "max": 9265442816,
+      "median": 9216155648,
+      "min": 9189347328
+    },
+    "peak_heap_alloc_bytes": {
+      "max": 551111344,
+      "median": 543066520,
+      "min": 534493424
+    },
+    "peak_rss_bytes": {
+      "max": 829358080,
+      "median": 811429888,
+      "min": 792576000
+    },
+    "phases": {
+      "backlinks": {
+        "duration_nanos": {
+          "max": 78601594,
+          "median": 63703825,
+          "min": 55680853
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8463093760,
+          "median": 8459522048,
+          "min": 8456376320
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 188730952,
+          "median": 188453448,
+          "min": 128891816
+        },
+        "peak_rss_bytes": {
+          "max": 264507392,
+          "median": 260935680,
+          "min": 259362816
+        },
+        "processed": 1,
+        "total": 1
+      },
+      "index_publish": {
+        "duration_nanos": {
+          "max": 65100895,
+          "median": 37707818,
+          "min": 21852385
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 9156239360,
+          "median": 9114619904,
+          "min": 9037103104
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 389758104,
+          "median": 321150176,
+          "min": 281739488
+        },
+        "peak_rss_bytes": {
+          "max": 749531136,
+          "median": 712777728,
+          "min": 636653568
+        },
+        "processed": 3,
+        "total": 3
+      },
+      "render_html": {
+        "duration_nanos": {
+          "max": 2240662734,
+          "median": 2028261060,
+          "min": 1600948513
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8648040448,
+          "median": 8644706304,
+          "min": 8640937984
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 386477960,
+          "median": 364309656,
+          "min": 348311520
+        },
+        "peak_rss_bytes": {
+          "max": 451149824,
+          "median": 444981248,
+          "min": 444207104
+        },
+        "processed": 2030,
+        "total": 2030
+      },
+      "resolve_root": {
+        "duration_nanos": {
+          "max": 25055645,
+          "median": 23238363,
+          "min": 16949981
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8250929152,
+          "median": 8244658176,
+          "min": 8242479104
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 5404040,
+          "median": 5146216,
+          "min": 4884696
+        },
+        "peak_rss_bytes": {
+          "max": 45232128,
+          "median": 44449792,
+          "min": 43982848
+        },
+        "processed": 1,
+        "total": 1
+      },
+      "search_index": {
+        "duration_nanos": {
+          "max": 52643678414,
+          "median": 49352368142,
+          "min": 40950670642
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 9265442816,
+          "median": 9216155648,
+          "min": 9189347328
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 551111344,
+          "median": 543066520,
+          "min": 534493424
+        },
+        "peak_rss_bytes": {
+          "max": 829358080,
+          "median": 811429888,
+          "min": 792576000
+        },
+        "processed": 2030,
+        "total": 2030
+      },
+      "snapshot_swap": {
+        "duration_nanos": {
+          "max": 45535355,
+          "median": 15749048,
+          "min": 15599825
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 9014157312,
+          "median": 9000497152,
+          "min": 8993349632
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 394188432,
+          "median": 328797880,
+          "min": 289948320
+        },
+        "peak_rss_bytes": {
+          "max": 613613568,
+          "median": 596049920,
+          "min": 595283968
+        },
+        "processed": 1,
+        "total": 1
+      },
+      "vault_normalize": {
+        "duration_nanos": {
+          "max": 10464408,
+          "median": 10305944,
+          "min": 9192314
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8458694656,
+          "median": 8457187328,
+          "min": 8455720960
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 184495904,
+          "median": 141064824,
+          "min": 140882928
+        },
+        "peak_rss_bytes": {
+          "max": 260210688,
+          "median": 260141056,
+          "min": 258613248
+        },
+        "processed": 1,
+        "total": 1
+      },
+      "vault_walk_parse": {
+        "duration_nanos": {
+          "max": 39965877571,
+          "median": 34627082445,
+          "min": 32804856771
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8459210752,
+          "median": 8458686464,
+          "min": 8456519680
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 209710904,
+          "median": 207902040,
+          "min": 203653264
+        },
+        "peak_rss_bytes": {
+          "max": 260202496,
+          "median": 260136960,
+          "min": 258613248
+        },
+        "processed": 2036,
+        "total": 2036
+      },
+      "wiki_link_index": {
+        "duration_nanos": {
+          "max": 132378682,
+          "median": 112570076,
+          "min": 97023317
+        },
+        "peak_cgroup_current_bytes": {
+          "max": 8461586432,
+          "median": 8459481088,
+          "min": 8456261632
+        },
+        "peak_heap_alloc_bytes": {
+          "max": 196679680,
+          "median": 173719384,
+          "min": 173441752
+        },
+        "peak_rss_bytes": {
+          "max": 264327168,
+          "median": 260608000,
+          "min": 259051520
+        },
+        "processed": 1,
+        "total": 1
+      }
+    },
+    "runs": 3
+  },
+  "privacy": {
+    "allowed_trace_attributes": [
+      "processed_notes",
+      "processed_bytes",
+      "total_bytes"
+    ],
+    "contains_note_content": false
+  },
+  "schema_version": 1,
+  "workload": {
+    "candidate_source_bytes": 76921819,
+    "markdown_candidates": 2036,
+    "publish_config_present": false,
+    "publish_config_sha256": null,
+    "published_notes": 2030,
+    "vault_commit": "5f9f18ca7791ba2ddeb8a2528e3c279e6ae5f75a",
+    "vault_ignore_sha256": "d39336e4bbba2e47c024bdec30b17659710c04834f8da2d60f52862b81393521",
+    "vault_worktree_dirty": false
+  }
+}

@@ -39,6 +39,12 @@ RelatedFiles:
       Note: Pinned clean-worktree Phase 0 baseline summary
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/batch-matrix/01-batch-matrix-report.md
       Note: Seven-variant matrix and selected 16-document candidate
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/candidate-current/01-candidate-proof.md
+      Note: Three-run before/after and finite-cgroup acceptance report
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/candidate-current/comparison.json
+      Note: Machine-readable 34 percent heap and 22 percent RSS reduction
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/finite-cgroup/result.json
+      Note: Isolated 1 GiB cgroup completion and peak evidence
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/implementation/real-vault-search-equivalence.json
       Note: Twenty-query 16725-result equivalence proof
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/01-run-persistent-baseline.sh
@@ -47,6 +53,8 @@ RelatedFiles:
       Note: Phase 0 workload-consistency and three-run distribution reducer
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/03-summarize-attribution.py
       Note: Content-free checkpoint and pprof aggregate reducer
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/05-compare-baseline-candidate.py
+      Note: Workload-identity guarded median and phase comparison
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/benchmark-search-index/main.go
       Note: Fresh-process search-only matrix harness
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/compare-real-search/main.go
@@ -59,6 +67,7 @@ LastUpdated: 2026-08-25T18:00:00-04:00
 WhatFor: Preserving prompts, evidence, decisions, commands, failures, review guidance, and continuation state for PV-MEM-002.
 WhenToUse: Read before resuming profiling, experiments, implementation, validation, or review for this ticket.
 ---
+
 
 
 
@@ -883,4 +892,134 @@ real-vault results compared: 16,725
 max score delta: 3.469446951953614e-18
 raw result content retained: none
 full local CI: PASS
+```
+
+## Step 8: Phase 4 — prove repeated improvement and finite-cgroup completion
+
+Phase 4 rebuilt the committed candidate once, ran three complete server startups against the exact detached vault commit, and compared medians/ranges to the three Phase 0 runs. The candidate reduced median heap by 34.27%, median RSS by 21.52%, and complete-load duration by 48.13%. Candidate ranges are separated from baseline ranges, and `search_index` remains the dominant phase rather than shifting pressure into publication or snapshot swap.
+
+The same binary then completed inside a network-isolated 1 GiB Docker cgroup. The app detected the finite limit, set its 85%-headroom `GOMEMLIMIT`, built all 2,030 documents, and emitted finite cgroup measurements. Peak cgroup current reached 988 MB, proving both successful constrained execution and that 1 GiB leaves little spare headroom for this private workload.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Prove the accepted implementation with repeated full-lifecycle runs, content/privacy audits, phase-shape checks, and an isolated finite-cgroup execution before changing budgets or declaring success.
+
+**Inferred user intent:** Replace exploratory one-run claims with repeatable operational evidence that includes container accounting, not only Go heap measurements.
+
+**Commit (code):** `34ec4b9` — `perf(PV-MEM-002): enable bounded persistent indexing`
+
+### What I did
+
+- Printed and archived:
+  - `scripts/slips/08-phase-3-done.yaml` after implementation commit `34ec4b9`;
+  - `scripts/slips/09-phase-4-start.yaml` before repeated measurement.
+- Built one exact committed candidate binary with `GOWORK=off`, `-trimpath`, SHA-256 `212c6724...1b1e`.
+- Reused the exact measure binary from Phase 0, SHA-256 `9d8ae4a...bdac`.
+- Ran three complete persistent server startups at 100 ms against detached clean vault `5f9f18c`.
+- Summarized candidate distributions and compared them to Phase 0 with `scripts/05-compare-baseline-candidate.py`.
+- Added workload identity checks before comparison.
+- Verified `search_index` remains the largest candidate heap/RSS phase.
+- Ran the candidate in `debian:bookworm-slim` with `--memory=1g --memory-swap=1g --network=none` and a read-only vault mount.
+- Captured finite cgroup limit/current, derived Go soft limit, heap, RSS, duration, progress, and index bytes.
+- Audited three candidate traces and the finite-cgroup trace for private/content-bearing fields.
+- Removed server logs and temporary indexes.
+- Wrote the repeated candidate report and machine-readable comparison.
+
+### Why
+
+The Phase 2 matrix measured only search construction and one run per variant. Full server runs include vault parsing, rendering, persistent publication, and snapshot swap. Three runs establish whether the reduction survives normal variation and whether another phase becomes dominant. Docker provides an isolated finite cgroup, unlike the shared unlimited host user scope.
+
+### What worked
+
+Median before/after:
+
+```text
+peak heap: 826,146,848 -> 543,066,520 B  (-34.27%)
+peak RSS:  1,033,994,240 -> 811,429,888 B (-21.52%)
+duration:  166.42 -> 86.32 s                (-48.13%)
+throughput: 12.20 -> 23.52 notes/s           (+92.80%)
+index size: 210,012,540 -> 205,077,678 B      (-2.35%)
+```
+
+Candidate range:
+
+```text
+heap: 534,493,424 .. 551,111,344 B
+RSS:  792,576,000 .. 829,358,080 B
+duration: 75.69 .. 95.12 s
+```
+
+Finite-cgroup run:
+
+```text
+hard limit: 1,073,741,824 B
+Go soft limit: 912,680,550 B
+peak heap: 623,229,576 B
+peak RSS: 803,254,272 B
+peak cgroup current: 988,028,928 B
+duration: 81.92 s
+search documents: 2030 / 2030
+result: succeeded
+```
+
+Candidate privacy audit inspected 2,687 events; finite-cgroup audit inspected 841. Both passed.
+
+### What didn't work
+
+The first Docker run completed successfully, but the container created `/out/traces` as root with mode `0700`. Host-side `find` failed:
+
+```text
+find: .../artifacts/finite-cgroup/traces: Permission denied
+```
+
+The container had already exited cleanly and artifacts were intact. I ran a one-shot Alpine container against the same output mount to change ownership to UID/GID 1000, then decoded and audited the trace. Future scripts should set output ownership before container exit. No `sudo`, mode broadening, or artifact loss was required.
+
+The Debian image was not local and was pulled by immutable digest resolution before the run. The artifact report records behavior, not an assumption that the image was already cached.
+
+### What I learned
+
+- The complete-lifecycle improvement is smaller than the search-only matrix because required vault/render state contributes to the process peak, but the reduction remains large and non-overlapping.
+- The selected batch nearly doubles end-to-end throughput, so memory reduction did not trade away reload speed.
+- Cgroup current peaks roughly 185 MB above process RSS in the finite container, demonstrating why RSS alone is insufficient for resource-limit guidance.
+- A 1 GiB limit succeeds but reaches 92% sampled utilization. It is a proof boundary, not a recommended comfortable production limit.
+- Sub-400 MB RSS is not achievable by batch tuning alone; Phase 1 found about 197 MB retained rendered HTML before indexing plus runtime/file-backed residency. That would require a separate lazy-render/cache design.
+
+### What was tricky to build
+
+The baseline host cgroup values were shared and could not be compared to candidate host cgroup values. The comparison script deliberately compares heap, process RSS, duration, throughput, and index size while the finite-cgroup result is reported separately. Mixing the shared host cgroup's 7–9 GB current usage into application deltas would be false attribution.
+
+The candidate report also distinguishes measured range separation from statistical inference. Three runs are enough for a robust engineering median/range comparison here, but not a general performance distribution model.
+
+### What warrants a second pair of eyes
+
+- Review finite-cgroup headroom and production resource recommendations; do not lower below 1 GiB from this result.
+- Review whether the 1 GiB proof should be repeated after Docker image build rather than mounted binary; Phase 5 container smoke covers packaging.
+- Review the conclusion that sub-400 MB requires a new rendering/lifetime ticket rather than further batch tuning.
+- Review baseline/candidate workload identity checks and binary hashes.
+
+### What should be done in the future
+
+Phase 5 should update generated-fixture budgets from fresh repeated fixture runs, run final Docker/Compose smoke and all repository gates, push the branch/PR, obtain CI/review evidence, complete ticket bookkeeping, and perform the requirement-by-requirement completion audit.
+
+### Code review instructions
+
+- Read `artifacts/candidate-current/01-candidate-proof.md` and `comparison.json`.
+- Compare all three baseline and candidate receipts, not only medians.
+- Inspect finite-cgroup `result.json`, receipt, and privacy audit.
+- Verify binary hashes in candidate manifest.
+- Confirm no server log, search directory, raw profile, or note content is retained.
+
+### Technical details
+
+```text
+baseline runs: 3
+candidate runs: 3
+sample interval: 100 ms
+candidate commit: 34ec4b9
+median heap reduction: 283,080,328 B
+median RSS reduction: 222,564,352 B
+finite cgroup: 1 GiB, succeeded
+candidate content audit: PASS
 ```

@@ -60,3 +60,12 @@ Phase 3 wired internal persistent defaults of 16 documents/1 MiB, preserved in-m
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/runtime.go — Accepted production integration
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/implementation/01-implementation-validation.md — Correctness and validation evidence
+
+## 2026-08-25
+
+Phase 4 repeated proof: three complete candidate runs reduced median heap 34.27%, RSS 21.52%, duration 48.13%, and index size 2.35%; an isolated 1 GiB cgroup run succeeded at 988 MB peak current and all retained events passed privacy audits.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/candidate-current/01-candidate-proof.md — Repeated acceptance report
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/finite-cgroup/result.json — Finite-cgroup operational boundary

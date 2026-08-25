@@ -1,0 +1,15 @@
+{
+  "candidate_binary_sha256": "212c67246691ab62764d89ccb62a8ef031ed8508bf5f7afa256027f4e3d61b1e",
+  "measure_binary_sha256": "9d8ae4a0c7d59537520d33a042867dc67ef011e989ce21fec06f7a9ab733bdac",
+  "receipt_sha256": {
+    "run-1.receipt.json": "ecfb11cbdc12206325242cc399ffab456fa1e285ff8c189186f8d886588fe651",
+    "run-2.receipt.json": "83c1cb58a47b77ff46d1b281696290aeb230c66be49c1a7ac0b60053c1459be6",
+    "run-3.receipt.json": "8a9e0fe188faf60c90ff521914a94a818fac0f8ce2626b6f4216e161a4e0de6d"
+  },
+  "schema_version": 1,
+  "trace_sha256": {
+    "run-1.jsonl": "786b8bfa5b54661553619b4fff81ed78f354ad4e6dcf228b26e64d8042692ddd",
+    "run-2.jsonl": "652ce5468f2dc3ffa04489e4bdc1fb8fdf888444c58ccb6dd04cc2553852c5b8",
+    "run-3.jsonl": "56a218672e77091a60caa09270662a1db9e8cf27aede7a8eaccd3f40bb58fc0e"
+  }
+}
