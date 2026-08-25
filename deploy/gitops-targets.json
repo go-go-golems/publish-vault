@@ -15,6 +15,22 @@
           "image_name": "ghcr.io/go-go-golems/publish-vault-ssr"
         }
       ]
+    },
+    {
+      "name": "obsidian-vault-publish",
+      "gitops_repo": "wesen/2026-03-27--hetzner-k3s",
+      "gitops_branch": "main",
+      "manifest_path": "gitops/kustomize/obsidian-vault-publish/deployment.yaml",
+      "images": [
+        {
+          "container_name": "app",
+          "image_name": "ghcr.io/go-go-golems/publish-vault"
+        },
+        {
+          "container_name": "ssr",
+          "image_name": "ghcr.io/go-go-golems/publish-vault-ssr"
+        }
+      ]
     }
   ]
 }
