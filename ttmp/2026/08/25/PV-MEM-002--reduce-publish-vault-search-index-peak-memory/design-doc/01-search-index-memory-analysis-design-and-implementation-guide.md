@@ -1,7 +1,7 @@
 ---
 Title: Search Index Memory Analysis, Design, and Implementation Guide
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - profiling

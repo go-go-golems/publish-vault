@@ -1,7 +1,7 @@
 ---
 Title: PV-MEM-002 refreshed persistent-index baseline
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - profiling

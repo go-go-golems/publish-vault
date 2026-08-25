@@ -1,7 +1,7 @@
 ---
 Title: PV-MEM-002 generated-fixture scaling evidence
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - search

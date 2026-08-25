@@ -1,7 +1,7 @@
 ---
 Title: PV-MEM-002 Phase 5 validation and packaging evidence
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - regression
@@ -73,4 +73,4 @@ Earlier Phase 3 evidence separately records direct `gosec ./...`, `govulncheck .
 
 ## Review boundary
 
-This report proves local Phase 5 gates and packaging. PR checks, final ticket doctor, clean-worktree state, commit identity, and merge state must be recorded in the final completion audit after the Phase 5 commit is pushed. Until then this ticket remains active and no completion slip may be printed.
+This report proves local Phase 5 gates and packaging. `02-requirement-evidence-audit.md` records the subsequent clean ticket doctor, exact Phase 5 commit, fresh PR checks, current-commit review, and completion-slip evidence.

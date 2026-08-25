@@ -1,7 +1,7 @@
 ---
 Title: Reduce publish-vault search-index peak memory
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - profiling
@@ -19,6 +19,10 @@ RelatedFiles:
       Note: Persistent generated-fixture production-path regression test
     - Path: repo://pkg/server/testdata/generated-fixture-memory-budget.json
       Note: Reviewed heap and race-compatible RSS thresholds
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/02-requirement-evidence-audit.md
+      Note: Final objective-to-evidence completion mapping
+    - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/pr-state.json
+      Note: Exact current-head PR checks mergeability and review snapshot
     - Path: repo://ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/06-run-generated-scaling.sh
       Note: Deterministic generated scaling harness
 ExternalSources: []
@@ -27,6 +31,7 @@ LastUpdated: 2026-08-25T19:20:00-04:00
 WhatFor: Coordinating baseline refresh, peak attribution, bounded search-index experiments, correctness proof, regression budgets, and rollout guidance.
 WhenToUse: Start here before profiling or changing publish-vault search-document generation, Bleve construction, mapping, snapshot publication, or memory limits.
 ---
+
 
 
 # Reduce publish-vault search-index peak memory
@@ -49,7 +54,7 @@ The preferred sub-400 MB RSS target proved unattainable through batching alone b
 
 ## Status
 
-Current status: **active — Phase 5 local gates passed; PR delivery and final audit pending**
+Current status: **complete — all local, CI, review, privacy, delivery, and evidence gates passed**
 
 ## Topics
 

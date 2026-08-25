@@ -79,3 +79,13 @@ Phase 5 changed the generated budget to persistent production indexing, tightene
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/memory_budget_test.go — Persistent generated-fixture setup and explicit index close
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/server/testdata/generated-fixture-memory-budget.json — Tightened reviewed regression thresholds
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/01-phase-5-validation.md — Regression packaging failure-triage and local validation evidence
+
+## 2026-08-25
+
+Completed PV-MEM-002 after commit 5f5600d passed all fresh PR checks and current-commit Codex review. The final audit maps every objective to concrete evidence, all tasks and metadata are complete, and the Phase 5 completion slip was printed only after its gates passed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/02-requirement-evidence-audit.md — Explicit completion mapping
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/artifacts/final/pr-state.json — Exact PR head checks mergeability and review snapshot
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-MEM-002--reduce-publish-vault-search-index-peak-memory/scripts/slips/12-phase-5-done.yaml — Final completion print source

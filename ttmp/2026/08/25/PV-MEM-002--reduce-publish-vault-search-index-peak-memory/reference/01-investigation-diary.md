@@ -1,7 +1,7 @@
 ---
 Title: Investigation Diary
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - profiling
@@ -1040,7 +1040,7 @@ Phase 5 converted the generated memory budget from an in-memory search smoke int
 
 **Inferred user intent:** Finish the optimization as a reviewable, regression-protected, packaged change rather than stopping after favorable benchmark results.
 
-**Commit (code):** pending Phase 5 commit
+**Commit (code):** `5f5600d` — `perf(PV-MEM-002): tighten persistent memory budgets`
 
 ### What I did
 
@@ -1154,4 +1154,101 @@ retained generated trace events audited: 428
 Docker smoke hard limit: 536,870,912 B
 Docker smoke GOMEMLIMIT: 456,340,275 B
 final local gates: all passed
+```
+
+## Step 10: Deliver Phase 5, obtain current-commit review, and audit every requirement
+
+Phase 5 commit `5f5600d` was pushed, all fresh GitHub checks passed, and Codex reviewed that exact commit with no major issues. The final audit maps every objective to committed evidence. Only after this evidence passed were ticket tasks/statuses closed and the Phase 5 completion slip authorized.
+
+### Prompt Context
+
+**User prompt (verbatim):** “Continue working toward the active thread goal.”
+
+**Assistant interpretation:** Continue beyond local green tests through PR delivery, current-head review, strict requirement audit, slips, bookkeeping, merge, and clean-state proof.
+
+**Inferred user intent:** Do not call the work complete merely because implementation tests pass; close the entire evidence and delivery loop.
+
+**Commit (code):** `5f5600d` — `perf(PV-MEM-002): tighten persistent memory budgets`
+
+### What I did
+
+- Pushed commits through `5f5600da7265d6aafcfc4514d3041449d70796f2`.
+- Replaced PR #25's documentation-only title/body with the measured implementation result and validation matrix.
+- Waited for every fresh check on that head.
+- Requested `@codex review`; Codex reported no major issues on `5f5600da72`.
+- Captured `artifacts/final/pr-state.json` and asserted exact head, mergeability, all check conclusions, and current review text.
+- Wrote `artifacts/final/02-requirement-evidence-audit.md`, mapping every explicit objective to files and fresh commands.
+- Closed both remaining ticket tasks and synchronized document statuses.
+- Ran final doctor, private-profile residue, TODO/residue, diff, branch synchronization, and worktree checks.
+- Printed and preserved `scripts/slips/12-phase-5-done.yaml` after all Phase 5 gates passed.
+
+### Commands run
+
+```bash
+git push origin task/pv-mem-002-search-index-analysis
+gh api repos/go-go-golems/publish-vault/pulls/25 -X PATCH ...
+gh pr checks 25 --watch --interval 15
+gh pr comment 25 --body '@codex review'
+gh pr view 25 --json ... > artifacts/final/pr-state.json
+docmgr doctor --ticket PV-MEM-002 --stale-after 30
+git diff --check
+git status --porcelain=v1
+git rev-list --left-right --count origin/task/pv-mem-002-search-index-analysis...HEAD
+```
+
+### What worked
+
+All twelve PR entries were SUCCESS or SKIPPED: tests/build, lint, GoSec, govulncheck, dependency review, TruffleHog, CodeQL/Analyze, and both release image publication workflows. PR #25 was mergeable. Codex explicitly reviewed current commit `5f5600da72` and found no major issues.
+
+The audit found no deferred implementation requirement. The only preferred target not reached—sub-400 MB RSS—was documented from the beginning as a stretch preference. The evidence shows batching cannot remove required rendered-vault and runtime/file-backed residency, so no correctness trade-off was made to chase it.
+
+### What didn't work
+
+`gh pr edit 25` updated neither title nor body because the installed CLI queried deprecated classic project cards and failed after the successful push:
+
+```text
+GraphQL: Projects (classic) is being deprecated in favor of the new Projects experience
+```
+
+I did not retry the same broken route. `gh api repos/go-go-golems/publish-vault/pulls/25 -X PATCH` updated title and body directly through the REST endpoint, and a subsequent read confirmed both.
+
+### What I learned
+
+- A review against an old documentation commit is not implementation review evidence; the exact reviewed SHA matters.
+- Release workflow jobs can expand into follow-on publish jobs, so the final check snapshot must be taken after the whole graph settles.
+- Completion evidence has a deliberate ordering: technical gates, current-head CI/review, requirement audit, task closure, completion slip, evidence commit, clean-state check, merge.
+
+### What was tricky to build
+
+The final audit avoids circular claims. The reviewed implementation head is immutable in `pr-state.json`; the final evidence commit changes only documentation and slip sources. Clean-worktree and branch-synchronization checks occur after that evidence commit, and merge state is checked after GitHub creates the merge commit.
+
+### What warrants a second pair of eyes
+
+- Review the requirement table for any evidence mismatch rather than accepting the summary totals.
+- Confirm Codex's current-commit comment names `5f5600da72`.
+- Confirm all skip conclusions are expected Open GitOps PR branch conditions, not skipped validation.
+- Confirm the final evidence commit contains documentation/slips only.
+
+### What should be done in the future
+
+A separate ticket may investigate lazy rendering or bounded rendered-content caches if lower steady-state RSS is required. It must preserve atomic snapshots and repeat this evidence discipline. Do not silently reduce the 1 GiB production memory limit based only on process RSS; finite-cgroup current reached 988 MB.
+
+### Code review instructions
+
+1. Start at `artifacts/final/02-requirement-evidence-audit.md`.
+2. Verify representative JSON artifacts rather than relying only on prose.
+3. Inspect PR #25 checks and Codex comment at current head.
+4. Confirm the final evidence commit has no implementation changes.
+5. Confirm post-merge main contains `5f5600d` and the worktree is clean.
+
+### Technical details
+
+```text
+PR: https://github.com/go-go-golems/publish-vault/pull/25
+implementation/evidence head: 5f5600da7265d6aafcfc4514d3041449d70796f2
+PR checks: 12 success/skipped, 0 failed/pending
+review: Codex, current commit, no major issues
+branch protection: no required approval rule
+remaining ticket tasks: 0
+requirement audit: all PASS
 ```

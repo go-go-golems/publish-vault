@@ -1,7 +1,7 @@
 ---
 Title: PV-MEM-002 search-index peak attribution
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - profiling

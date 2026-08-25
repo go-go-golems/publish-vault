@@ -1,7 +1,7 @@
 ---
 Title: PV-MEM-002 bounded Bleve batch matrix
 Ticket: PV-MEM-002
-Status: active
+Status: complete
 Topics:
     - memory
     - search
