@@ -1,0 +1,233 @@
+{
+  "baseline_commit": "8648cfcd1690c086010fbc5a64d27fe0f5ad6a9c",
+  "baseline_dominant_phase_by_heap": "search_index",
+  "baseline_dominant_phase_by_rss": "search_index",
+  "candidate_commit": "34ec4b9eb19440f8749971d28f9bf943bcce5a31",
+  "candidate_dominant_phase_by_heap": "search_index",
+  "candidate_dominant_phase_by_rss": "search_index",
+  "metrics": {
+    "duration_nanos": {
+      "absolute_change": -80103375651,
+      "baseline": 166419777280,
+      "candidate": 86316401629,
+      "percent_change": -48.13
+    },
+    "index_bytes": {
+      "absolute_change": -4934862,
+      "baseline": 210012540,
+      "candidate": 205077678,
+      "percent_change": -2.35
+    },
+    "peak_heap_alloc_bytes": {
+      "absolute_change": -283080328,
+      "baseline": 826146848,
+      "candidate": 543066520,
+      "percent_change": -34.27
+    },
+    "peak_rss_bytes": {
+      "absolute_change": -222564352,
+      "baseline": 1033994240,
+      "candidate": 811429888,
+      "percent_change": -21.52
+    },
+    "throughput_notes_per_second": {
+      "absolute_change": 11.320056448059601,
+      "baseline": 12.198069443300243,
+      "candidate": 23.518125891359844,
+      "percent_change": 92.8
+    }
+  },
+  "phases": {
+    "backlinks": {
+      "duration_nanos": {
+        "absolute_change": -11433843,
+        "baseline": 75137668,
+        "candidate": 63703825,
+        "percent_change": -15.22
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -3957016,
+        "baseline": 192410464,
+        "candidate": 188453448,
+        "percent_change": -2.06
+      },
+      "peak_rss_bytes": {
+        "absolute_change": 204800,
+        "baseline": 260730880,
+        "candidate": 260935680,
+        "percent_change": 0.08
+      }
+    },
+    "index_publish": {
+      "duration_nanos": {
+        "absolute_change": -34995228,
+        "baseline": 72703046,
+        "candidate": 37707818,
+        "percent_change": -48.13
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -116786216,
+        "baseline": 437936392,
+        "candidate": 321150176,
+        "percent_change": -26.67
+      },
+      "peak_rss_bytes": {
+        "absolute_change": -179712000,
+        "baseline": 892489728,
+        "candidate": 712777728,
+        "percent_change": -20.14
+      }
+    },
+    "render_html": {
+      "duration_nanos": {
+        "absolute_change": -337597662,
+        "baseline": 2365858722,
+        "candidate": 2028261060,
+        "percent_change": -14.27
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": 13202632,
+        "baseline": 351107024,
+        "candidate": 364309656,
+        "percent_change": 3.76
+      },
+      "peak_rss_bytes": {
+        "absolute_change": -5394432,
+        "baseline": 450375680,
+        "candidate": 444981248,
+        "percent_change": -1.2
+      }
+    },
+    "resolve_root": {
+      "duration_nanos": {
+        "absolute_change": -11151802,
+        "baseline": 34390165,
+        "candidate": 23238363,
+        "percent_change": -32.43
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": 1680520,
+        "baseline": 3465696,
+        "candidate": 5146216,
+        "percent_change": 48.49
+      },
+      "peak_rss_bytes": {
+        "absolute_change": -856064,
+        "baseline": 45305856,
+        "candidate": 44449792,
+        "percent_change": -1.89
+      }
+    },
+    "search_index": {
+      "duration_nanos": {
+        "absolute_change": -58055008303,
+        "baseline": 107407376445,
+        "candidate": 49352368142,
+        "percent_change": -54.05
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -283080328,
+        "baseline": 826146848,
+        "candidate": 543066520,
+        "percent_change": -34.27
+      },
+      "peak_rss_bytes": {
+        "absolute_change": -222564352,
+        "baseline": 1033994240,
+        "candidate": 811429888,
+        "percent_change": -21.52
+      }
+    },
+    "snapshot_swap": {
+      "duration_nanos": {
+        "absolute_change": -13527734,
+        "baseline": 29276782,
+        "candidate": 15749048,
+        "percent_change": -46.21
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -119510776,
+        "baseline": 448308656,
+        "candidate": 328797880,
+        "percent_change": -26.66
+      },
+      "peak_rss_bytes": {
+        "absolute_change": -186454016,
+        "baseline": 782503936,
+        "candidate": 596049920,
+        "percent_change": -23.83
+      }
+    },
+    "vault_normalize": {
+      "duration_nanos": {
+        "absolute_change": -1474253,
+        "baseline": 11780197,
+        "candidate": 10305944,
+        "percent_change": -12.51
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -3679496,
+        "baseline": 144744320,
+        "candidate": 141064824,
+        "percent_change": -2.54
+      },
+      "peak_rss_bytes": {
+        "absolute_change": 86016,
+        "baseline": 260055040,
+        "candidate": 260141056,
+        "percent_change": 0.03
+      }
+    },
+    "vault_walk_parse": {
+      "duration_nanos": {
+        "absolute_change": -13172578537,
+        "baseline": 47799660982,
+        "candidate": 34627082445,
+        "percent_change": -27.56
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -29624,
+        "baseline": 207931664,
+        "candidate": 207902040,
+        "percent_change": -0.01
+      },
+      "peak_rss_bytes": {
+        "absolute_change": 81920,
+        "baseline": 260055040,
+        "candidate": 260136960,
+        "percent_change": 0.03
+      }
+    },
+    "wiki_link_index": {
+      "duration_nanos": {
+        "absolute_change": -6786968,
+        "baseline": 119357044,
+        "candidate": 112570076,
+        "percent_change": -5.69
+      },
+      "peak_heap_alloc_bytes": {
+        "absolute_change": -3583784,
+        "baseline": 177303168,
+        "candidate": 173719384,
+        "percent_change": -2.02
+      },
+      "peak_rss_bytes": {
+        "absolute_change": 192512,
+        "baseline": 260415488,
+        "candidate": 260608000,
+        "percent_change": 0.07
+      }
+    }
+  },
+  "runs_each": 3,
+  "schema_version": 1,
+  "workload": {
+    "candidate_source_bytes": 76921819,
+    "markdown_candidates": 2036,
+    "publish_config_present": false,
+    "publish_config_sha256": null,
+    "published_notes": 2030,
+    "vault_commit": "5f9f18ca7791ba2ddeb8a2528e3c279e6ae5f75a",
+    "vault_ignore_sha256": "d39336e4bbba2e47c024bdec30b17659710c04834f8da2d60f52862b81393521"
+  }
+}

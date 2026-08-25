@@ -1,0 +1,19 @@
+{
+  "measure_binary_sha256": "9d8ae4a0c7d59537520d33a042867dc67ef011e989ce21fec06f7a9ab733bdac",
+  "publish_vault_binary_sha256": "3d2fbb5329f00fe3a559100df474778ef4e6e30c0ceda5c062cc8ae9cacd3966",
+  "receipt_sha256": {
+    "run-1.receipt.json": "fcfdb254a55f5bf9bdc4ce13f0c73743669b3dbded3115e358b52c0c793e96a2",
+    "run-2.receipt.json": "3a546817dcae89fcce663ff110683139244da3b0d6caf0fdc02e775730c6e24a",
+    "run-3.receipt.json": "0340f72385de8315fb0d64e51392e5259301663c80860322e1e3e149e040b5b5"
+  },
+  "schema_version": 1,
+  "trace_sha256": {
+    "run-1.jsonl": "947c49f8745b1e98ff2aaa5a356873f21a6b54f141d1fcd03f647c8f12d30455",
+    "run-1.summary.jsonl": "40172887a10bcfad7f679f0ab4a7a86f3466100d356a5095aed213245f06a589",
+    "run-2.jsonl": "3ca7a809dc05d9a50f0949422712de732a271bb348969314469488594caff7c8",
+    "run-2.summary.jsonl": "fb80be73a79c4c4f63eef22d262b9b86ed694721f3bb473fd022e818d1932b8b",
+    "run-3.jsonl": "00810c626f99070783701af5a5fd919d8993203e8ed531fb616da1931fc4eae7",
+    "run-3.summary.jsonl": "85c8c2395bb58c06a04b2df682815b6171c6e73b6e4980f1981a3dd36d511f02",
+    "run-console.jsonl": "af02bcafb71a3adb0cacd0f3d41e489b59539c0835ebe21ada4a205ca5d7c4ed"
+  }
+}

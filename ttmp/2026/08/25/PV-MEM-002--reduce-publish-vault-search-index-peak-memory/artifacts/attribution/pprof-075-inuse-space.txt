@@ -1,0 +1,48 @@
+File: profile-search-index
+Build ID: fd5262f3941cbda6adf3447b0957105e8c91f22c
+Type: inuse_space
+Time: 2026-08-25 18:07:04 EDT
+Showing nodes accounting for 206779046B, 94.90% of 217888976B total
+Dropped 66 nodes (cum <= 1089444B)
+Showing top 40 nodes out of 67
+      flat  flat%   sum%        cum   cum%
+196664808B 90.26% 90.26% 196664808B 90.26%  regexp.(*Regexp).ReplaceAllStringFunc
+  2621760B  1.20% 91.46%   2621760B  1.20%  internal/bytealg.MakeNoZero
+  2115252B  0.97% 92.43%   2115252B  0.97%  github.com/blevesearch/vellum.newRegistry (inline)
+  2025669B  0.93% 93.36%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc
+  1212696B  0.56% 93.92%   1212696B  0.56%  bufio.NewWriterSize (inline)
+  1090069B   0.5% 94.42%   2663125B  1.22%  github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto
+  1048792B  0.48% 94.90% 100159783B 45.97%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/bleve/v2.(*indexImpl).Index
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/bleve/v2/document.(*Document).VisitComposite
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).Batch
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).Update
+         0     0% 94.90%   2966436B  1.36%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).mergerLoop
+         0     0% 94.90%   2966436B  1.36%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).planMergeAtSnapshot
+         0     0% 94.90%   2640436B  1.21%  github.com/blevesearch/vellum.New (inline)
+         0     0% 94.90%   2640436B  1.21%  github.com/blevesearch/vellum.newBuilder
+         0     0% 94.90%   2966436B  1.36%  github.com/blevesearch/zapx/v17.(*ZapPlugin).MergeUsing
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/zapx/v17.(*ZapPlugin).NewUsing
+         0     0% 94.90%   2966436B  1.36%  github.com/blevesearch/zapx/v17.(*ZapPlugin).merge
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/zapx/v17.(*ZapPlugin).newWithChunkMode
+         0     0% 94.90%   5554695B  2.55%  github.com/blevesearch/zapx/v17.(*interim).convert
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*interim).processDocument
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*interim).processDocument.func1
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*interim).processDocument.func2
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*interim).processDocuments (inline)
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).process
+         0     0% 94.90%   1754580B  0.81%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).writeDicts
+         0     0% 94.90%   1753740B   0.8%  github.com/blevesearch/zapx/v17.(*invertedTextIndexSection).Merge
+         0     0% 94.90%   1754580B  0.81%  github.com/blevesearch/zapx/v17.(*invertedTextIndexSection).Persist
+         0     0% 94.90%   3095031B  1.42%  github.com/blevesearch/zapx/v17.(*invertedTextIndexSection).Process
+         0     0% 94.90%   1753740B   0.8%  github.com/blevesearch/zapx/v17.mergeAndPersistInvertedSection
+         0     0% 94.90%   2966436B  1.36%  github.com/blevesearch/zapx/v17.mergeSegmentBases
+         0     0% 94.90%   1753740B   0.8%  github.com/blevesearch/zapx/v17.mergeToWriter
+         0     0% 94.90%  98586647B 45.25%  github.com/go-go-golems/publish-vault/internal/parser.Parse
+         0     0% 94.90%  35322968B 16.21%  github.com/go-go-golems/publish-vault/internal/parser.RestoreMath
+         0     0% 94.90%  55529769B 25.49%  github.com/go-go-golems/publish-vault/internal/parser.renderCallouts (inline)
+         0     0% 94.90%   3492772B  1.60%  github.com/go-go-golems/publish-vault/internal/parser.resolveSelfHeadingLinks
+         0     0% 94.90%   5554695B  2.55%  github.com/go-go-golems/publish-vault/pkg/search.(*Index).Index
+         0     0% 94.90%   5554695B  2.55%  github.com/go-go-golems/publish-vault/pkg/search.NewPersistentWithOptions
+         0     0% 94.90%   5554695B  2.55%  github.com/go-go-golems/publish-vault/pkg/search.indexVault
+         0     0% 94.90%   5554695B  2.55%  github.com/go-go-golems/publish-vault/pkg/search.indexVault.func1

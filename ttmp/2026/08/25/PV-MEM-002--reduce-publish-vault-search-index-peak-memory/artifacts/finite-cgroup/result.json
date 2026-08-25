@@ -1,0 +1,31 @@
+{
+  "container_limit_bytes": 1073741824,
+  "duration_nanos": 81921115444,
+  "go_soft_limit_bytes": 912680550,
+  "index_bytes": 201409031,
+  "peaks": {
+    "cgroup_current_bytes": 988028928,
+    "heap_alloc_bytes": 623229576,
+    "process_tree_rss_sum_bytes": 0,
+    "rss_bytes": 803254272
+  },
+  "schema_version": 1,
+  "search_index": {
+    "duration_nanos": 47571446616,
+    "peaks": {
+      "cgroup_current_bytes": 988028928,
+      "heap_alloc_bytes": 623229576,
+      "process_tree_rss_sum_bytes": 0,
+      "rss_bytes": 803254272
+    },
+    "processed": 2030,
+    "total": 2030
+  },
+  "sources": {
+    "cgroup": "available",
+    "process": "available",
+    "process_tree": "",
+    "runtime": "available",
+    "smaps": "available"
+  }
+}

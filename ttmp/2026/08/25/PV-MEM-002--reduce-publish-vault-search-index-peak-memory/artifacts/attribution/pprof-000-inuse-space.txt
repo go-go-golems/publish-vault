@@ -1,0 +1,48 @@
+File: profile-search-index
+Build ID: fd5262f3941cbda6adf3447b0957105e8c91f22c
+Type: inuse_space
+Time: 2026-08-25 18:05:42 EDT
+Showing nodes accounting for 205649514B, 98.22% of 209367845B total
+Dropped 30 nodes (cum <= 1046839B)
+Showing top 40 nodes out of 56
+      flat  flat%   sum%        cum   cum%
+196664808B 93.93% 93.93% 196664808B 93.93%  regexp.(*Regexp).ReplaceAllStringFunc
+  2621760B  1.25% 95.18%   2621760B  1.25%  internal/bytealg.MakeNoZero
+  1090069B  0.52% 95.71%   2663125B  1.27%  github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto
+  1076076B  0.51% 96.22%   1076076B  0.51%  html.init.func1
+  1050625B   0.5% 96.72%   1050625B   0.5%  runtime.mallocgc
+  1048792B   0.5% 97.22% 100159783B 47.84%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+  1048720B   0.5% 97.72%   1048720B   0.5%  github.com/go-go-golems/publish-vault/internal/parser.extractWikiLinks
+  1048664B   0.5% 98.22%   1048664B   0.5%  gopkg.in/yaml%2ev2.(*parser).scalar
+         0     0% 98.22%   1076076B  0.51%  github.com/go-go-golems/publish-vault/internal/parser.BuildHeadingIndex
+         0     0% 98.22%  98586647B 47.09%  github.com/go-go-golems/publish-vault/internal/parser.Parse
+         0     0% 98.22%  35322968B 16.87%  github.com/go-go-golems/publish-vault/internal/parser.RestoreMath
+         0     0% 98.22%  55529769B 26.52%  github.com/go-go-golems/publish-vault/internal/parser.renderCallouts (inline)
+         0     0% 98.22%   3492772B  1.67%  github.com/go-go-golems/publish-vault/internal/parser.resolveSelfHeadingLinks
+         0     0% 98.22% 207266987B 99.00%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).LoadAll
+         0     0% 98.22% 102822908B 49.11%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).LoadAll.func2
+         0     0% 98.22%   2663125B  1.27%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).indexAsset (inline)
+         0     0% 98.22% 103395375B 49.38%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).rebuildHTML
+         0     0% 98.22% 207266987B 99.00%  github.com/go-go-golems/publish-vault/pkg/vault.New
+         0     0% 98.22% 103395375B 49.38%  github.com/go-go-golems/publish-vault/pkg/vault.replaceUnresolvedNoteEmbeds (inline)
+         0     0% 98.22%   1572960B  0.75%  github.com/yuin/goldmark-meta.(*metaParser).Close
+         0     0% 98.22%   2143594B  1.02%  github.com/yuin/goldmark.(*markdown).Convert
+         0     0% 98.22%   1572960B  0.75%  github.com/yuin/goldmark/parser.(*parser).Parse
+         0     0% 98.22%   1572960B  0.75%  github.com/yuin/goldmark/parser.(*parser).closeBlocks
+         0     0% 98.22%   1572960B  0.75%  github.com/yuin/goldmark/parser.(*parser).parseBlocks
+         0     0% 98.22%   1572960B  0.75%  gopkg.in/yaml%2ev2.(*parser).document
+         0     0% 98.22%   1572960B  0.75%  gopkg.in/yaml%2ev2.(*parser).mapping
+         0     0% 98.22%   1572960B  0.75%  gopkg.in/yaml%2ev2.(*parser).parse
+         0     0% 98.22%   1048640B   0.5%  gopkg.in/yaml%2ev2.(*parser).sequence
+         0     0% 98.22%   1572960B  0.75%  gopkg.in/yaml%2ev2.Unmarshal (inline)
+         0     0% 98.22%   1572960B  0.75%  gopkg.in/yaml%2ev2.unmarshal
+         0     0% 98.22%   1076076B  0.51%  html.UnescapeString
+         0     0% 98.22%   1076076B  0.51%  html.init.OnceValues[go.shape.map[string]int32,go.shape.map[string][2]int32].func2
+         0     0% 98.22%   1076076B  0.51%  html.init.OnceValues[go.shape.map[string]int32,go.shape.map[string][2]int32].func2.1
+         0     0% 98.22% 207266987B 99.00%  main.main
+         0     0% 98.22% 207266987B 99.00%  main.run
+         0     0% 98.22%   1048704B   0.5%  path/filepath.Join (inline)
+         0     0% 98.22% 103871612B 49.61%  path/filepath.Walk
+         0     0% 98.22%   1048704B   0.5%  path/filepath.join
+         0     0% 98.22% 103871612B 49.61%  path/filepath.walk
+         0     0% 98.22%   1050625B   0.5%  runtime.allocm

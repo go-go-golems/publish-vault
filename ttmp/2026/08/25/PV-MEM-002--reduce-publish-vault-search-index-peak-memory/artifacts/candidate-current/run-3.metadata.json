@@ -1,0 +1,130 @@
+{
+  "duration_nanos": 75693019603,
+  "index_bytes": 205035119,
+  "mode": "persistent",
+  "notes": 2030,
+  "peaks": {
+    "cgroup_current_bytes": 9189347328,
+    "heap_alloc_bytes": 534493424,
+    "process_tree_rss_sum_bytes": 0,
+    "rss_bytes": 792576000
+  },
+  "phases": [
+    {
+      "duration_nanos": 23238363,
+      "name": "resolve_root",
+      "peaks": {
+        "cgroup_current_bytes": 8244658176,
+        "heap_alloc_bytes": 5146216,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 43982848
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 32804856771,
+      "name": "vault_walk_parse",
+      "peaks": {
+        "cgroup_current_bytes": 8459210752,
+        "heap_alloc_bytes": 207902040,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 258613248
+      },
+      "processed": 2036,
+      "total": 2036
+    },
+    {
+      "duration_nanos": 9192314,
+      "name": "vault_normalize",
+      "peaks": {
+        "cgroup_current_bytes": 8458694656,
+        "heap_alloc_bytes": 140882928,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 258613248
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 97023317,
+      "name": "wiki_link_index",
+      "peaks": {
+        "cgroup_current_bytes": 8459481088,
+        "heap_alloc_bytes": 173441752,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 259051520
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 55680853,
+      "name": "backlinks",
+      "peaks": {
+        "cgroup_current_bytes": 8459522048,
+        "heap_alloc_bytes": 188453448,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 259362816
+      },
+      "processed": 1,
+      "total": 1
+    },
+    {
+      "duration_nanos": 1600948513,
+      "name": "render_html",
+      "peaks": {
+        "cgroup_current_bytes": 8644706304,
+        "heap_alloc_bytes": 348311520,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 444207104
+      },
+      "processed": 2030,
+      "total": 2030
+    },
+    {
+      "duration_nanos": 40950670642,
+      "name": "search_index",
+      "peaks": {
+        "cgroup_current_bytes": 9189347328,
+        "heap_alloc_bytes": 534493424,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 792576000
+      },
+      "processed": 2030,
+      "total": 2030
+    },
+    {
+      "duration_nanos": 65100895,
+      "name": "index_publish",
+      "peaks": {
+        "cgroup_current_bytes": 9156239360,
+        "heap_alloc_bytes": 281739488,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 749531136
+      },
+      "processed": 3,
+      "total": 3
+    },
+    {
+      "duration_nanos": 45535355,
+      "name": "snapshot_swap",
+      "peaks": {
+        "cgroup_current_bytes": 9000497152,
+        "heap_alloc_bytes": 289948320,
+        "process_tree_rss_sum_bytes": 0,
+        "rss_bytes": 596049920
+      },
+      "processed": 1,
+      "total": 1
+    }
+  ],
+  "run": 3,
+  "sources": {
+    "cgroup": "unlimited",
+    "process": "available",
+    "process_tree": "",
+    "runtime": "available",
+    "smaps": "available"
+  }
+}

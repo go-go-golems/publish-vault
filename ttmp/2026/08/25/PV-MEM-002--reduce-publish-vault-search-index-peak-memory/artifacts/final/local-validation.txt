@@ -1,0 +1,18 @@
+RUN generate: go generate ./...
+PASS generate
+RUN ci-check: make ci-check
+PASS ci-check
+RUN race: env GOWORK=off go test -race ./... -count=1
+PASS race
+RUN linux-build: env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOWORK=off go build ./...
+PASS linux-build
+RUN darwin-build: env GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 GOWORK=off go build ./...
+PASS darwin-build
+RUN compose-config: docker compose config
+PASS compose-config
+RUN fixture-10x: env GOWORK=off go test ./pkg/server -run ^TestGeneratedFixtureMemoryBudget$ -count=10
+PASS fixture-10x
+RUN search-stress: env GOWORK=off go test ./pkg/search -count=50
+PASS search-stress
+RUN diff-check: git diff --check
+PASS diff-check

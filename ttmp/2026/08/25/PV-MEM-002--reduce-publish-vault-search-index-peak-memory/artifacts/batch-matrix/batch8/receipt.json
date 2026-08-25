@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "run_id": "e65fbe5d8b510f59d216d65dc67bab86",
+  "run_name": "search_index_benchmark",
+  "started_at": "2026-08-25T22:27:51.946483637Z",
+  "duration_nanos": 67788251143,
+  "sample_interval_nanos": 100000000,
+  "result": {
+    "status": "succeeded"
+  },
+  "peaks": {
+    "heap_alloc_bytes": 635282728,
+    "rss_bytes": 813395968,
+    "process_tree_rss_sum_bytes": 0,
+    "cgroup_current_bytes": 8024514560
+  },
+  "gc_delta": {
+    "heap_alloc_bytes": 0,
+    "rss_bytes": 0,
+    "process_tree_rss_sum_bytes": 0,
+    "cgroup_current_bytes": 0,
+    "total_alloc_bytes": 22587590632,
+    "mallocs_total": 215354165,
+    "frees_total": 213387265,
+    "num_gc": 98,
+    "gc_pause_total_nanos": 49208742
+  },
+  "sources": {
+    "runtime": "available",
+    "process": "available",
+    "smaps": "available",
+    "process_tree": "",
+    "cgroup": "unlimited"
+  },
+  "phases": [
+    {
+      "name": "search_index",
+      "started_at": "2026-08-25T22:27:51.96084843Z",
+      "duration_nanos": 67752241596,
+      "progress": {
+        "processed": 2030,
+        "total": 2030,
+        "unit": "documents"
+      },
+      "result": {
+        "status": "succeeded"
+      },
+      "peaks": {
+        "heap_alloc_bytes": 635282728,
+        "rss_bytes": 813395968,
+        "process_tree_rss_sum_bytes": 0,
+        "cgroup_current_bytes": 8024514560
+      }
+    }
+  ]
+}

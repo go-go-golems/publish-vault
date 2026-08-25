@@ -640,6 +640,15 @@ persistent-index publication, snapshot swap, and trace-only delayed old-snapshot
 release. Existing `/api/healthz` memory fields retain their JSON names while
 using the shared measure runtime collector internally.
 
+When `--search-index-path` enables a persistent full-snapshot index, documents
+are committed to Bleve in bounded batches of at most 16 documents and 1 MiB of
+estimated slug/title/body/tag/excerpt bytes. A single document larger than the
+byte limit is committed alone. These internal bounds reduce repeated Scorch
+segment/merge allocation while keeping staged source fields bounded; they are
+not operator tuning flags. Progress advances after each successful batch
+commit. The in-memory and incremental single-document paths keep their existing
+behavior.
+
 ---
 
 ## Validation checklist
@@ -710,7 +719,7 @@ Retro Obsidian Publish is usable, but it is still a young project. The current i
 
 - one Go server process;
 - one in-memory vault snapshot;
-- one in-memory search index;
+- one Bleve search index, either in-memory or per-snapshot persistent on disk;
 - one embedded React frontend;
 - optional reload endpoint for content automation.
 

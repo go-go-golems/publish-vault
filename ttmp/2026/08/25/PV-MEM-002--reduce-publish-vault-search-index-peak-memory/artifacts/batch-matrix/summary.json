@@ -1,0 +1,152 @@
+{
+  "rows": [
+    {
+      "batch_bytes": 8388608,
+      "batch_documents": 128,
+      "documents": 2030,
+      "duration_nanos": 44843414035,
+      "gc_cycles": 55,
+      "index_bytes": 198146912,
+      "indexed_bytes": 72070169,
+      "name": "batch128",
+      "peak_heap_alloc_bytes": 801219720,
+      "peak_rss_bytes": 980045824,
+      "total_alloc_bytes": 14351344296,
+      "versus_current_percent": {
+        "duration_nanos": -50.02,
+        "index_bytes": -15.0,
+        "peak_heap_alloc_bytes": -7.88,
+        "peak_rss_bytes": -8.26,
+        "total_alloc_bytes": -71.5
+      }
+    },
+    {
+      "batch_bytes": 1048576,
+      "batch_documents": 16,
+      "documents": 2030,
+      "duration_nanos": 61776043299,
+      "gc_cycles": 83,
+      "index_bytes": 199028353,
+      "indexed_bytes": 72070169,
+      "name": "batch16",
+      "peak_heap_alloc_bytes": 521084376,
+      "peak_rss_bytes": 766619648,
+      "total_alloc_bytes": 19273219336,
+      "versus_current_percent": {
+        "duration_nanos": -31.15,
+        "index_bytes": -14.62,
+        "peak_heap_alloc_bytes": -40.09,
+        "peak_rss_bytes": -28.24,
+        "total_alloc_bytes": -61.72
+      }
+    },
+    {
+      "batch_bytes": 2097152,
+      "batch_documents": 32,
+      "documents": 2030,
+      "duration_nanos": 57814382196,
+      "gc_cycles": 77,
+      "index_bytes": 198617238,
+      "indexed_bytes": 72070169,
+      "name": "batch32",
+      "peak_heap_alloc_bytes": 585288968,
+      "peak_rss_bytes": 843472896,
+      "total_alloc_bytes": 18207673408,
+      "versus_current_percent": {
+        "duration_nanos": -35.57,
+        "index_bytes": -14.79,
+        "peak_heap_alloc_bytes": -32.7,
+        "peak_rss_bytes": -21.04,
+        "total_alloc_bytes": -63.84
+      }
+    },
+    {
+      "batch_bytes": 262144,
+      "batch_documents": 4,
+      "documents": 2030,
+      "duration_nanos": 70319648987,
+      "gc_cycles": 115,
+      "index_bytes": 216496974,
+      "indexed_bytes": 72070169,
+      "name": "batch4",
+      "peak_heap_alloc_bytes": 758835360,
+      "peak_rss_bytes": 956723200,
+      "total_alloc_bytes": 28763335192,
+      "versus_current_percent": {
+        "duration_nanos": -21.63,
+        "index_bytes": -7.12,
+        "peak_heap_alloc_bytes": -12.75,
+        "peak_rss_bytes": -10.44,
+        "total_alloc_bytes": -42.88
+      }
+    },
+    {
+      "batch_bytes": 4194304,
+      "batch_documents": 64,
+      "documents": 2030,
+      "duration_nanos": 94124452963,
+      "gc_cycles": 71,
+      "index_bytes": 199368997,
+      "indexed_bytes": 72070169,
+      "name": "batch64",
+      "peak_heap_alloc_bytes": 641511216,
+      "peak_rss_bytes": 870866944,
+      "total_alloc_bytes": 16751985056,
+      "versus_current_percent": {
+        "duration_nanos": 4.9,
+        "index_bytes": -14.47,
+        "peak_heap_alloc_bytes": -26.24,
+        "peak_rss_bytes": -18.48,
+        "total_alloc_bytes": -66.73
+      }
+    },
+    {
+      "batch_bytes": 524288,
+      "batch_documents": 8,
+      "documents": 2030,
+      "duration_nanos": 67718645022,
+      "gc_cycles": 98,
+      "index_bytes": 198417449,
+      "indexed_bytes": 72070169,
+      "name": "batch8",
+      "peak_heap_alloc_bytes": 635282728,
+      "peak_rss_bytes": 813395968,
+      "total_alloc_bytes": 22587590632,
+      "versus_current_percent": {
+        "duration_nanos": -24.53,
+        "index_bytes": -14.88,
+        "peak_heap_alloc_bytes": -26.95,
+        "peak_rss_bytes": -23.86,
+        "total_alloc_bytes": -55.14
+      }
+    },
+    {
+      "batch_bytes": 0,
+      "batch_documents": 0,
+      "documents": 2030,
+      "duration_nanos": 89728066704,
+      "gc_cycles": 192,
+      "index_bytes": 233101871,
+      "indexed_bytes": 72070169,
+      "name": "current",
+      "peak_heap_alloc_bytes": 869712904,
+      "peak_rss_bytes": 1068277760,
+      "total_alloc_bytes": 50352073512,
+      "versus_current_percent": {
+        "duration_nanos": 0.0,
+        "index_bytes": 0.0,
+        "peak_heap_alloc_bytes": 0.0,
+        "peak_rss_bytes": 0.0,
+        "total_alloc_bytes": 0.0
+      }
+    }
+  ],
+  "runs_are_single_exploratory_measurements": true,
+  "schema_version": 1,
+  "selected": {
+    "batch_bytes": 1048576,
+    "batch_documents": 16,
+    "name": "batch16",
+    "rationale": "best observed heap/RSS combination while also reducing duration, cumulative allocation, GC cycles, and index bytes"
+  }
+}

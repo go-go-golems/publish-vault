@@ -1,0 +1,48 @@
+File: profile-search-index
+Build ID: fd5262f3941cbda6adf3447b0957105e8c91f22c
+Type: inuse_space
+Time: 2026-08-25 18:07:31 EDT
+Showing nodes accounting for 216298890B, 95.11% of 227408012B total
+Dropped 72 nodes (cum <= 1137040B)
+Showing top 40 nodes out of 84
+      flat  flat%   sum%        cum   cum%
+196664808B 86.48% 86.48% 196664808B 86.48%  regexp.(*Regexp).ReplaceAllStringFunc
+  4230506B  1.86% 88.34%   4230506B  1.86%  github.com/blevesearch/vellum.newRegistry (inline)
+  4147352B  1.82% 90.17%   5216714B  2.29%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).realloc
+  2621760B  1.15% 91.32%   2621760B  1.15%  internal/bytealg.MakeNoZero
+  2136279B  0.94% 92.26%   2136279B  0.94%  bytes.growSlice
+  1573692B  0.69% 92.95%   1573692B  0.69%  github.com/blevesearch/vellum.(*builderNodeUnfinished).lastCompiled (inline)
+  1572936B  0.69% 93.64%   1572936B  0.69%  github.com/blevesearch/vellum.(*builderNodePool).Get (inline)
+  1212696B  0.53% 94.17%   1212696B  0.53%  bufio.NewWriterSize (inline)
+  1090069B  0.48% 94.65%   2663125B  1.17%  github.com/go-go-golems/publish-vault/pkg/vault.indexAssetInto
+  1048792B  0.46% 95.11% 100159783B 44.04%  github.com/go-go-golems/publish-vault/pkg/vault.(*Vault).loadNote
+         0     0% 95.11%   2136279B  0.94%  bufio.(*Writer).Flush
+         0     0% 95.11%   2136279B  0.94%  bufio.(*Writer).WriteByte
+         0     0% 95.11%   2136279B  0.94%  bytes.(*Buffer).Write
+         0     0% 95.11%   2136279B  0.94%  bytes.(*Buffer).grow
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/bleve/v2.(*indexImpl).Index
+         0     0% 95.11%   5216714B  2.29%  github.com/blevesearch/bleve/v2/document.(*Document).VisitComposite
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).Batch
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).Update
+         0     0% 95.11%   7200687B  3.17%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).mergerLoop
+         0     0% 95.11%   7200687B  3.17%  github.com/blevesearch/bleve/v2/index/scorch.(*Scorch).planMergeAtSnapshot
+         0     0% 95.11%   5282907B  2.32%  github.com/blevesearch/vellum.(*Builder).Insert
+         0     0% 95.11%   2136279B  0.94%  github.com/blevesearch/vellum.(*Builder).compile
+         0     0% 95.11%   3709971B  1.63%  github.com/blevesearch/vellum.(*Builder).compileFrom
+         0     0% 95.11%   2136279B  0.94%  github.com/blevesearch/vellum.(*encoderV1).encodeState
+         0     0% 95.11%   2136279B  0.94%  github.com/blevesearch/vellum.(*encoderV1).encodeStateOneFinish
+         0     0% 95.11%   1572936B  0.69%  github.com/blevesearch/vellum.(*unfinishedNodes).addSuffix
+         0     0% 95.11%   2136279B  0.94%  github.com/blevesearch/vellum.(*writer).WriteByte (inline)
+         0     0% 95.11%   4230506B  1.86%  github.com/blevesearch/vellum.New (inline)
+         0     0% 95.11%   4230506B  1.86%  github.com/blevesearch/vellum.newBuilder
+         0     0% 95.11%   7200687B  3.17%  github.com/blevesearch/zapx/v17.(*ZapPlugin).MergeUsing
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/zapx/v17.(*ZapPlugin).NewUsing
+         0     0% 95.11%   7200687B  3.17%  github.com/blevesearch/zapx/v17.(*ZapPlugin).merge
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/zapx/v17.(*ZapPlugin).newWithChunkMode
+         0     0% 95.11%   9266432B  4.07%  github.com/blevesearch/zapx/v17.(*interim).convert
+         0     0% 95.11%   5741010B  2.52%  github.com/blevesearch/zapx/v17.(*interim).processDocument
+         0     0% 95.11%   5216714B  2.29%  github.com/blevesearch/zapx/v17.(*interim).processDocument.func1
+         0     0% 95.11%   5216714B  2.29%  github.com/blevesearch/zapx/v17.(*interim).processDocument.func2
+         0     0% 95.11%   5741010B  2.52%  github.com/blevesearch/zapx/v17.(*interim).processDocuments (inline)
+         0     0% 95.11%   5741010B  2.52%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).process
+         0     0% 95.11%   1410169B  0.62%  github.com/blevesearch/zapx/v17.(*invertedIndexOpaque).writeDicts

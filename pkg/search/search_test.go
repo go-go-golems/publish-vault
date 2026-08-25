@@ -2,6 +2,7 @@ package search
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,6 +87,191 @@ func TestIndexProgressForMemoryAndPersistentIndexes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBatchedIndexProgressAndValidation(t *testing.T) {
+	root := t.TempDir()
+	for i := 1; i <= 5; i++ {
+		writeTestNote(t, root, filepath.Join("notes", string(rune('a'+i-1))+".md"), "# Note\n\nshared body")
+	}
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	var observed []IndexProgress
+	idx, err := NewPersistentWithOptions(v, filepath.Join(t.TempDir(), "index"), Options{
+		BatchDocuments: 2,
+		BatchBytes:     1 << 20,
+		ObserveIndexed: func(progress IndexProgress) { observed = append(observed, progress) },
+	})
+	if err != nil {
+		t.Fatalf("NewPersistentWithOptions: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := idx.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+	wantProcessed := []uint64{0, 2, 4, 5}
+	if len(observed) != len(wantProcessed) {
+		t.Fatalf("progress = %#v, want %d observations", observed, len(wantProcessed))
+	}
+	for i, want := range wantProcessed {
+		if observed[i].ProcessedDocuments != want || observed[i].TotalDocuments != 5 {
+			t.Errorf("progress[%d] = %#v, want processed=%d total=5", i, observed[i], want)
+		}
+	}
+	if observed[len(observed)-1].IndexedBytes == 0 {
+		t.Fatal("final indexed bytes = 0")
+	}
+
+	for _, options := range []Options{
+		{BatchDocuments: 2},
+		{BatchBytes: 1024},
+	} {
+		indexPath := filepath.Join(t.TempDir(), "invalid")
+		if err := os.MkdirAll(indexPath, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		sentinel := filepath.Join(indexPath, "sentinel")
+		if err := os.WriteFile(sentinel, []byte("keep"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewPersistentWithOptions(v, indexPath, options); err == nil {
+			t.Fatalf("NewPersistentWithOptions(%#v) succeeded, want validation error", options)
+		}
+		if _, err := os.Stat(sentinel); err != nil {
+			t.Fatalf("invalid options removed existing target before validation: %v", err)
+		}
+	}
+}
+
+func TestBatchedIndexFlushesOversizedDocumentsAlone(t *testing.T) {
+	root := t.TempDir()
+	writeTestNote(t, root, "one.md", "# One\n\nfirst oversized body")
+	writeTestNote(t, root, "two.md", "# Two\n\nsecond oversized body")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	var processed []uint64
+	idx, err := NewPersistentWithOptions(v, filepath.Join(t.TempDir(), "index"), Options{
+		BatchDocuments: 100,
+		BatchBytes:     1,
+		ObserveIndexed: func(progress IndexProgress) { processed = append(processed, progress.ProcessedDocuments) },
+	})
+	if err != nil {
+		t.Fatalf("NewPersistentWithOptions: %v", err)
+	}
+	defer func() { _ = idx.Close() }()
+	want := []uint64{0, 1, 2}
+	if !equalUint64s(processed, want) {
+		t.Fatalf("processed = %v, want %v", processed, want)
+	}
+}
+
+func TestBatchedIndexClosesAfterSourceFailure(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "note.md")
+	writeTestNote(t, root, "note.md", "# Note\n\nbody")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	indexPath := filepath.Join(t.TempDir(), "index")
+	_, err = NewPersistentWithOptions(v, indexPath, Options{
+		BatchDocuments: 16,
+		BatchBytes:     1 << 20,
+		ObserveIndexed: func(progress IndexProgress) {
+			if progress.ProcessedDocuments == 0 {
+				_ = os.Remove(notePath)
+			}
+		},
+	})
+	if err == nil {
+		t.Fatal("NewPersistentWithOptions succeeded after source removal")
+	}
+	if err := os.RemoveAll(indexPath); err != nil {
+		t.Fatalf("remove failed index after constructor cleanup: %v", err)
+	}
+}
+
+func TestBatchedAndSingleDocumentIndexesHaveEquivalentSearchResults(t *testing.T) {
+	root := t.TempDir()
+	writeTestNote(t, root, "one.md", "---\ntags: [philosophy]\n---\n# Alpha Design\n\nPersistent memory indexing details.")
+	writeTestNote(t, root, "two.md", "---\ntags: [writing]\n---\n# Beta Report\n\nSearch indexing and memory measurements.")
+	writeTestNote(t, root, "three.md", "# Gamma\n\nUnrelated body text.")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	baseline, err := NewPersistent(v, filepath.Join(t.TempDir(), "baseline"))
+	if err != nil {
+		t.Fatalf("NewPersistent baseline: %v", err)
+	}
+	defer func() { _ = baseline.Close() }()
+	batched, err := NewPersistentWithOptions(v, filepath.Join(t.TempDir(), "batched"), Options{BatchDocuments: 2, BatchBytes: 1024})
+	if err != nil {
+		t.Fatalf("NewPersistentWithOptions batched: %v", err)
+	}
+	defer func() { _ = batched.Close() }()
+
+	for _, query := range []string{"memory", "search indexing", "#philosophy", "tag:writing", "alp", "unrelated"} {
+		want, err := baseline.Search(query, 20)
+		if err != nil {
+			t.Fatalf("baseline.Search(%q): %v", query, err)
+		}
+		got, err := batched.Search(query, 20)
+		if err != nil {
+			t.Fatalf("batched.Search(%q): %v", query, err)
+		}
+		assertEquivalentResults(t, query, got, want)
+	}
+}
+
+func assertEquivalentResults(t *testing.T, query string, got, want []SearchResult) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("Search(%q) result count = %d, want %d; got=%#v want=%#v", query, len(got), len(want), got, want)
+	}
+	gotBySlug := make(map[string]SearchResult, len(got))
+	for _, result := range got {
+		gotBySlug[result.Slug] = result
+	}
+	for _, expected := range want {
+		actual, ok := gotBySlug[expected.Slug]
+		if !ok {
+			t.Errorf("Search(%q) missing slug %q; got=%#v", query, expected.Slug, got)
+			continue
+		}
+		if actual.Title != expected.Title || actual.Excerpt != expected.Excerpt || !equalStrings(actual.Tags, expected.Tags) || math.Abs(actual.Score-expected.Score) > 1e-12 {
+			t.Errorf("Search(%q) slug %q = %#v, want %#v", query, expected.Slug, actual, expected)
+		}
+	}
+}
+
+func equalUint64s(left, right []uint64) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestSearchByTag(t *testing.T) {

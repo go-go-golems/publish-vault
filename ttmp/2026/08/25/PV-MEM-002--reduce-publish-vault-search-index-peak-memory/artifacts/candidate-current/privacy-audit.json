@@ -1,0 +1,12 @@
+{
+  "attribute_keys": [
+    "processed_bytes",
+    "processed_notes",
+    "total_bytes"
+  ],
+  "events": 2687,
+  "forbidden_content_findings": [],
+  "passed": true,
+  "schema_version": 1,
+  "trace_files": 3
+}

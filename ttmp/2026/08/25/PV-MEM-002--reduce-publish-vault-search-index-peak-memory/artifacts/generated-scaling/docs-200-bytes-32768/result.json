@@ -1,0 +1,15 @@
+{
+  "documents": 200,
+  "duration_nanos": 4855291501,
+  "index_bytes": 15631207,
+  "payload_bytes_per_document": 32768,
+  "peak_heap_alloc_bytes": 67298640,
+  "peak_rss_bytes": 137486336,
+  "schema_version": 1,
+  "search_index": {
+    "duration_nanos": 2048918156,
+    "peak_heap_alloc_bytes": 67298640,
+    "peak_rss_bytes": 137486336
+  },
+  "source_payload_bytes": 6553600
+}
