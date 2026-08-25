@@ -34,6 +34,19 @@ type Index struct {
 	idx bleve.Index
 }
 
+// IndexProgress reports completed documents and the content-free byte count of
+// fields submitted to Bleve. TotalDocuments is fixed from the source snapshot.
+type IndexProgress struct {
+	ProcessedDocuments uint64
+	TotalDocuments     uint64
+	IndexedBytes       uint64
+}
+
+// Options configures bounded search-index progress observation.
+type Options struct {
+	ObserveIndexed func(IndexProgress)
+}
+
 // noteDoc is the document shape stored in bleve.
 type noteDoc struct {
 	Title   string `json:"title"`
@@ -44,14 +57,17 @@ type noteDoc struct {
 
 // New creates an in-memory bleve index and indexes all vault notes.
 func New(v *vault.Vault) (*Index, error) {
+	return NewWithOptions(v, Options{})
+}
+
+// NewWithOptions creates an in-memory index with bounded progress callbacks.
+func NewWithOptions(v *vault.Vault, options Options) (*Index, error) {
 	idx, err := bleve.NewMemOnly(buildMapping())
 	if err != nil {
 		return nil, err
 	}
 	si := &Index{idx: idx}
-	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
-		return si.Index(doc)
-	}); err != nil {
+	if err := indexVault(si, v, options); err != nil {
 		_ = si.Close()
 		return nil, err
 	}
@@ -62,6 +78,11 @@ func New(v *vault.Vault) (*Index, error) {
 // all current vault notes. Any existing directory at indexPath is removed first
 // so full reloads cannot retain stale documents for deleted notes.
 func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
+	return NewPersistentWithOptions(v, indexPath, Options{})
+}
+
+// NewPersistentWithOptions creates a persistent index with bounded progress callbacks.
+func NewPersistentWithOptions(v *vault.Vault, indexPath string, options Options) (*Index, error) {
 	if err := os.RemoveAll(indexPath); err != nil {
 		return nil, err
 	}
@@ -74,13 +95,33 @@ func NewPersistent(v *vault.Vault, indexPath string) (*Index, error) {
 	}
 
 	si := &Index{idx: idx}
-	if err := v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
-		return si.Index(doc)
-	}); err != nil {
+	if err := indexVault(si, v, options); err != nil {
 		_ = si.Close()
 		return nil, err
 	}
 	return si, nil
+}
+
+func indexVault(index *Index, v *vault.Vault, options Options) error {
+	// #nosec G115 -- Count is map len: nonnegative and int fits uint64 on supported architectures.
+	progress := IndexProgress{TotalDocuments: uint64(v.Count())}
+	if options.ObserveIndexed != nil {
+		options.ObserveIndexed(progress)
+	}
+	return v.ForEachSearchDocument(func(doc vault.SearchDocument) error {
+		if err := index.Index(doc); err != nil {
+			return err
+		}
+		progress.ProcessedDocuments++
+		progress.IndexedBytes += uint64(len(doc.Slug) + len(doc.Title) + len(doc.Body) + len(doc.Excerpt))
+		for _, tag := range doc.Tags {
+			progress.IndexedBytes += uint64(len(tag))
+		}
+		if options.ObserveIndexed != nil {
+			options.ObserveIndexed(progress)
+		}
+		return nil
+	})
 }
 
 // OpenPersistent opens an existing persistent bleve index at indexPath.

@@ -103,6 +103,32 @@ type SearchDocument struct {
 	Excerpt string
 }
 
+// LoadStage is a finite, content-free vault build phase suitable for traces and metrics.
+type LoadStage string
+
+const (
+	LoadStageWalkParse  LoadStage = "vault_walk_parse"
+	LoadStageNormalize  LoadStage = "vault_normalize"
+	LoadStageWikiLinks  LoadStage = "wiki_link_index"
+	LoadStageBacklinks  LoadStage = "backlinks"
+	LoadStageRenderHTML LoadStage = "render_html"
+)
+
+// LoadProgress reports completed candidate notes and source bytes. TotalNotes
+// and TotalBytes count publish-eligible Markdown candidates before parsing;
+// parse failures and publish:false notes still count as processed work.
+type LoadProgress struct {
+	Stage          LoadStage
+	ProcessedNotes uint64
+	TotalNotes     uint64
+	ProcessedBytes uint64
+	TotalBytes     uint64
+}
+
+// LoadObserver receives bounded progress while LoadAll holds the vault write
+// lock. It must not call back into the Vault.
+type LoadObserver func(LoadProgress)
+
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
 	mu            sync.RWMutex
@@ -114,10 +140,16 @@ type Vault struct {
 	root          string               // absolute path to vault directory
 	ignore        *ignore.Ignore       // compiled .vault-ignore; nil/empty means exclude nothing
 	configMatcher *vaultconfig.Matcher // compiled .publish/config.yaml blacklist; nil/empty means exclude nothing
+	loadObserver  LoadObserver         // optional bounded lifecycle callback
 }
 
 // Option configures a Vault.
 type Option func(*Vault)
+
+// WithLoadObserver reports bounded load-stage progress.
+func WithLoadObserver(observer LoadObserver) Option {
+	return func(v *Vault) { v.loadObserver = observer }
+}
 
 // WithConfig attaches a vault config (blacklist matcher) to the vault. When
 // set, the loader excludes paths matched by the config blacklist in addition
@@ -163,6 +195,40 @@ func New(rootDir string, opts ...Option) (*Vault, error) {
 	return v, nil
 }
 
+func (v *Vault) observeLoad(progress LoadProgress) {
+	if v.loadObserver != nil {
+		v.loadObserver(progress)
+	}
+}
+
+func (v *Vault) loadCandidateTotals() (uint64, uint64, error) {
+	var notes, bytes uint64
+	err := filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if path != v.root && strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			if path != v.root && v.ShouldPruneDir(path) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") || v.IsExcluded(path, false) {
+			return nil
+		}
+		notes++
+		if info.Size() > 0 {
+			// #nosec G115 -- a positive int64 is exactly representable by uint64.
+			bytes += uint64(info.Size())
+		}
+		return nil
+	})
+	return notes, bytes, err
+}
+
 // LoadAll scans the vault directory and parses every .md file.
 func (v *Vault) LoadAll() error {
 	v.mu.Lock()
@@ -178,12 +244,18 @@ func (v *Vault) LoadAll() error {
 	// individually below.
 	counts := map[ExclusionReason]int{}
 	collisions := 0
+	totalNotes, totalBytes, err := v.loadCandidateTotals()
+	if err != nil {
+		return err
+	}
+	var processedNotes, processedBytes uint64
+	v.observeLoad(LoadProgress{Stage: LoadStageWalkParse, TotalNotes: totalNotes, TotalBytes: totalBytes})
 	drop := func(absPath string, reason ExclusionReason) {
 		v.excluded[v.relPath(absPath)] = reason
 		counts[reason]++
 	}
 
-	err := filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // skip unreadable entries
 		}
@@ -214,6 +286,15 @@ func (v *Vault) LoadAll() error {
 			drop(path, v.exclusionMechanism(path, false))
 			return nil
 		}
+		processedNotes++
+		if info.Size() > 0 {
+			// #nosec G115 -- a positive int64 is exactly representable by uint64.
+			processedBytes += uint64(info.Size())
+		}
+		defer v.observeLoad(LoadProgress{
+			Stage: LoadStageWalkParse, ProcessedNotes: processedNotes, TotalNotes: totalNotes,
+			ProcessedBytes: processedBytes, TotalBytes: totalBytes,
+		})
 		note, err := v.loadNote(path, info)
 		if err != nil {
 			// Always individual and always visible: an unparseable note is a
@@ -259,10 +340,18 @@ func (v *Vault) LoadAll() error {
 			len(v.notes), formatExclusionCounts(counts), collisions)
 	}
 
+	v.observeLoad(LoadProgress{Stage: LoadStageNormalize, TotalNotes: 1})
 	v.buildNormalizedIndex()
+	v.observeLoad(LoadProgress{Stage: LoadStageNormalize, ProcessedNotes: 1, TotalNotes: 1})
+	v.observeLoad(LoadProgress{Stage: LoadStageWikiLinks, TotalNotes: 1})
 	v.buildWikiLinkIndex()
+	v.observeLoad(LoadProgress{Stage: LoadStageWikiLinks, ProcessedNotes: 1, TotalNotes: 1})
+	v.observeLoad(LoadProgress{Stage: LoadStageBacklinks, TotalNotes: 1})
 	v.buildBacklinks()
+	v.observeLoad(LoadProgress{Stage: LoadStageBacklinks, ProcessedNotes: 1, TotalNotes: 1})
+	v.observeLoad(LoadProgress{Stage: LoadStageRenderHTML, TotalNotes: uint64(len(v.notes))})
 	v.rebuildHTML()
+	v.observeLoad(LoadProgress{Stage: LoadStageRenderHTML, ProcessedNotes: uint64(len(v.notes)), TotalNotes: uint64(len(v.notes))})
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -88,6 +89,47 @@ func TestCountReturnsLoadedNoteCount(t *testing.T) {
 	}
 	if got := v.Count(); got != 2 {
 		t.Fatalf("Count() = %d, want 2", got)
+	}
+}
+
+func TestLoadObserverReportsBoundedStageNoteAndByteProgress(t *testing.T) {
+	root := t.TempDir()
+	published := []byte("# Published\n\nbody")
+	hidden := []byte("---\npublish: false\n---\n# Hidden")
+	if err := os.WriteFile(filepath.Join(root, "Published.md"), published, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Hidden.md"), hidden, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var progress []LoadProgress
+	v, err := New(root, WithLoadObserver(func(value LoadProgress) { progress = append(progress, value) }))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if v.Count() != 1 {
+		t.Fatalf("published notes = %d, want 1", v.Count())
+	}
+	if len(progress) < 10 {
+		t.Fatalf("too few progress events: %#v", progress)
+	}
+	first, walkDone := progress[0], progress[2]
+	wantBytes := uint64(len(published) + len(hidden))
+	if first.Stage != LoadStageWalkParse || first.ProcessedNotes != 0 || first.TotalNotes != 2 || first.TotalBytes != wantBytes {
+		t.Fatalf("walk start = %#v", first)
+	}
+	if walkDone.Stage != LoadStageWalkParse || walkDone.ProcessedNotes != 2 || walkDone.ProcessedBytes != wantBytes {
+		t.Fatalf("walk completion = %#v", walkDone)
+	}
+	var stages []LoadStage
+	for _, value := range progress {
+		if len(stages) == 0 || stages[len(stages)-1] != value.Stage {
+			stages = append(stages, value.Stage)
+		}
+	}
+	wantStages := []LoadStage{LoadStageWalkParse, LoadStageNormalize, LoadStageWikiLinks, LoadStageBacklinks, LoadStageRenderHTML}
+	if !reflect.DeepEqual(stages, wantStages) {
+		t.Fatalf("stages = %v, want %v", stages, wantStages)
 	}
 }
 

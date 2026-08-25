@@ -1,15 +1,17 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-go-golems/measure/pkg/collector"
 	"github.com/go-go-golems/publish-vault/pkg/search"
 	"github.com/go-go-golems/publish-vault/pkg/vault"
 	"github.com/go-go-golems/publish-vault/pkg/vaultconfig"
@@ -28,6 +30,7 @@ var oldSnapshotCloseDelay = 5 * time.Second
 // RuntimeOptions configures how runtime snapshots are loaded.
 type RuntimeOptions struct {
 	SearchIndexPath string
+	measurement     *runtimeMeasurement
 	// VaultConfigPath is the vault config file (publish blacklist) to read. An
 	// empty value means <resolvedRoot>/.publish/config.yaml. The file is read
 	// again for every snapshot, so a reload picks up edits to the config and a
@@ -56,6 +59,7 @@ type RuntimeState struct {
 	searchIndexPath string
 	vaultConfigPath string
 	snapshot        *Snapshot
+	measurement     *runtimeMeasurement
 
 	// reloadMu serialises the expensive build so two reloads can never be in
 	// flight at once. Building a snapshot of the production vault costs about
@@ -74,15 +78,18 @@ func NewRuntimeState(configuredRoot string) (*RuntimeState, error) {
 }
 
 func NewRuntimeStateWithOptions(configuredRoot string, opts RuntimeOptions) (*RuntimeState, error) {
-	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath, opts.VaultConfigPath)
+	run := opts.measurement.startRun("initial_load")
+	snap, err := loadSnapshot(configuredRoot, opts.SearchIndexPath, opts.VaultConfigPath, run)
 	if err != nil {
+		run.finish(err)
 		return nil, err
 	}
+	run.switchPhase("snapshot_swap", 1, "snapshots")
+	run.setProgress(1)
+	run.finish(nil)
 	return &RuntimeState{
-		configuredRoot:  configuredRoot,
-		searchIndexPath: opts.SearchIndexPath,
-		vaultConfigPath: opts.VaultConfigPath,
-		snapshot:        snap,
+		configuredRoot: configuredRoot, searchIndexPath: opts.SearchIndexPath,
+		vaultConfigPath: opts.VaultConfigPath, snapshot: snap, measurement: opts.measurement,
 	}, nil
 }
 
@@ -135,29 +142,36 @@ func (s *RuntimeState) Reload() error {
 	}
 
 	logMemoryPhase("reload_start", "configuredRoot", configured)
-	next, err := loadSnapshot(configured, s.searchIndexPath, s.vaultConfigPath)
+	run := s.measurement.startRun("reload")
+	next, err := loadSnapshot(configured, s.searchIndexPath, s.vaultConfigPath, run)
 	if err != nil {
+		run.finish(err)
 		logMemoryPhase("reload_failed", "configuredRoot", configured, "error", err.Error())
 		return err
 	}
 
+	run.switchPhase("snapshot_swap", 1, "snapshots")
 	s.mu.Lock()
 	old := s.snapshot
 	s.snapshot = next
 	s.mu.Unlock()
-	closeSnapshotAfter(old, oldSnapshotCloseDelay)
+	run.setProgress(1)
+	run.finish(nil)
+	closeSnapshotAfter(old, oldSnapshotCloseDelay, s.measurement)
 	logMemoryPhase("reload_swapped", "configuredRoot", configured, "resolvedRoot", next.ResolvedRoot, "revision", next.Revision, "duration", time.Since(started).String())
 	return nil
 }
 
-func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string) (*Snapshot, error) {
+func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string, run *measurementRun) (*Snapshot, error) {
 	started := time.Now()
 	logMemoryPhase("load_start", "configuredRoot", configuredRoot, "persistentSearch", fmt.Sprint(searchIndexPath != ""))
 
+	run.switchPhase("resolve_root", 1, "roots")
 	resolvedRoot, err := resolveRoot(configuredRoot)
 	if err != nil {
 		return nil, err
 	}
+	run.setProgress(1)
 	revision := snapshotRevision(resolvedRoot, time.Now())
 	logMemoryPhase("load_resolved_root", "configuredRoot", configuredRoot, "resolvedRoot", resolvedRoot, "revision", revision)
 
@@ -168,14 +182,14 @@ func loadSnapshot(configuredRoot, searchIndexPath, vaultConfigPath string) (*Sna
 	vaultCfg := loadVaultConfig(resolvedRoot, vaultConfigPath)
 
 	vaultStarted := time.Now()
-	v, err := vault.New(resolvedRoot, vault.WithConfig(vaultCfg))
+	v, err := vault.New(resolvedRoot, vault.WithConfig(vaultCfg), vault.WithLoadObserver(run.observeVault))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
 	logMemoryPhase("load_vault_done", "resolvedRoot", resolvedRoot, "revision", revision, "notes", fmt.Sprint(v.Count()), "duration", time.Since(vaultStarted).String())
 
 	searchStarted := time.Now()
-	si, indexDir, err := buildSearchIndex(v, searchIndexPath, revision)
+	si, indexDir, err := buildSearchIndex(v, searchIndexPath, revision, run)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build search index: %w", err)
 	}
@@ -258,13 +272,13 @@ func loadVaultConfig(resolvedRoot, configPath string) *vaultconfig.Config {
 // quarter that size is already the point where an operator should know.
 const inMemoryIndexWarnNotes = 400
 
-func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search.Index, string, error) {
+func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string, run *measurementRun) (*search.Index, string, error) {
 	if searchIndexPath == "" {
 		if n := v.Count(); n >= inMemoryIndexWarnNotes {
 			log.Printf("warning: search index is in memory for %d notes and will dominate heap usage; "+
 				"pass --search-index-path <writable-dir> to keep it on disk (needs a volume, not tmpfs)", n)
 		}
-		si, err := search.New(v)
+		si, err := search.NewWithOptions(v, search.Options{ObserveIndexed: run.observeSearch})
 		return si, "", err
 	}
 
@@ -287,28 +301,32 @@ func buildSearchIndex(v *vault.Vault, searchIndexPath, revision string) (*search
 		return nil, "", err
 	}
 
-	si, err := search.NewPersistent(v, buildIndexDir)
+	si, err := search.NewPersistentWithOptions(v, buildIndexDir, search.Options{ObserveIndexed: run.observeSearch})
 	if err != nil {
 		_ = os.RemoveAll(buildDir)
 		return nil, "", err
 	}
+	run.switchPhase("index_publish", 3, "steps")
 	if err := si.Close(); err != nil {
 		_ = os.RemoveAll(buildDir)
 		return nil, "", err
 	}
+	run.setProgress(1)
 	if err := os.Rename(buildDir, finalDir); err != nil {
 		_ = os.RemoveAll(buildDir)
 		return nil, "", err
 	}
+	run.setProgress(2)
 	si, err = search.OpenPersistent(finalIndexDir)
 	if err != nil {
 		_ = os.RemoveAll(finalDir)
 		return nil, "", err
 	}
+	run.setProgress(3)
 	return si, finalDir, nil
 }
 
-func closeSnapshotAfter(snap *Snapshot, delay time.Duration) {
+func closeSnapshotAfter(snap *Snapshot, delay time.Duration, measurement *runtimeMeasurement) {
 	if snap == nil {
 		return
 	}
@@ -316,16 +334,26 @@ func closeSnapshotAfter(snap *Snapshot, delay time.Duration) {
 		if delay > 0 {
 			time.Sleep(delay)
 		}
+		run := measurement.startTraceOnlyRun("snapshot_release")
+		run.switchPhase("old_snapshot_release", 1, "snapshots")
+		var releaseErrors []error
 		if snap.Search != nil {
 			if err := snap.Search.Close(); err != nil {
+				releaseErrors = append(releaseErrors, err)
 				log.Printf("warning: close search index for revision %s: %v", snap.Revision, err)
 			}
 		}
 		if snap.IndexDir != "" {
 			if err := os.RemoveAll(snap.IndexDir); err != nil {
+				releaseErrors = append(releaseErrors, err)
 				log.Printf("warning: remove old search index dir %s: %v", snap.IndexDir, err)
 			}
 		}
+		releaseErr := errors.Join(releaseErrors...)
+		if releaseErr == nil {
+			run.setProgress(1)
+		}
+		run.finish(releaseErr)
 	}()
 }
 
@@ -355,14 +383,13 @@ type memoryStats struct {
 }
 
 func currentMemoryStats() memoryStats {
-	var m goruntime.MemStats
-	goruntime.ReadMemStats(&m)
+	memory, err := collector.NewRuntimeReader().ReadPID(context.Background(), os.Getpid())
+	if err != nil {
+		return memoryStats{}
+	}
 	return memoryStats{
-		HeapAllocBytes: m.HeapAlloc,
-		HeapSysBytes:   m.HeapSys,
-		HeapInuseBytes: m.HeapInuse,
-		NextGCBytes:    m.NextGC,
-		NumGC:          m.NumGC,
+		HeapAllocBytes: memory.HeapAllocBytes, HeapSysBytes: memory.HeapSysBytes,
+		HeapInuseBytes: memory.HeapInuseBytes, NextGCBytes: memory.GCGoalBytes, NumGC: memory.NumGC,
 	}
 }
 

@@ -144,7 +144,7 @@ func TestBuildSearchIndexReopensPersistentIndexAtFinalPath(t *testing.T) {
 		t.Fatalf("vault.New() error = %v", err)
 	}
 	searchBase := filepath.Join(t.TempDir(), "search")
-	si, finalDir, err := buildSearchIndex(v, searchBase, "rev-final-path")
+	si, finalDir, err := buildSearchIndex(v, searchBase, "rev-final-path", nil)
 	if err != nil {
 		t.Fatalf("buildSearchIndex() error = %v", err)
 	}

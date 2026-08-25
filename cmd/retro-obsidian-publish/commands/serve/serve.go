@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -36,6 +37,10 @@ type Settings struct {
 	Favicon             string `glazed:"favicon"`
 	SearchIndexPath     string `glazed:"search-index-path"`
 	PprofAddr           string `glazed:"pprof-addr"`
+	MetricsAddr         string `glazed:"metrics-addr"`
+	MetricsEnvironment  string `glazed:"metrics-environment"`
+	MeasureTraceDir     string `glazed:"measure-trace-dir"`
+	MeasureInterval     string `glazed:"measure-interval"`
 	PagesDir            string `glazed:"pages-dir"`
 	Config              string `glazed:"config"`
 }
@@ -107,6 +112,22 @@ Examples:
 				fields.WithDefault(""),
 				fields.WithHelp("Listen address for net/http/pprof (e.g. 127.0.0.1:6060). Serves heap and goroutine profiles on a SEPARATE listener from the public API, so it is never exposed by the main port. Empty disables it."),
 			),
+			fields.New("metrics-addr", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Private listen address for bounded Prometheus metrics (for example 127.0.0.1:9091 or :9091 inside a cluster). Never mounted on the public HTTP mux; empty disables the listener."),
+			),
+			fields.New("metrics-environment", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Fixed low-cardinality environment label for measure metrics, such as production or local."),
+			),
+			fields.New("measure-trace-dir", fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("Optional private directory for content-free snapshot/reload JSONL traces and receipts. Empty disables files while metrics remain available."),
+			),
+			fields.New("measure-interval", fields.TypeString,
+				fields.WithDefault("1s"),
+				fields.WithHelp("Memory sample interval for snapshot/reload measurement; minimum 100ms."),
+			),
 			fields.New("pages-dir", fields.TypeString,
 				fields.WithDefault(""),
 				fields.WithHelp("Directory of widget.dsl page scripts served at /api/widget/*. Defaults to <vault>/.publish/pages; widget routes stay disabled when the directory does not exist."),
@@ -149,8 +170,18 @@ func (c *Command) RunIntoGlazeProcessor(ctx context.Context, vals *values.Values
 	if pagesDir == "" {
 		pagesDir = filepath.Join(settings.Vault, ".publish", "pages")
 	}
+	measureInterval, err := time.ParseDuration(settings.MeasureInterval)
+	if err != nil {
+		return fmt.Errorf("invalid --measure-interval %q: %w", settings.MeasureInterval, err)
+	}
 	// The config file is read by the runtime, once per vault snapshot, so an
 	// admin reload picks up config edits. An empty path defaults to
 	// <resolved vault root>/.publish/config.yaml.
-	return appserver.Run(ctx, appserver.Config{VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle, ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback, SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PprofAddr: settings.PprofAddr, PagesDir: pagesDir, VaultConfigPath: settings.Config})
+	return appserver.Run(ctx, appserver.Config{
+		VaultDir: settings.Vault, Port: settings.Port, VaultName: settings.VaultName, PageTitle: settings.PageTitle,
+		ServeWeb: settings.ServeWeb, Watch: settings.Watch, ReloadToken: reloadToken, ReloadAllowLoopback: settings.ReloadAllowLoopback,
+		SSRURL: settings.SSRURL, FaviconPath: settings.Favicon, SearchIndexPath: settings.SearchIndexPath, PprofAddr: settings.PprofAddr,
+		MetricsAddr: settings.MetricsAddr, MetricsEnvironment: settings.MetricsEnvironment, MeasureTraceDir: settings.MeasureTraceDir,
+		MeasureInterval: measureInterval, PagesDir: pagesDir, VaultConfigPath: settings.Config,
+	})
 }

@@ -49,6 +49,45 @@ func writeTestNote(t *testing.T, root, rel, content string) {
 	}
 }
 
+func TestIndexProgressForMemoryAndPersistentIndexes(t *testing.T) {
+	root := t.TempDir()
+	writeTestNote(t, root, "one.md", "# One\n\nalpha body")
+	writeTestNote(t, root, "two.md", "# Two\n\nbeta body")
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	for _, tt := range []struct {
+		name  string
+		build func(Options) (*Index, error)
+	}{
+		{name: "memory", build: func(options Options) (*Index, error) { return NewWithOptions(v, options) }},
+		{name: "persistent", build: func(options Options) (*Index, error) {
+			return NewPersistentWithOptions(v, filepath.Join(t.TempDir(), "index"), options)
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var observed []IndexProgress
+			index, err := tt.build(Options{ObserveIndexed: func(progress IndexProgress) { observed = append(observed, progress) }})
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			t.Cleanup(func() {
+				if err := index.Close(); err != nil {
+					t.Errorf("Close: %v", err)
+				}
+			})
+			if len(observed) != 3 || observed[0].ProcessedDocuments != 0 || observed[0].TotalDocuments != 2 {
+				t.Fatalf("initial/final progress = %#v", observed)
+			}
+			last := observed[len(observed)-1]
+			if last.ProcessedDocuments != 2 || last.TotalDocuments != 2 || last.IndexedBytes == 0 {
+				t.Fatalf("final progress = %#v", last)
+			}
+		})
+	}
+}
+
 func TestSearchByTag(t *testing.T) {
 	root := t.TempDir()
 	writeTestNote(t, root, "note-1.md", "---\ntags: [philosophy, stoicism]\n---\n# Note One\n\nAbout stoicism.")
