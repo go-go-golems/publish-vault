@@ -26,6 +26,19 @@ on:
       - web/**
       - deploy/gitops-targets.json
   workflow_dispatch:
+    inputs:
+      push_image:
+        description: Push the built images to ghcr.io (build-only on PRs).
+        type: boolean
+        default: true
+      force_gitops:
+        description: Open the Hetzner GitOps PR. Defaults on for main; set false to build/push only.
+        type: boolean
+        default: true
+      reason:
+        description: Short reason for the manual run (recorded in the run title).
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -37,8 +50,43 @@ concurrency:
   group: publish-image-${{ github.ref }}
   cancel-in-progress: true
 
+# Gate semantics, kept in one place:
+#   push_image      = push the built images to ghcr.io (never on pull_request).
+#   open_gitops_pr  = open the Hetzner GitOps image-bump PR.
+# A push to main enables both automatically. A manual workflow_dispatch run
+# sets them from its inputs (force_gitops defaults to true). PR runs build
+# and test only and never push or open a GitOps PR.
+# Vault JWT auth for the GitOps PR requires event_name in {push, workflow_dispatch}
+# and ref == refs/heads/main; the retro-obsidian-publish-gitops-pr role is bound
+# to exactly those claims, so a manual run from main can mint the GitOps PR token.
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      push_image: ${{ steps.g.outputs.push_image }}
+      open_gitops_pr: ${{ steps.g.outputs.open_gitops_pr }}
+    steps:
+      - id: g
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "push_image=false" >> "$GITHUB_OUTPUT"
+            echo "open_gitops_pr=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "push_image=${{ inputs.push_image }}" >> "$GITHUB_OUTPUT"
+            # GitOps PR only makes sense on main; honor the input's force flag there.
+            if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ inputs.force_gitops }}" = "true" ]; then
+              echo "open_gitops_pr=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "open_gitops_pr=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # push to main
+            echo "push_image=true" >> "$GITHUB_OUTPUT"
+            echo "open_gitops_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release-ssr:
+    needs: gate
     uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
     secrets: inherit
     with:
@@ -52,13 +100,13 @@ jobs:
         pnpm --dir web check
         pnpm --dir web build:all
       go_version_file: go.mod
-      push_image: ${{ github.event_name != 'pull_request' }}
+      push_image: ${{ needs.gate.outputs.push_image == 'true' }}
       open_gitops_pr: false
       tooling_repository: go-go-golems/infra-tooling
       tooling_ref: main
 
   release:
-    needs: release-ssr
+    needs: [gate, release-ssr]
     uses: go-go-golems/infra-tooling/.github/workflows/publish-ghcr-image.yml@main
     secrets: inherit
     with:
@@ -68,8 +116,8 @@ jobs:
         go test ./...
       go_version_file: go.mod
       gitops_target_config: deploy/gitops-targets.json
-      push_image: ${{ github.event_name != 'pull_request' }}
-      open_gitops_pr: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      push_image: ${{ needs.gate.outputs.push_image == 'true' }}
+      open_gitops_pr: ${{ needs.gate.outputs.open_gitops_pr == 'true' }}
       gitops_pr_token_source: github_app
       vault_role: retro-obsidian-publish-gitops-pr
       gitops_app_secret_path: kv/data/ci/github/retro-obsidian-publish/gitops-pr-app
