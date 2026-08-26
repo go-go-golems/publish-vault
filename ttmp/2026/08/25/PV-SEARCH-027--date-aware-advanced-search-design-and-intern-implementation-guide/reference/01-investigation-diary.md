@@ -469,7 +469,7 @@ The implementation order is deliberately backend/domain first. Shared date fixtu
 
 **Inferred user intent:** Hand this ticket to a new engineer and have them understand not just which files to edit, but why the boundaries and validation order exist.
 
-**Commit (code):** pending Phase 4 documentation commit
+**Commit (code):** `585646f` — `docs(PV-SEARCH-027): write intern implementation guide`
 
 ### What I did
 
@@ -552,5 +552,7 @@ subordinate architecture/UX diagrams: 6 total across ticket
 main implementation languages: Go and TypeScript
 persistent backend: Bleve v2.6.0
 frontend state: React Router URL + RTK Query
+P4 completion slip printed after commit: yes
+Phase 4 task: complete
 implementation changes in ticket: none
 ```
