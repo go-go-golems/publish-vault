@@ -33,8 +33,12 @@ RelatedFiles:
       Note: Merged primary design contract
     - Path: repo://web/src/search/noteDate.ts
       Note: TS date resolver mirroring Go
+    - Path: repo://web/src/search/searchParams.ts
+      Note: URL codec and normalization
     - Path: repo://web/src/vault/staticVault.ts
-      Note: Static parity and JSON_SCHEMA parsing
+      Note: |-
+        Static parity and JSON_SCHEMA parsing
+        staticSearchAdvanced parity
 ExternalSources:
     - https://pkg.go.dev/github.com/blevesearch/bleve/v2
 Summary: Phased implementation map for PV-SEARCH-028, anchoring each phase to the merged PV-SEARCH-027 design contracts, files, gates, and review risks.
@@ -42,6 +46,7 @@ LastUpdated: 2026-08-26T01:46:00-04:00
 WhatFor: Knowing which files change in each phase and what gate must pass before the next phase starts.
 WhenToUse: Read before starting or reviewing any PV-SEARCH-028 phase.
 ---
+
 
 
 

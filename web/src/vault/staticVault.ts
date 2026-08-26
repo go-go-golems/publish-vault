@@ -8,7 +8,7 @@
  * This module is the "static backend" used when VITE_API_URL is not set.
  */
 
-import { JSON_SCHEMA, load as yamlLoad } from "js-yaml";
+import { load as yamlLoad, JSON_SCHEMA } from "js-yaml";
 import { marked } from "marked";
 import type {
   Note,
@@ -18,6 +18,20 @@ import type {
   TagCount,
 } from "../types";
 import type { SiteConfig } from "../store/vaultApi";
+import { resolveNoteDates, apiValue, display as displayDate } from "../search/noteDate";
+import {
+  normalizeSearchRequest,
+  isEffective,
+  dateOnlyToInstant,
+  dateOnlyNextDayInstant,
+} from "../search/searchParams";
+import type {
+  DateField,
+  SearchRequest,
+  SearchResponse,
+  SearchResultDate,
+  SearchSort,
+} from "../types";
 
 // ── Marked wiki-link extension ───────────────────────────────────
 // We register a custom inline token so marked never sees raw HTML —
@@ -214,7 +228,7 @@ interface RawNote {
   modTime: string;
 }
 
-function buildVault(): {
+export function buildVaultFromRaw(rawFiles: Record<string, string>): {
   notes: Map<string, Note>;
   list: NoteListItem[];
   tree: FileNode;
@@ -318,6 +332,7 @@ function buildVault(): {
       wikiLinks: (wikiLinkMap.get(rn.slug) ?? []).map((t) => ({ target: t })),
       backlinks: backlinkMap.get(rn.slug) ?? [],
       modTime: rn.modTime,
+      dates: resolveNoteDates(rn.frontmatter).dates,
       rawMarkdown: rn.rawMarkdown,
     });
   }
@@ -404,10 +419,10 @@ function buildVault(): {
 }
 
 // ── Singleton vault instance ──────────────────────────────────────
-let _vault: ReturnType<typeof buildVault> | null = null;
+let _vault: ReturnType<typeof buildVaultFromRaw> | null = null;
 
 function getVault() {
-  if (!_vault) _vault = buildVault();
+  if (!_vault) _vault = buildVaultFromRaw(rawFiles);
   return _vault;
 }
 
@@ -468,12 +483,165 @@ export function staticSearch(query: string): SearchResult[] {
         title: note.title,
         excerpt: note.excerpt,
         tags: note.tags,
+        path: note.path,
         score,
       });
     }
   }
 
   return results.sort((a, b) => b.score - a.score);
+}
+
+// ── Advanced static search (PV-SEARCH-028) ────────────────────────
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  let prev = new Array(b.length + 1);
+  let curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[b.length];
+}
+
+/** Pinned legacy #tag inclusion contract: prefix for queries of at most three
+ * characters, otherwise exact or edit-distance-one over normalized tags. This
+ * mirrors the backend's deployed dynamic behavior so static and dynamic modes
+ * include the same notes. */
+function legacyTagMatches(normalizedTags: string[], tagQuery: string): boolean {
+  if (tagQuery.length <= 3) {
+    return normalizedTags.some((t) => t.startsWith(tagQuery));
+  }
+  return normalizedTags.some((t) => t === tagQuery || levenshtein(t, tagQuery) <= 1);
+}
+
+function noteTextMatches(note: Note, q: string): boolean {
+  return (
+    note.title.toLowerCase().includes(q) ||
+    note.tags.some((t) => t.toLowerCase().includes(q)) ||
+    note.excerpt.toLowerCase().includes(q)
+  );
+}
+
+function textScore(note: Note, q: string, tagQuery: string | null): number {
+  if (tagQuery) {
+    return legacyTagMatches(note.tags.map((t) => t.toLowerCase()), tagQuery) ? 3 : 0;
+  }
+  const title = note.title.toLowerCase().includes(q) ? 2 : 0;
+  const tag = note.tags.some((t) => t.toLowerCase().includes(q)) ? 1.5 : 0;
+  const content = note.excerpt.toLowerCase().includes(q) ? 1 : 0;
+  return title + tag + content;
+}
+
+function dateInstantForField(note: Note, field: DateField | ""): Date | null {
+  if (!note.dates) return null;
+  if (field === "created") return note.dates.created?.value ?? null;
+  if (field === "updated") return note.dates.updated?.value ?? null;
+  const d = displayDate(note.dates).date;
+  return d ? d.value : null;
+}
+
+function displayInstant(note: Note): Date | null {
+  return dateInstantForField(note, "display");
+}
+
+function noteMatchesAdvanced(note: Note, req: SearchRequest, tagQuery: string | null, qLower: string): boolean {
+  if (req.query) {
+    if (tagQuery) {
+      if (!legacyTagMatches(note.tags.map((t) => t.toLowerCase()), tagQuery)) return false;
+    } else if (!noteTextMatches(note, qLower)) {
+      return false;
+    }
+  }
+  if (req.tags.length > 0) {
+    const normTags = note.tags.map((t) => t.toLowerCase());
+    const match = req.tagMode === "any"
+      ? req.tags.some((t) => normTags.includes(t))
+      : req.tags.every((t) => normTags.includes(t));
+    if (!match) return false;
+  }
+  if (req.pathPrefixes.length > 0) {
+    const normPath = note.path.toLowerCase().replace(/^\.\//, "").replace(/^\//, "");
+    if (!req.pathPrefixes.some((p) => normPath.startsWith(p))) return false;
+  }
+  if (req.dateFrom || req.dateTo) {
+    const instant = dateInstantForField(note, req.dateField);
+    if (instant === null) return false;
+    const t = instant.getTime();
+    if (req.dateFrom && t < dateOnlyToInstant(req.dateFrom).getTime()) return false;
+    if (req.dateTo && t >= dateOnlyNextDayInstant(req.dateTo).getTime()) return false;
+  }
+  return true;
+}
+
+/** staticSearchAdvanced reproduces the backend advanced-search inclusion and
+ * ordering contract in the browser: exact tag all/any, path prefixes, date
+ * ranges, deterministic sorts, pagination, and a total count. It does not
+ * promise Bleve score parity. */
+export function staticSearchAdvanced(req: SearchRequest): SearchResponse {
+  return searchAdvancedInNotes(getVault().notes, req);
+}
+
+/** searchAdvancedInNotes runs the static advanced-search contract against an
+ * arbitrary notes map, so tests can feed controlled fixtures without the
+ * singleton demo vault. */
+export function searchAdvancedInNotes(notes: Map<string, Note>, req: SearchRequest): SearchResponse {
+  const { request } = normalizeSearchRequest(req);
+  const all = Array.from(notes.values());
+  if (!isEffective(request)) {
+    return { results: [], total: 0, limit: request.limit, offset: request.offset, sort: request.sort as SearchSort };
+  }
+  const qLower = request.query.toLowerCase();
+  const tagQuery = extractStaticTagQuery(request.query);
+  const scored = all
+    .filter((note) => noteMatchesAdvanced(note, request, tagQuery, qLower))
+    .map((note) => ({ note, score: textScore(note, qLower, tagQuery) }));
+
+  if (request.sort === "newest" || request.sort === "oldest") {
+    scored.sort((a, b) => {
+      const da = displayInstant(a.note);
+      const db = displayInstant(b.note);
+      if (da === null && db === null) return a.note.slug.localeCompare(b.note.slug);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      const cmp = da.getTime() - db.getTime();
+      if (cmp !== 0) return request.sort === "newest" ? -cmp : cmp;
+      return a.note.slug.localeCompare(b.note.slug);
+    });
+  } else {
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      return a.note.slug.localeCompare(b.note.slug);
+    });
+  }
+
+  const total = scored.length;
+  const page = scored.slice(request.offset, request.offset + request.limit);
+  const results: SearchResult[] = page.map(({ note, score }) => {
+    const shown = note.dates ? displayDate(note.dates) : { kind: "" as const, date: null };
+    const date: SearchResultDate | undefined =
+      shown.date && shown.kind
+        ? { value: apiValue(shown.date) ?? "", kind: shown.kind, precision: shown.date.precision }
+        : undefined;
+    return {
+      slug: note.slug,
+      title: note.title,
+      excerpt: note.excerpt,
+      tags: note.tags,
+      path: note.path,
+      score,
+      date,
+    };
+  });
+  return { results, total, limit: request.limit, offset: request.offset, sort: request.sort as SearchSort };
 }
 
 /** Return the first note slug (used as default landing note) */

@@ -449,3 +449,129 @@ repeated singletons: rejected (400)
 lint: 0 issues
 race: pass
 ```
+
+## Step 4: Phase D — shared TS types, URL codec, and static parity
+
+Phase D brings the frontend to the same typed contract as the backend. There
+are now shared TypeScript request/response types, a pure canonical URL codec, an
+RTK Query `searchAdvanced` endpoint with a canonical cache key, and a static
+`staticSearchAdvanced` that reproduces the backend's exact tag/path/date/sort/
+pagination inclusion and ordering. The static vault resolves authored dates on
+its notes and the legacy `#tag` discovery uses the pinned prefix/edit-distance
+contract.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Implement Phase D: TS types, URL codec, RTK Query advanced endpoint, and static-mode parity with shared fixtures.
+
+**Inferred user intent:** Make static and dynamic modes include and order the same notes for structured filters, with a shareable canonical URL.
+
+**Commit (code):** pending Phase D commit
+
+### What I did
+
+- Added `SearchRequest`/`SearchResponse`/`SearchResultDate`/`DateOnly`/
+  `FieldError`/`TagMode`/`DateField`/`SearchSort` to `web/src/types/index.ts`
+  and added `path`/`date` to `SearchResult` and `dates` to `Note`.
+- Added `web/src/search/searchParams.ts` with `parseDateOnly`,
+  `normalizeSearchRequest`, `canonicalizeSearchRequest`, `encodeSearchParams`,
+  `decodeSearchParams`, and `isEffective` mirroring `pkg/search/request.go`.
+- Added `web/src/search/searchParams.test.ts` (10 URL codec/normalization tests).
+- Refactored `buildVault` into `buildVaultFromRaw(rawFiles)` and resolved
+  `Note.dates` in build; extracted `searchAdvancedInNotes` for testability.
+- Implemented `staticSearchAdvanced` with exact tag all/any, path prefixes,
+  date ranges, deterministic sorts (missing date last), pagination, total, and
+  the pinned legacy `#tag` prefix/edit-distance-1 contract.
+- Added `web/src/vault/staticVault.advanced.test.ts` (11 parity tests using the
+  same Alpha/Beta/Gamma/Plain vault as the Go contract tests).
+- Added the `searchAdvanced` RTK Query endpoint (backend + static) with a
+  canonical `serializeQueryArgs` cache key and exported `useSearchAdvancedQuery`.
+- Updated legacy `staticSearch` results to include `path`.
+
+### Why
+
+- The browser URL is the committed request state; a pure codec keeps it
+  shareable and reconstructable.
+- Static and dynamic modes must include and order the same notes for metadata
+  filters; the same fixture vault proves it.
+- A canonical RTK Query cache key prevents equivalent tag orderings from
+  creating duplicate cache entries.
+
+### What worked
+
+- The 11 static parity tests use the exact Alpha/Beta/Gamma/Plain vault from
+  the Go tests and assert the same expected IDs/order, proving backend ↔ static
+  parity for structured filters, dates, sorts, and pagination.
+- Extracting `buildVaultFromRaw`/`searchAdvancedInNotes` let tests feed
+  controlled notes without the singleton demo vault.
+- The pinned legacy `#go` prefix contract matches the backend exactly for
+  short queries; edit-distance-1 covers longer tags.
+
+### What didn't work
+
+- `for...of` over `URLSearchParams` needed `Array.from` (tsconfig target).
+- `new Set(PARAM_ORDER)` inferred a literal-union Set; typed it as
+  `Set<string>`.
+- `SearchResult` gained required `path`, which broke the existing
+  `staticSearch` result literal; added `path`.
+- The empty-request sort default only applies when the raw `sort` is empty, so
+  the request type now allows `sort: ""` (and `dateField`/`tagMode` empty) to
+  mirror Go zero values.
+
+### What I learned
+
+- RTK Query `serializeQueryArgs` must produce a stable string for equivalent
+  requests; canonicalizing before encoding gives that.
+- Static text ranking (title/tag/excerpt substring) cannot match Bleve score,
+  but inclusion and deterministic tie-break (slug) can.
+- Resolving dates once at build time and storing on `Note` avoids re-parsing
+  frontmatter on every static search.
+
+### What was tricky to build
+
+The date-range boundary had to match the backend's half-open `[from, to+1day)`
+interval exactly: `t >= from && t < nextDayStart`. The static `DateOnly` instant
+helpers (`dateOnlyToInstant`, `dateOnlyNextDayInstant`) mirror Go's
+`StartUTC`/`NextDayStartUTC` so a single-day filter `[d, d]` includes the whole
+calendar day in both runtimes.
+
+The legacy `#tag` fuzzy contract is the one place static mode approximates Bleve:
+Bleve uses a fuzziness-1 MatchQuery with the standard analyzer, while static
+mode uses exact-or-Levenshtein-1 over normalized complete tags. For typical
+single-word tags these agree; the design explicitly does not promise score
+parity, and the parity fixtures use prefix (<=3) cases that match exactly.
+
+### What warrants a second pair of eyes
+
+- Confirm `staticSearchAdvanced` and the Go `SearchAdvanced` agree on the
+  shared fixture vault for every structured case (the tests assert this).
+- Confirm the RTK Query cache key is stable across equivalent tag/path orderings.
+- Confirm the static `Note.dates` field does not leak into a serialized shape
+  the static `getNote` consumer cannot handle (it is optional).
+
+### What should be done in the future
+
+- Phase E should drive `SearchPage` from the canonical URL via
+  `useSearchAdvancedQuery`, add accessible filter controls, and render result
+  dates with `<time dateTime>`.
+- A follow-up should decide whether to deprecate the legacy `useSearchQuery`.
+
+### Code review instructions
+
+- Start at `web/src/search/searchParams.ts` and `staticSearchAdvanced` in
+  `web/src/vault/staticVault.ts`.
+- Run `pnpm --dir web vitest run` and `pnpm --dir web build`.
+- Compare `staticVault.advanced.test.ts` with `pkg/search/search_advanced_test.go`.
+
+### Technical details
+
+```text
+web tests: 82/82 (added 10 searchParams + 11 static advanced)
+web build: pass
+url codec round-trip: pass
+static parity: 11/11 match Go contract
+RTK Query: searchAdvanced endpoint + useSearchAdvancedQuery
+legacy #tag: pinned prefix (<=3) / edit-distance-1 (>3)
+```

@@ -28,3 +28,11 @@ Phase C: /api/search/advanced endpoint with stable 400 field-error envelope, unk
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/api/search_request.go — Advanced handler
+
+## 2026-08-25
+
+Phase D: shared TS types, canonical URL codec, RTK Query searchAdvanced endpoint, and static-mode advanced search parity with the backend contract.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/vault/staticVault.ts — staticSearchAdvanced
