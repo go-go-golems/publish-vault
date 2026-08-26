@@ -369,7 +369,7 @@ The frontend design makes the URL the committed source of truth. Advanced contro
 
 **Inferred user intent:** Give the intern contracts that eliminate duplicated parsing, unclear AND/OR behavior, unshareable state, and backend/static drift.
 
-**Commit (code):** pending Phase 3 documentation commit
+**Commit (code):** `665c450` — `docs(PV-SEARCH-027): design advanced search contracts`
 
 ### What I did
 
@@ -450,5 +450,7 @@ committed UI state: canonical URL
 advanced UI: responsive Dialog with local draft
 facets: deferred
 probe cases passed: 5/5
+P3 completion slip printed after commit: yes
+Phase 3 task: complete
 implementation changes: none
 ```
