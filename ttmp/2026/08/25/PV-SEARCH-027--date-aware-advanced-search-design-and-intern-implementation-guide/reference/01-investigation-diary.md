@@ -454,3 +454,103 @@ P3 completion slip printed after commit: yes
 Phase 3 task: complete
 implementation changes: none
 ```
+
+## Step 5: Integrate the intern implementation handoff
+
+Phase 4 consolidated the architecture map and focused decision documents into one standalone primary guide. The guide starts with runtime invariants and repository orientation, then defines domain types, index fields, query composition, HTTP and URL contracts, UI behavior, six implementation phases, test matrices, performance acceptance, deployment, rollback, observability, mistakes, and review gates.
+
+The implementation order is deliberately backend/domain first. Shared date fixtures and typed request semantics must exist before React controls so the UI cannot become the only authoritative parser.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Produce the final intern-facing build sequence with enough technical detail to begin implementation safely, while retaining links to deeper evidence documents.
+
+**Inferred user intent:** Hand this ticket to a new engineer and have them understand not just which files to edit, but why the boundaries and validation order exist.
+
+**Commit (code):** pending Phase 4 documentation commit
+
+### What I did
+
+- Printed and preserved `scripts/slips/09-phase-4-start.yaml` before writing the handoff.
+- Inspected repository-owned validation targets and frontend package scripts.
+- Rewrote the primary guide as a standalone architecture/design/implementation document.
+- Added repository maps, Go and TypeScript contracts, mapping/query pseudocode, runtime and query diagrams, API examples, URL rules, UI state tables, implementation phases A–F, tests, commands, performance evidence requirements, rollout/rollback, observability, mistakes, review checklist, and definition of done.
+- Corrected the frontend test command to the actually installed Vitest executable: `pnpm --dir web exec vitest run`.
+- Updated the ticket status summary to show design completion and pending delivery.
+
+### Why
+
+The focused Phase 2 and Phase 3 documents are reviewable decision records, but an intern needs one reading order and one implementation sequence. The primary guide connects each decision to its owning file and gate.
+
+### What worked
+
+- Existing Makefile targets provide a comprehensive final local gate through `make ci-check`.
+- Existing persistent-index and memory infrastructure can validate mapping cost without inventing another benchmark system.
+- The design decomposes into coherent review slices, so domain, index, API, static/URL, UI, and performance changes can be committed independently.
+
+### What didn't work
+
+No command failed. While reviewing the proposed command list, I found that `web/package.json` installs Vitest but defines no `test` script. The initial draft said `pnpm --dir web test --run`, which would be an invalid handoff command. I replaced it with:
+
+```text
+pnpm --dir web exec vitest run
+```
+
+This correction occurred before the Phase 4 commit.
+
+The first automated primary-guide quality gate also stopped before staging:
+
+```text
+Traceback (most recent call last):
+  File "<stdin>", line 5, in <module>
+AssertionError
+```
+
+The script required at least 4,000 whitespace-delimited words; the draft had 3,952 and two Mermaid diagrams. I did not lower the gate. I added a concrete end-to-end request lifecycle explaining one combined text/tag/path/date request through URL, RTK Query, HTTP validation, Bleve, self-contained hits, result rendering, browser history, and static parity. The rerun exceeded the threshold.
+
+### What I learned
+
+- The repository already has direct security and build targets, so the guide should name those rather than generic “run CI” advice.
+- Mapping evolution must be reviewed against the recently tightened 32 MiB heap / 160 MiB race-compatible generated fixture budgets.
+- A feature-complete implementation needs a content-changing production reload check, not only initial startup.
+
+### What was tricky to build
+
+The implementation guide must be standalone without duplicating every focused decision paragraph. It therefore states accepted contracts and implementation steps directly, then links to subordinate evidence for alternatives and probe details.
+
+The legacy endpoint decision needs a finite compatibility boundary. The guide permits one adapter to avoid deployment-order breakage but explicitly forbids a duplicate query implementation and requires a follow-up removal decision.
+
+### What warrants a second pair of eyes
+
+- Review the six implementation phases for dependency order and PR size.
+- Confirm all commands exist on current main.
+- Review the legacy endpoint compatibility window.
+- Confirm memory/index evidence is a pre-deployment gate, not a future optimization.
+- Review whether the shared fixture location is accessible to both Go and Vite/Vitest without embedding private data.
+
+### What should be done in the future
+
+Phase 5 must validate all docs, run probes and repository tests, audit references and slips, finalize statuses/tasks/changelog, perform reMarkable dry-run and upload verification, commit/push, and preserve completion evidence.
+
+### Code review instructions
+
+- Read the primary guide in order, especially sections 11–18.
+- Verify every file path exists on current main or is explicitly marked as a new file.
+- Run every listed validation command that is applicable to documentation-only work.
+- Compare domain/API types with the Phase 2 and Phase 3 decision docs for drift.
+- Confirm no implementation code is claimed as completed by this ticket.
+
+### Technical details
+
+```text
+primary guide sections: 19
+implementation phases: A-F
+primary diagrams: 2
+subordinate architecture/UX diagrams: 6 total across ticket
+main implementation languages: Go and TypeScript
+persistent backend: Bleve v2.6.0
+frontend state: React Router URL + RTK Query
+implementation changes in ticket: none
+```

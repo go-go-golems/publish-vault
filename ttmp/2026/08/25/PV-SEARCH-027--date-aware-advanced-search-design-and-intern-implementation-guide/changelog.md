@@ -36,3 +36,11 @@ Phase 3 designed typed advanced requests, exact keyword/date/path fields, compou
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/03-advanced-search-request-index-url-and-interaction-design.md — End-to-end advanced search contract
+
+## 2026-08-25
+
+Phase 4 integrated current architecture and decisions into a standalone 19-section intern guide with six implementation phases, concrete contracts, pseudocode, diagrams, tests, performance gates, rollout, rollback, and review checklist.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/01-date-aware-advanced-search-architecture-and-implementation-guide.md — Primary intern implementation handoff

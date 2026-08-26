@@ -15,7 +15,7 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: Evidence-first design ticket for adding canonical note dates to search results and a typed advanced-search system with metadata filters, URL persistence, accessible UI, and preserved snapshot semantics.
-LastUpdated: 2026-08-25T20:35:00-04:00
+LastUpdated: 2026-08-25T21:20:00-04:00
 WhatFor: Coordinating architecture research, date semantics, API and index contracts, frontend UX, implementation sequencing, testing, and intern handoff.
 WhenToUse: Start here before changing publish-vault note metadata, Bleve mappings, search APIs, URL state, result cards, or advanced-search controls.
 ---
@@ -39,7 +39,7 @@ The primary audience is a new intern. The final guide must teach the current arc
 
 ## Status
 
-Current status: **active**
+Current status: **active — architecture, date, API, index, URL, UX, and implementation design complete; final audit and reMarkable delivery pending**
 
 ## Topics
 
