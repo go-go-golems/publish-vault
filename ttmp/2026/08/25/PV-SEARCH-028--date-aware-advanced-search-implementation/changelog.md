@@ -20,3 +20,11 @@ Phase B: typed SearchRequest/SearchResponse, Bleve date/tag/path keyword mapping
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/search/search.go — Mapping and SearchAdvanced
+
+## 2026-08-25
+
+Phase C: /api/search/advanced endpoint with stable 400 field-error envelope, unknown-parameter and repeated-singleton rejection, and legacy /api/search delegating to SearchAdvanced.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/api/search_request.go — Advanced handler

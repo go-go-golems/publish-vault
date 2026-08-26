@@ -5,8 +5,9 @@
 //	GET /api/notes          — list all notes (slug, title, tags, excerpt, modTime)
 //	GET /api/notes/{slug}   — full note (html, frontmatter, wikiLinks, backlinks)
 //	GET /api/tree           — hierarchical file tree
-//	GET /api/search?q=...   — full-text search
-//	GET /api/tags           — all tags with counts
+//	GET /api/search?q=...        — full-text search (legacy bare array)
+//	GET /api/search/advanced      — typed advanced search (envelope)
+//	GET /api/tags                 — all tags with counts
 package api
 
 import (
@@ -64,6 +65,7 @@ func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/api/notes/{slug:.*}", h.getNote).Methods("GET")
 	r.HandleFunc("/api/tree", h.getTree).Methods("GET")
 	r.HandleFunc("/api/search", h.searchNotes).Methods("GET")
+	r.HandleFunc("/api/search/advanced", h.searchAdvanced).Methods("GET")
 	r.HandleFunc("/api/tags", h.listTags).Methods("GET")
 }
 
@@ -217,7 +219,9 @@ func (h *Handler) getTree(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, v.FileTree())
 }
 
-// searchNotes performs full-text search.
+// searchNotes performs the legacy full-text search and returns a bare array.
+// It delegates to the same typed SearchAdvanced implementation as the advanced
+// endpoint so there is one search path during the compatibility window.
 func (h *Handler) searchNotes(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
@@ -225,11 +229,13 @@ func (h *Handler) searchNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, si := h.provider.Snapshot()
-	results, err := si.Search(q, 30)
+	req, _ := search.NormalizeSearchRequest(search.SearchRequest{Query: q, Limit: 30})
+	resp, err := si.SearchAdvanced(req)
 	if err != nil {
 		http.Error(w, `{"error":"search failed"}`, http.StatusInternalServerError)
 		return
 	}
+	results := resp.Results
 	if results == nil {
 		results = []search.SearchResult{}
 	}

@@ -349,3 +349,103 @@ sorts: relevance=-_score,_id newest=-display_at,_id oldest=display_at,_id
 missing date sort: last (Bleve default, pinned by test)
 range: half-open [from, to+1day)
 ```
+
+## Step 3: Phase C — advanced HTTP API
+
+Phase C exposes the typed search over HTTP. The new `/api/search/advanced`
+endpoint parses repeated and singleton parameters, rejects unknown keys,
+returns a stable 400 field-error envelope, and delegates to the shared
+`SearchAdvanced`. The legacy `/api/search` endpoint now delegates to the same
+typed implementation so there is one search path during the compatibility window.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Implement Phase C: the advanced HTTP endpoint with validation, error contract, legacy adapter, and tests.
+
+**Inferred user intent:** Give API consumers (and the future frontend) a stable, validated, documented advanced-search contract.
+
+**Commit (code):** pending Phase C commit
+
+### What I did
+
+- Added `pkg/api/search_request.go` with `parseAdvancedParams`, the accepted
+  parameter spec, the `advancedError` envelope, `jsonStatusResponse`, and the
+  `searchAdvanced` handler.
+- Registered `/api/search/advanced` in `Handler.Register`.
+- Rewrote `searchNotes` to delegate to `SearchAdvanced` (legacy bare array kept).
+- Added `pkg/api/search_advanced_test.go` (9 contract tests: envelope, empty
+  array, filter-only, before_date_from, unknown parameter, repeated singleton,
+  invalid limit, invalid date, legacy bare array).
+- Updated the README API reference table and added an advanced-search curl example.
+
+### Why
+
+- A second endpoint avoids breaking existing bundles/scripts during deployment
+  order differences; both handlers share one typed search method.
+- Rejecting unknown parameters prevents misspelled filters from returning
+  unexpectedly broad results.
+- Stable field codes (not messages) are the machine contract.
+
+### What worked
+
+- The legacy endpoint delegating to `SearchAdvanced` kept the existing API test
+  green and preserved the bare-array response shape.
+- Empty results serialize as `[]` not `null` because the handler nil-checks.
+
+### What didn't work
+
+- First build failed: `encoding/json` was not imported in `search_request.go`.
+- A first draft reimplemented `strings.Contains`; replaced with the stdlib call.
+- Setting `WriteHeader` before `jsonResponse` would drop the Content-Type; added
+  `jsonStatusResponse` to set Content-Type before the status code.
+
+### What I learned
+
+- `http.Header().Set` after `WriteHeader` is a no-op, so error envelopes need a
+  helper that sets Content-Type first.
+- The legacy and advanced endpoints intentionally return different shapes (bare
+  array vs envelope); the test pins that the legacy body has no `"total":` key.
+
+### What was tricky to build
+
+The error envelope must be machine-readable and content-safe: field names and
+finite codes are stable, but raw query values are never echoed into the body or
+logs. Invalid dates and limits produce parse-time errors with the same field
+names as the semantic errors from `NormalizeSearchRequest`, so the two error
+lists are concatenated and the caller sees one coherent set.
+
+### What warrants a second pair of eyes
+
+- Confirm unknown-parameter rejection does not break legitimate query-string
+  characters handled by gorilla/mux.
+- Confirm the 500 `search_unavailable` path does not leak the underlying Bleve
+  error message.
+- Confirm the legacy adapter returns the same note set as before delegating.
+
+### What should be done in the future
+
+- Add a deprecation header or help note for `/api/search` once the frontend
+  migrates fully (Phase E).
+- Consider request-scoped context for cancellation so canceled requests do not
+  log as server errors.
+
+### Code review instructions
+
+- Start at `pkg/api/search_request.go` and the `searchAdvanced` handler.
+- Run `GOWORK=off go test ./pkg/api/`.
+- Verify the README API table lists both search endpoints.
+
+### Technical details
+
+```text
+api contract tests: 9 pass
+legacy endpoint: delegates to SearchAdvanced, returns bare array
+advanced endpoint: /api/search/advanced, returns envelope
+error envelope: {"error":{"code","message","fields":[{field,code,message}]}}
+unknown params: rejected (400)
+repeated singletons: rejected (400)
+lint: 0 issues
+race: pass
+```

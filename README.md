@@ -295,7 +295,8 @@ All API endpoints are served from the same process as the web app.
 | `GET` | `/api/notes` | Lightweight list of all notes. |
 | `GET` | `/api/notes/{slug}` | Full note with HTML, frontmatter, tags, wiki links, backlinks, and modification time. |
 | `GET` | `/api/tree` | Folder tree for sidebar navigation. |
-| `GET` | `/api/search?q={query}` | Full-text search results. |
+| `GET` | `/api/search?q={query}` | Full-text search results (legacy bare array). |
+| `GET` | `/api/search/advanced` | Typed advanced search with tags, path, date range, sort, and pagination (envelope). |
 | `GET` | `/api/tags` | Tag counts. |
 | `POST` | `/api/admin/reload` | Optional administrative reload endpoint. Disabled unless configured. |
 
@@ -305,7 +306,15 @@ Example:
 curl -fsS http://127.0.0.1:8080/api/healthz | jq
 curl -fsS http://127.0.0.1:8080/api/notes | jq '.[0]'
 curl -fsS 'http://127.0.0.1:8080/api/search?q=zettelkasten' | jq
+curl -fsS 'http://127.0.0.1:8080/api/search/advanced?q=memory&tag=go&date_from=2024-01-01&date_to=2024-12-31&sort=newest&limit=20' | jq
 ```
+
+The advanced endpoint accepts `q`, repeated `tag` and `path`, `tag_mode`
+(`all`/`any`), `date_field` (`display`/`created`/`updated`), `date_from`,
+`date_to` (inclusive `YYYY-MM-DD`), `sort` (`relevance`/`newest`/`oldest`),
+`limit` (1–100), and `offset` (0–10000). Invalid input returns HTTP 400 with a
+stable `{"error":{"code","fields":[...]}}` envelope; unknown parameters are
+rejected.
 
 ---
 
