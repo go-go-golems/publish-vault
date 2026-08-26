@@ -14,10 +14,13 @@ Owners: []
 RelatedFiles:
     - Path: repo://pkg/api/api.go
       Note: Advanced endpoint and legacy adapter
+    - Path: repo://pkg/search/request.go
+      Note: Typed request and normalization
     - Path: repo://pkg/search/search.go
       Note: |-
         Bleve mapping, noteDoc, query builder, result extraction
         Bleve mapping and query builder
+        Bleve mapping and SearchAdvanced
     - Path: repo://pkg/vault/date.go
       Note: Canonical authored-date resolver
     - Path: repo://pkg/vault/vault.go
@@ -37,6 +40,7 @@ LastUpdated: 2026-08-26T01:46:00-04:00
 WhatFor: Knowing which files change in each phase and what gate must pass before the next phase starts.
 WhenToUse: Read before starting or reviewing any PV-SEARCH-028 phase.
 ---
+
 
 
 

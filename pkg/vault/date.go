@@ -208,6 +208,16 @@ func noteDateKindString(dates NoteDates) string {
 	return string(kind)
 }
 
+// noteDatePrecisionString returns the display date's precision ("date" or
+// "timestamp"), or "" when no authored date exists.
+func noteDatePrecisionString(dates NoteDates) string {
+	_, d := dates.Display()
+	if d == nil {
+		return ""
+	}
+	return string(d.Precision)
+}
+
 // dateWarningKey is the content-free metrics/log key for a rejected date.
 func dateWarningKey(w DateWarning) string {
 	return string(w.Concept) + ":" + string(w.Reason)

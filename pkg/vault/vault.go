@@ -97,15 +97,17 @@ type FileNode struct {
 // SearchDocument is the plain-text representation used by the full-text index.
 // It is built from Markdown source on demand instead of from rendered HTML.
 type SearchDocument struct {
-	Slug      string
-	Title     string
-	Body      string
-	Tags      []string
-	Excerpt   string
-	CreatedAt *time.Time
-	UpdatedAt *time.Time
-	DisplayAt *time.Time
-	DateKind  string
+	Slug          string
+	Title         string
+	Body          string
+	Tags          []string
+	Excerpt       string
+	Path          string
+	CreatedAt     *time.Time
+	UpdatedAt     *time.Time
+	DisplayAt     *time.Time
+	DateKind      string
+	DatePrecision string
 }
 
 // LoadStage is a finite, content-free vault build phase suitable for traces and metrics.
@@ -1186,15 +1188,17 @@ func (v *Vault) SearchDocument(note *Note) (SearchDocument, error) {
 		return SearchDocument{}, err
 	}
 	return SearchDocument{
-		Slug:      note.Slug,
-		Title:     note.Title,
-		Body:      parser.PlainText(raw),
-		Tags:      append([]string(nil), note.Tags...),
-		Excerpt:   note.Excerpt,
-		CreatedAt: noteDateInstant(note.Dates.Created),
-		UpdatedAt: noteDateInstant(note.Dates.Updated),
-		DisplayAt: noteDateDisplayInstant(note.Dates),
-		DateKind:  noteDateKindString(note.Dates),
+		Slug:          note.Slug,
+		Title:         note.Title,
+		Body:          parser.PlainText(raw),
+		Tags:          append([]string(nil), note.Tags...),
+		Excerpt:       note.Excerpt,
+		Path:          note.Path,
+		CreatedAt:     noteDateInstant(note.Dates.Created),
+		UpdatedAt:     noteDateInstant(note.Dates.Updated),
+		DisplayAt:     noteDateDisplayInstant(note.Dates),
+		DateKind:      noteDateKindString(note.Dates),
+		DatePrecision: noteDatePrecisionString(note.Dates),
 	}, nil
 }
 

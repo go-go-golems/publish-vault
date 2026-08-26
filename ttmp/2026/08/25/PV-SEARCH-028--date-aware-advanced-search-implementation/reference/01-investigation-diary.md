@@ -221,3 +221,131 @@ date precision: date | timestamp (separate from time.Time)
 display precedence: updated > created > absent
 invalid-date counter: content-free, keyed concept:reason
 ```
+
+## Step 2: Phase B — typed request, Bleve mapping, and query builder
+
+Phase B makes the index understand dates, exact tags, paths, and sorting. The
+Go search package now has a typed `SearchRequest`/`SearchResponse`, a normalizer
+with stable field errors, a Bleve mapping with datetime and keyword fields, a
+compound query builder, deterministic sorts, and date-aware result extraction.
+The legacy `Search`/`searchByTag` paths were refactored onto the same query and
+extraction helpers so there is one search implementation, not two.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Implement Phase B: typed request model, Bleve field mapping, compound query construction, sorting, pagination, and result extraction with dates and path.
+
+**Inferred user intent:** Make the index queryable by structured filters so Phase C (HTTP) and Phase D (static) can build on one typed contract.
+
+**Commit (code):** pending Phase B commit
+
+### What I did
+
+- Added `pkg/search/request.go` with `SearchRequest`, `SearchResponse`,
+  `SearchResultDate`, `DateOnly`, `TagMode`/`DateField`/`SearchSort` enums,
+  `NormalizeSearchRequest` with stable field errors, and `Effective()`.
+- Extended `vault.SearchDocument` with `Path` and `DatePrecision` and populated
+  them in `SearchDocument()`.
+- Extended `noteDoc` with `tags_kw`, `path`, `path_kw`, `created_at`,
+  `updated_at`, `display_at`, `date_kind`, `date_precision`; `toNoteDoc`
+  lowercases tags and the path for exact/prefix filtering.
+- Extended `buildMapping` with keyword (`tags_kw`, `path`, `path_kw`,
+  `date_kind`, `date_precision`) and datetime (`created_at`, `updated_at`,
+  `display_at`) field mappings, all stored for hit reconstruction.
+- Updated `searchDocumentBytes` to count the new fields so the PV-MEM-002 batch
+  bound stays honest.
+- Refactored `Search` and `searchByTag` onto shared `textQueryClause`,
+  `legacyTagQuery`, and `extractResults` helpers.
+- Added `buildSearchQuery`, `dateRangeQuery`, `sortFields`, and `SearchAdvanced`.
+- Added `request_test.go` and `search_advanced_test.go` (11 contract tests).
+
+### Why
+
+- One typed request object replaces positional growth and is shared by the
+  HTTP and static implementations.
+- Exact filters need separate keyword fields so current analyzed `#tag`
+  discovery stays unchanged.
+- Date ranges and sorts need datetime fields; result cards need stored
+  provenance to reconstruct the display date without a second vault lookup.
+
+### What worked
+
+- Bleve's default missing-field sort puts undated notes last for both newest
+  and oldest, so no explicit presence field was needed; the contract test pins
+  this so a Bleve upgrade cannot silently change it.
+- Refactoring legacy search onto shared helpers kept the existing
+  equivalence tests green with no behavior change.
+- The half-open `[from, to+1day)` range gives correct same-day inclusivity.
+
+### What didn't work
+
+- `golangci-lint exhaustive` required explicit enum cases in
+  `dateFieldName`/`sortFields`; added all cases plus a defensive default.
+- `bleve.NewDateRangeInclusiveQuery` takes `*bool` inclusive flags, not bool;
+  passed `&inclStart`/`&inclEnd`.
+- Sort/pagination tests initially used filter-only-empty requests, which are
+  correctly not effective; switched them to a text query matching all notes so
+  sorting across dated and undated notes is exercised.
+
+### What I learned
+
+- An empty (no text, no filters) request is not effective and returns empty by
+  design; the note-list endpoint, not the advanced endpoint, lists everything.
+- `tags_kw` must be lowercased explicitly because keyword fields use no
+  analyzer, while the analyzed `tags` field is lowercased by the standard
+  analyzer.
+- `DateOnly.Before` uses calendar order so `date_to < date_from` validation is
+  timezone-independent.
+
+### What was tricky to build
+
+The result date is reconstructed from the stored `display_at` instant plus the
+`date_kind`/`date_precision` keywords, not from a stored original literal. For
+date precision the instant is midnight UTC, which formats back to the original
+`YYYY-MM-DD`; for timestamp precision it formats to UTC RFC3339 at second
+precision. This keeps one read path and avoids storing a redundant string, but
+it depends on the instant being normalized to UTC at index time (Phase A).
+
+The no-fallthrough and alias rules from Phase A mean a note can have a valid
+`date` ignored because an invalid `created` took precedence; the date-range
+contract therefore filters on resolved display/created/updated instants only.
+
+### What warrants a second pair of eyes
+
+- Confirm `searchDocumentBytes` counting the `tags_kw` copy and `path_kw` copy
+  keeps the 1 MiB batch bound honest under the PV-MEM-002 budgets.
+- Confirm persistent reopen/equivalence still holds with the new stored fields
+  (covered by `pkg/server` race tests).
+- Confirm the `date_field` without a range is rejected rather than silently
+  ignored.
+
+### What should be done in the future
+
+- Phase C should wire `NormalizeSearchRequest` + `SearchAdvanced` behind
+  `/api/search/advanced` with stable 400 field errors and a legacy adapter.
+- Phase D should reproduce the exact tag/path/date/sort contract in TypeScript
+  with shared expected-ID fixtures.
+
+### Code review instructions
+
+- Start at `pkg/search/request.go` and `SearchAdvanced` in `pkg/search/search.go`.
+- Run `GOWORK=off go test ./pkg/search/` (request + advanced contract tests).
+- Verify legacy `TestSearchCompatibility` and persistent reopen tests still pass.
+- Inspect `buildMapping` for the stored/not-stored field decisions.
+
+### Technical details
+
+```text
+request tests: pass
+advanced contract tests: 11 pass
+legacy search equivalence: pass
+persistent reopen: pass (race)
+lint: 0 issues
+gosec: 0 issues
+new fields: tags_kw path path_kw created_at updated_at display_at date_kind date_precision
+sorts: relevance=-_score,_id newest=-display_at,_id oldest=display_at,_id
+missing date sort: last (Bleve default, pinned by test)
+range: half-open [from, to+1day)
+```

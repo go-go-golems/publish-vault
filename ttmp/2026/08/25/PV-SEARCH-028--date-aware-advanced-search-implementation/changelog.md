@@ -12,3 +12,11 @@ Phase A: canonical authored-date domain in Go and TS, shared fixture, invalid-da
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/vault/date.go — Date resolver
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/vault/staticVault.ts — JSON_SCHEMA frontmatter parsing
+
+## 2026-08-25
+
+Phase B: typed SearchRequest/SearchResponse, Bleve date/tag/path keyword mappings, compound query builder, deterministic sorts, pagination, and date-aware result extraction.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/search/search.go — Mapping and SearchAdvanced
