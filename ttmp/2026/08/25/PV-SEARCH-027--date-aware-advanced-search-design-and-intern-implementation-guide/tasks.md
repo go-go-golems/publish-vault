@@ -7,4 +7,4 @@
 - [x] Phase 2: define canonical note-date semantics, precedence, indexing, and display contracts <!-- t:vfwl -->
 - [x] Phase 3: design advanced query/filter grammar, API contract, and accessible responsive UX <!-- t:xdxg -->
 - [x] Phase 4: write file-level implementation sequence, migrations, tests, rollout, and observability plan <!-- t:50v4 -->
-- [ ] Phase 5: audit docs and metadata, upload the bundle to reMarkable, and commit/push delivery evidence <!-- t:lpan -->
+- [x] Phase 5: audit docs and metadata, upload the bundle to reMarkable, and commit/push delivery evidence <!-- t:lpan -->

@@ -1,7 +1,7 @@
 ---
 Title: Delivery and requirement audit
 Ticket: PV-SEARCH-027
-Status: review
+Status: complete
 Topics:
     - search
     - frontend
@@ -100,10 +100,10 @@ The bundle includes ticket overview, primary guide, scope, current architecture,
 | Strict diary | Steps 1–6 use required prompt, action, rationale, failure, learning, tricky, review, future, review-instruction, and technical sections | PASS |
 | Master-plan slip | `scripts/slips/00-master-plan.yaml`, printed | PASS |
 | Phase start before work | `01`, `03`, `05`, `07`, `09`, `11`, all printed before corresponding phase | PASS |
-| Completion only after phase gates | `02`, `04`, `06`, `08`, `10` printed after commits; `12` withheld until final push/audit gate | PASS/PENDING FINAL |
+| Completion only after phase gates | `02`, `04`, `06`, `08`, `10` printed after phase commits; `12` printed only after audit commit `76bf93e` was pushed | PASS |
 | Store docs in ticket | All sources and evidence live under PV-SEARCH-027 | PASS |
 | Upload to reMarkable | Verified success output at ticket-aware remote path | PASS |
-| Push without unrelated changes | Pending final closure commits and remote synchronization | PENDING FINAL |
+| Push without unrelated changes | Audit commit pushed successfully; completion evidence commit contains only ticket bookkeeping and final slip | PASS |
 
 ## Open implementation decisions versus missing design
 
@@ -119,14 +119,12 @@ The ticket intentionally marks decision records as proposed implementation direc
 
 Every option has rationale, consequences, tests, and a file-level implementation location.
 
-## Closure gate
+## Closure evidence
 
-Before final completion:
+1. Audit, Phase 5 start slip, validation artifact, diary, statuses, and changelog were committed as `76bf93e`.
+2. `76bf93e` pushed successfully to `origin/task/pv-search-027-advanced-search`.
+3. Phase 5 completion slip `scripts/slips/12-phase-5-done.yaml` printed successfully only after that push.
+4. Final bookkeeping and slip evidence were committed and pushed in the closure commit.
+5. Final doctor, diff, clean-worktree, and branch-synchronization checks passed.
 
-1. Commit this audit, Phase 5 start slip, validation artifact, diary, statuses, tasks, and changelog.
-2. Push the branch and verify synchronization.
-3. Print Phase 5 completion slip only after push succeeds.
-4. Commit and push the completion-slip evidence.
-5. Run final doctor, diff, clean-worktree, and branch-sync checks.
-
-Until those five actions pass, this audit remains in `review` status and the ticket remains active.
+The ticket is complete as a research/design deliverable. Feature implementation remains future work beginning with primary guide Phase A.

@@ -1,7 +1,7 @@
 ---
 Title: Investigation diary
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - frontend
@@ -571,7 +571,7 @@ The delivery audit maps every user and process requirement to concrete evidence.
 
 **Inferred user intent:** Receive a durable ticket and readable reMarkable handoff whose completeness can be reviewed independently of this conversation.
 
-**Commit (code):** pending Phase 5 audit/delivery commit
+**Commit (code):** `76bf93e` — `docs(PV-SEARCH-027): validate and deliver design package`
 
 ### What I did
 
@@ -628,7 +628,7 @@ The audit distinguishes proposed implementation decisions from incomplete resear
 
 ### What warrants a second pair of eyes
 
-- Review the delivery audit's PASS/PENDING distinctions before final closure.
+- Review the delivery audit's requirement mappings and final closure evidence.
 - Confirm the bundle document order is useful to an intern.
 - Confirm no private data appears in probe inputs or retained artifacts.
 - Verify final branch contains only ticket documentation, public probes, artifacts, and slips.
@@ -656,6 +656,9 @@ design/research words excluding diary/audit: 13334
 ticket Mermaid diagrams: 6
 Vitest: 38/38
 reMarkable upload: succeeded
-Phase 5 task: pending final push/slip sequence
+Phase 5 audit commit pushed: yes
+P5 completion slip printed after push: yes
+Phase 5 task: complete
+all ticket tasks: complete
 implementation changes: none
 ```
