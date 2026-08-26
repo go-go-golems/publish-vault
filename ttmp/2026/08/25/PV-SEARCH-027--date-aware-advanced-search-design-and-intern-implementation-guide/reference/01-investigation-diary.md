@@ -167,7 +167,7 @@ The map also identifies a compatibility constraint that shapes the eventual Blev
 
 **Inferred user intent:** Give an intern the system model necessary to modify all implementations consistently and preserve reload, static-build, and current search behavior.
 
-**Commit (code):** pending Phase 1 documentation commit
+**Commit (code):** `8a1877d` — `docs(PV-SEARCH-027): map current search architecture`
 
 ### What I did
 
@@ -248,5 +248,7 @@ current URL state: q only
 current result date field: none
 current card date prop: optional modTime
 architecture diagrams: 3
+P1 completion slip printed after commit: yes
+Phase 1 task: complete
 implementation changes: none
 ```
