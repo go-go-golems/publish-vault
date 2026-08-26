@@ -354,3 +354,101 @@ P2 completion slip printed after commit: yes
 Phase 2 task: complete
 implementation changes: none
 ```
+
+## Step 4: Design typed filters, compound queries, canonical URLs, and accessible controls
+
+Phase 3 turns the date model into a complete advanced-search contract. The design keeps current fuzzy/prefix tag discovery intact while adding exact tag arrays, folder prefixes, date ranges, deterministic sorting, bounded pagination, and a response envelope through one typed search implementation.
+
+The frontend design makes the URL the committed source of truth. Advanced controls edit a local draft and apply one canonical URL transition; filter chips, sort changes, back/forward navigation, RTK cache keys, static mode, and the HTTP endpoint all use the same request semantics.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Define exact end-to-end filter semantics and interaction states, not merely a visual filter panel.
+
+**Inferred user intent:** Give the intern contracts that eliminate duplicated parsing, unclear AND/OR behavior, unshareable state, and backend/static drift.
+
+**Commit (code):** pending Phase 3 documentation commit
+
+### What I did
+
+- Printed and preserved `scripts/slips/07-phase-3-start.yaml` before query/UX design.
+- Added `scripts/03-probe-bleve-filter-composition/main.go`.
+- Proved exact term queries over keyword arrays, all/any tag composition, keyword path prefixes, and tag-plus-date conjunction.
+- Defined `SearchRequest`, `SearchResponse`, finite enums, limits, normalization, validation, and stable field errors.
+- Designed a versioned `/api/search/advanced` envelope backed by the same typed method as the legacy adapter.
+- Specified analyzed versus exact Bleve fields, query-tree construction, path semantics, sort, pagination, and security limits.
+- Specified canonical URL encoding, RTK Query cache keys, static inclusion parity, draft/apply/cancel state, chips, result cards, responsive layout, accessibility, and all visible states.
+- Wrote decision records DR-3 through DR-5 and concrete request examples.
+
+### Why
+
+A visual panel without typed semantics would move ambiguity into hidden component code. Each filter category needs exact combination rules, normalization, bounded size, backend mapping, URL representation, and static behavior before component implementation begins.
+
+### What worked
+
+The Bleve probe returned the expected document IDs for all five compound cases. Keyword array fields support independent exact tags; conjunction and disjunction implement explicit all/any behavior; path prefix over a keyword field respects folder normalization; date and tag clauses compose normally.
+
+Existing React primitives cover dialog, buttons, inputs, tags, and scroll areas. The design can use one responsive Dialog rather than adding a new dependency solely for a mobile drawer.
+
+### What didn't work
+
+No command failed. The design rejected two tempting shortcuts:
+
+- Joining exact tags into one keyword string would make the whole list one term rather than independently filterable values.
+- Reusing the free-text field for an advanced grammar would require quoting, escaping, precedence, and parser diagnostics that are unnecessary for the requested filter set.
+
+These are recorded as rejected options rather than implementation TODOs.
+
+### What I learned
+
+- Multiple folder selections must be OR alternatives; tags require explicit all/any.
+- Filter-only requests require `MatchAllQuery` plus structured clauses and cannot use the current two-character gate.
+- A canonical URL codec is also an RTK Query cache-key normalizer.
+- Backend/static score parity is not realistic, but ordered inclusion parity for metadata filters is.
+- Facets are not needed for the first implementation because existing tag and tree endpoints can populate controls.
+
+### What was tricky to build
+
+The response envelope is useful for total and pagination but breaks the current bare-array endpoint. The design therefore adds one advanced HTTP contract while keeping one search implementation. The legacy route adapts a simple request and unwraps results for a finite compatibility window.
+
+Missing-date sort order may depend on Bleve internals. The implementation plan must require an explicit probe/test and, if necessary, a presence field or two-stage retrieval rather than leaving missing order undocumented.
+
+### What warrants a second pair of eyes
+
+- Review the decision to use `/api/search/advanced` rather than changing `/api/search` in place.
+- Review exact limits (20 tags, 10 paths, 100 result limit, 10,000 offset).
+- Confirm path filters are folder-prefix OR semantics.
+- Confirm URL defaults and history push/replace behavior.
+- Review whether total-count calculation is acceptable at expected vault size.
+- Verify all mobile dialog and chip interactions remain keyboard accessible.
+
+### What should be done in the future
+
+Phase 4 must integrate the architecture and decision docs into one intern guide with a file-level implementation order, code sketches, shared fixtures, migration/rebuild steps, local and CI validation, memory/index budgets, rollout, observability, rollback, and review checklist.
+
+### Code review instructions
+
+- Run the filter-composition probe and compare the retained JSON.
+- Trace each query category through section 6 pseudocode.
+- Round-trip the URL examples mentally against section 10 rules.
+- Verify the UI state table includes invalid URL and backend error behavior.
+- Confirm exact tags and analyzed discovery tags are separate fields.
+
+### Technical details
+
+```text
+advanced endpoint: GET /api/search/advanced
+legacy endpoint: GET /api/search?q=...
+tag exact semantics: all or any
+path semantics: normalized folder-prefix OR
+date semantics: canonical Phase 2 model
+sort: relevance, newest, oldest
+pagination: limit 1..100, offset 0..10000
+committed UI state: canonical URL
+advanced UI: responsive Dialog with local draft
+facets: deferred
+probe cases passed: 5/5
+implementation changes: none
+```

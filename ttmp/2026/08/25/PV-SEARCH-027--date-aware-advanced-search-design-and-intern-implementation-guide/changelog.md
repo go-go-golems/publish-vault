@@ -28,3 +28,11 @@ Phase 2 defined strict authored created/updated dates, no ModTime fallback, UTC 
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/02-canonical-note-date-model-and-bleve-date-contract.md — Canonical date decision and API/index contract
+
+## 2026-08-25
+
+Phase 3 designed typed advanced requests, exact keyword/date/path fields, compound Bleve queries, a versioned envelope, canonical URL state, static inclusion parity, and responsive accessible filter controls.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/03-advanced-search-request-index-url-and-interaction-design.md — End-to-end advanced search contract
