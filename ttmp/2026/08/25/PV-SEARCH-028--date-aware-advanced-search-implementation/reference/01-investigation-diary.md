@@ -575,3 +575,114 @@ static parity: 11/11 match Go contract
 RTK Query: searchAdvanced endpoint + useSearchAdvancedQuery
 legacy #tag: pinned prefix (<=3) / edit-distance-1 (>3)
 ```
+
+## Step 5: Phase E — advanced-search UI and date rendering
+
+Phase E makes the feature user-facing. SearchPage is now driven by the canonical
+URL: it decodes URL params into a typed request, queries the shared
+`useSearchAdvancedQuery`, and renders results with authored dates and paths. An
+accessible filter panel edits tags, tag mode, folder prefixes, and date range;
+the header holds the text field, sort, result count, and pagination. Invalid URL
+filters render a reset action instead of being silently dropped.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Implement Phase E: URL-driven SearchPage, accessible filter controls, sort, applied chips, pagination, and NoteCard date/path rendering.
+
+**Inferred user intent:** Deliver the visible feature so a user can filter, sort, share a URL, and see truthful authored dates.
+
+**Commit (code):** pending Phase E commit
+
+### What I did
+
+- Rewrote `SearchPage` to decode the URL via `decodeSearchParams` +
+  `normalizeSearchRequest`, query `useSearchAdvancedQuery`, and commit changes
+  back through a single `commitRequest` that re-encodes the canonical URL.
+- Added `AdvancedSearchPanel` (Radix Dialog) with tag, tag-mode, path, date
+  field, and date-range inputs; Apply merges with the current query/sort and
+  resets offset.
+- Added a header sort select, an active-filter chip row with per-chip remove,
+  a result count, and Prev/Next pagination.
+- Invalid URL filters render a reset-all banner with the field errors.
+- Updated `NoteCard` to accept `date` (rendered as `<time dateTime>` with a
+  created/updated label) and `path` (rendered as a small breadcrumb), keeping
+  `modTime` as a fallback.
+- Added NoteCard date/path stories and an AdvancedSearchPanel story.
+
+### Why
+
+- The URL is the committed request; decoding/encoding through one codec keeps
+  it shareable and reconstructable.
+- Accessible controls (labelled inputs, Radix Dialog) keep filters usable by
+  keyboard and screen readers.
+- Showing the authored date with `<time>` keeps SSR text deterministic and
+  avoids hydration mismatch.
+
+### What worked
+
+- Reusing the Phase D codec meant the page logic is mostly decode then query
+  then encode, with no duplicated validation.
+- `skip: !effective || errors.length > 0` avoids querying for empty or invalid
+  requests and lets the empty state show the TagCloud.
+- Storybook, Vitest, client build, and SSR build all pass with the new stories.
+
+### What didn't work
+
+- First tsc pass used icon names "filter" and "x" that the Icon set does not
+  expose; switched to "menu" and "close".
+- `parseDateOnly` returns `DateOnly | null`; the panel needed `?? undefined` to
+  satisfy the `DateOnly | undefined` request field.
+- `NoteCard` lacked a `path` prop; added it as an optional breadcrumb.
+
+### What I learned
+
+- One `commitRequest` funnel keeps the URL canonical and prevents partial
+  updates from drifting out of sync with Redux.
+- Pagination via offset changes the canonical URL, so a shared page link
+  includes the page.
+
+### What was tricky to build
+
+The page has two sources of truth risk: Redux `searchQuery` and the URL. The
+new SearchPage treats the URL as canonical and only uses Redux for `activeNote`
+navigation; the old `searchQuery` slice is no longer read here, so the text
+field is controlled by `request.query` (decoded from the URL). This avoids the
+dual-source drift the design warned about.
+
+Invalid filters must stay visible: the page decodes errors, skips the query,
+and shows a reset-all action rather than silently clearing the URL.
+
+### What warrants a second pair of eyes
+
+- Confirm the filter panel is keyboard-accessible (Radix Dialog focus trap).
+- Confirm the `<time>` label does not shift the calendar day across SSR/client.
+- Confirm pagination and filter changes reset offset to 0.
+
+### What should be done in the future
+
+- Add a jsdom-based SearchPage integration test once a DOM test environment is
+  adopted (the project currently uses node env).
+- Deprecate `useSearchQuery` once all consumers migrate.
+- Consider a "Load More" alternative to offset pagination for large result sets.
+
+### Code review instructions
+
+- Start at `SearchPage.tsx` and `AdvancedSearchPanel.tsx`.
+- Run `pnpm --dir web check`, `pnpm --dir web vitest run`, `pnpm --dir web build`,
+  and `pnpm --dir web build-storybook`.
+- Verify NoteCard date/path stories render.
+
+### Technical details
+
+```text
+web tests: 82/82
+web build: pass
+storybook build: pass
+backend tests: pass (cached)
+lint: 0 issues
+SearchPage: URL-driven via useSearchAdvancedQuery
+NoteCard: <time dateTime> date + path breadcrumb
+pagination: offset-based Prev/Next
+```

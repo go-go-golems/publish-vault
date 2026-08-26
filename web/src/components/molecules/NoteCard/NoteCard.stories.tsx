@@ -27,3 +27,20 @@ export const Active: Story = {
 export const NoExcerpt: Story = {
   args: { slug: "empty", title: "Empty Note", tags: ["draft"] },
 };
+
+export const WithAuthoredDate: Story = {
+  args: {
+    ...Default.args,
+    date: { value: "2024-01-15T18:45:00Z", kind: "updated", precision: "timestamp" },
+  },
+};
+
+export const DateOnly: Story = {
+  args: {
+    slug: "dated",
+    title: "Dated Note",
+    excerpt: "A note with a created date.",
+    tags: ["history"],
+    date: { value: "2024-01-15", kind: "created", precision: "date" },
+  },
+};

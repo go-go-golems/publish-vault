@@ -7,6 +7,7 @@ import React from "react";
 import { clsx } from "clsx";
 import { Tag } from "../../atoms/Tag/Tag";
 import { Icon } from "../../atoms/Icon/Icon";
+import type { SearchResultDate } from "../../../types";
 
 export interface NoteCardProps {
   slug: string;
@@ -14,10 +15,21 @@ export interface NoteCardProps {
   excerpt?: string;
   tags?: string[];
   modTime?: string;
+  /** Authored display date (created/updated) from the search result. */
+  date?: SearchResultDate;
+  /** Vault-relative path, shown as a small breadcrumb. */
+  path?: string;
   onClick?: (slug: string) => void;
   onTagClick?: (tag: string) => void;
   active?: boolean;
   className?: string;
+}
+
+function dateLabel(date: SearchResultDate): string {
+  const kind = date.kind === "updated" ? "Updated" : "Created";
+  // Date precision shows the literal; timestamp shows the UTC date for the chip.
+  const shown = date.precision === "timestamp" ? date.value.slice(0, 10) : date.value;
+  return `${kind} ${shown}`;
 }
 
 export const NoteCard: React.FC<NoteCardProps> = ({
@@ -26,6 +38,8 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   excerpt,
   tags,
   modTime,
+  date,
+  path,
   onClick,
   onTagClick,
   active,
@@ -51,6 +65,16 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           className={active ? "text-[var(--color-paper)]" : "text-[var(--color-muted-foreground)]"}
         />
         <div className="flex-1 min-w-0">
+          {path && (
+            <div
+              className={clsx(
+                "text-[10px] truncate mb-0.5",
+                active ? "text-[var(--color-paper)]/60" : "text-[var(--color-muted-foreground)]"
+              )}
+            >
+              {path}
+            </div>
+          )}
           <h3
             className={clsx(
               "text-xs font-bold leading-tight truncate",
@@ -69,7 +93,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               {excerpt}
             </p>
           )}
-          {(tags?.length || modTime) && (
+          {(tags?.length || date || modTime) && (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {tags?.slice(0, 3).map((t) => (
                 <Tag
@@ -86,7 +110,19 @@ export const NoteCard: React.FC<NoteCardProps> = ({
                   className={active ? "border-[var(--color-paper)]/60 text-[var(--color-paper)]/80" : ""}
                 />
               ))}
-              {modTime && (
+              {date ? (
+                <time
+                  dateTime={date.value}
+                  title={date.value}
+                  className={clsx(
+                    "text-[10px] ml-auto flex items-center gap-0.5",
+                    active ? "text-[var(--color-paper)]/60" : "text-[var(--color-muted-foreground)]"
+                  )}
+                >
+                  <Icon name="clock" size={9} />
+                  {dateLabel(date)}
+                </time>
+              ) : modTime ? (
                 <span
                   className={clsx(
                     "text-[10px] ml-auto flex items-center gap-0.5",
@@ -96,7 +132,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
                   <Icon name="clock" size={9} />
                   {modTime}
                 </span>
-              )}
+              ) : null}
             </div>
           )}
         </div>

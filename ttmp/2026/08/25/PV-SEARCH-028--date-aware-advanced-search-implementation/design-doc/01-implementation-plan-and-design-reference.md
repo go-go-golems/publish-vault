@@ -31,6 +31,10 @@ RelatedFiles:
       Note: Shared cross-language fixture
     - Path: repo://ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/01-date-aware-advanced-search-architecture-and-implementation-guide.md
       Note: Merged primary design contract
+    - Path: repo://web/src/components/molecules/AdvancedSearchPanel/AdvancedSearchPanel.tsx
+      Note: Accessible filter panel
+    - Path: repo://web/src/components/pages/SearchPage/SearchPage.tsx
+      Note: URL-driven advanced search page
     - Path: repo://web/src/search/noteDate.ts
       Note: TS date resolver mirroring Go
     - Path: repo://web/src/search/searchParams.ts
@@ -46,6 +50,7 @@ LastUpdated: 2026-08-26T01:46:00-04:00
 WhatFor: Knowing which files change in each phase and what gate must pass before the next phase starts.
 WhenToUse: Read before starting or reviewing any PV-SEARCH-028 phase.
 ---
+
 
 
 

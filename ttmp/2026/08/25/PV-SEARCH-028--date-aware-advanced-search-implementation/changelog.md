@@ -36,3 +36,11 @@ Phase D: shared TS types, canonical URL codec, RTK Query searchAdvanced endpoint
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/vault/staticVault.ts — staticSearchAdvanced
+
+## 2026-08-25
+
+Phase E: URL-driven SearchPage with accessible filter panel, sort, applied chips, pagination, and NoteCard authored-date/path rendering.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/components/pages/SearchPage/SearchPage.tsx — URL-driven search
