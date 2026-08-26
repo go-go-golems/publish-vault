@@ -652,17 +652,20 @@ func (si *Index) buildSearchQuery(req SearchRequest) bq.Query {
 // UTC of the day after date_to (exclusive).
 func dateRangeQuery(req SearchRequest) bq.Query {
 	field := dateFieldName(req.DateField)
-	var start, end time.Time
-	inclStart := false
-	inclEnd := false
+	// The range is half-open on the upper bound: start is midnight UTC of
+	// date_from (inclusive), end is midnight UTC of the day after date_to
+	// (exclusive). Bleve treats a zero time as an open bound regardless of the
+	// inclusive flag, so the flags are only meaningful when the bound is set.
+	start := time.Time{}
+	end := time.Time{}
 	if req.DateFrom != nil {
 		start = req.DateFrom.StartUTC()
-		inclStart = true
 	}
 	if req.DateTo != nil {
 		end = req.DateTo.NextDayStartUTC()
-		inclEnd = true
 	}
+	inclStart := true
+	inclEnd := false
 	rq := bleve.NewDateRangeInclusiveQuery(start, end, &inclStart, &inclEnd)
 	rq.SetField(field)
 	return rq

@@ -52,3 +52,12 @@ Phase F: full validation (ci-check, race, web, storybook), Docker/Compose smoke,
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-028--date-aware-advanced-search-implementation/artifacts/final/01-phase-f-validation.md — Phase F evidence
+
+## 2026-08-26
+
+PR #27 review corrections: exclusive date-range upper bound (P1), reject JS-normalized invalid calendar dates, reject explicit limit=0, reject partial numeric URL params, and surface search failures with a Retry state.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/search/search.go — Exclusive date range end
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/search/searchParams.ts — Strict date and integer parsing

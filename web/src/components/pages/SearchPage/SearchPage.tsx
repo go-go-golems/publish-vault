@@ -69,7 +69,7 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
   const effective = isEffective(request);
 
   const { data: tags, isLoading: tagsLoading } = useListTagsQuery();
-  const { data, isFetching } = useSearchAdvancedQuery(request, {
+  const { data, isFetching, isError, refetch } = useSearchAdvancedQuery(request, {
     skip: !effective || errors.length > 0,
   });
 
@@ -272,6 +272,18 @@ export const SearchPage: React.FC<SearchPageProps> = () => {
           <div className="flex items-center justify-center py-8 gap-2 text-[var(--color-muted-foreground)] text-xs">
             <Icon name="search" size={14} className="animate-pulse" />
             Searching…
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--color-muted-foreground)]">
+            <Icon name="alert" size={24} strokeWidth={1} />
+            <p className="text-xs font-bold">Search is temporarily unavailable</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="text-xs underline"
+            >
+              Retry
+            </button>
           </div>
         ) : data && data.results.length > 0 ? (
           <div className="flex flex-col gap-2">

@@ -86,8 +86,17 @@ function parseNoteDate(
   sourceKey: string,
 ): { date: NoteDate } | { reason: InvalidDateReason } {
   if (isStrictDateOnly(value)) {
-    const instant = new Date(`${value}T00:00:00Z`);
-    if (Number.isNaN(instant.getTime())) {
+    const [y, m, d] = value.split("-").map((s) => Number.parseInt(s, 10));
+    const instant = new Date(Date.UTC(y, m - 1, d));
+    if (
+      Number.isNaN(instant.getTime()) ||
+      instant.getUTCFullYear() !== y ||
+      instant.getUTCMonth() + 1 !== m ||
+      instant.getUTCDate() !== d
+    ) {
+      // JavaScript's Date normalizes nonexistent calendar dates (e.g.
+      // 2024-02-30 becomes March 1). Reject them so static mode does not
+      // silently accept authored dates the Go backend rejects.
       return { reason: "invalid_calendar_date" };
     }
     return {

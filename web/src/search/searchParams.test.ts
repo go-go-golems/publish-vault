@@ -118,4 +118,31 @@ describe("URL codec round-trip", () => {
     const { errors } = decodeSearchParams(new URLSearchParams("q=a&q=b"));
     expect(errors.some((e) => e.field === "q" && e.code === "repeated_parameter")).toBe(true);
   });
+
+  it("rejects an explicit limit of 0 instead of defaulting it", () => {
+    const { errors } = decodeSearchParams(new URLSearchParams("q=x&limit=0"));
+    expect(errors.some((e) => e.field === "limit" && e.code === "limit_out_of_range")).toBe(true);
+  });
+
+  it("rejects partially parsed numeric parameters", () => {
+    for (const bad of ["10junk", "2.5", "1e2", "0x10"]) {
+      const { errors } = decodeSearchParams(new URLSearchParams(`q=x&limit=${bad}`));
+      expect(errors.some((e) => e.field === "limit" && e.code === "limit_out_of_range"), bad).toBe(true);
+    }
+  });
+});
+
+describe("parseDateOnly rejects invalid calendar dates", () => {
+  it("rejects 2024-02-30 which JS would normalize to March 1", () => {
+    expect(parseDateOnly("2024-02-30")).toBeNull();
+  });
+  it("rejects 2024-04-31 which JS would normalize to May 1", () => {
+    expect(parseDateOnly("2024-04-31")).toBeNull();
+  });
+  it("accepts a valid leap day", () => {
+    expect(parseDateOnly("2024-02-29")).toEqual({ year: 2024, month: 2, day: 29 });
+  });
+  it("rejects a non-leap February 29", () => {
+    expect(parseDateOnly("2023-02-29")).toBeNull();
+  });
 });

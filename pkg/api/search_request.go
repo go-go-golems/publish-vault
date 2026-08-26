@@ -95,10 +95,17 @@ func parseAdvancedParams(values url.Values) (search.SearchRequest, []search.Fiel
 		req.Sort = search.SearchSort(v)
 	}
 	if v, ok := singleton("limit", "limit"); ok {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-			req.Limit = n
-		} else {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
 			errs = append(errs, search.FieldError{Field: "limit", Code: "limit_out_of_range", Message: "limit must be an integer between 1 and 100."})
+		} else if n == 0 {
+			// 0 is the internal omitted-value sentinel; an explicitly supplied
+			// zero is out of the documented 1-100 range, not a request for the
+			// default. Reject it here so normalization does not silently turn
+			// it into the default of 30.
+			errs = append(errs, search.FieldError{Field: "limit", Code: "limit_out_of_range", Message: "limit must be between 1 and 100."})
+		} else {
+			req.Limit = n
 		}
 	}
 	if v, ok := singleton("offset", "offset"); ok {

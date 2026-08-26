@@ -173,6 +173,20 @@ func TestAdvancedSearchInvalidLimit(t *testing.T) {
 	}
 }
 
+func TestAdvancedSearchExplicitZeroLimitRejected(t *testing.T) {
+	rr := doAdvanced(t, advancedHandler(t), "/api/search/advanced?q=x&limit=0")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for explicit limit=0", rr.Code)
+	}
+	var body advancedError
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !hasAPIField(body.Error.Fields, "limit", "limit_out_of_range") {
+		t.Fatalf("fields = %+v, want limit/limit_out_of_range for explicit zero", body.Error.Fields)
+	}
+}
+
 func TestAdvancedSearchInvalidDate(t *testing.T) {
 	rr := doAdvanced(t, advancedHandler(t), "/api/search/advanced?date_from=01/15/2024")
 	if rr.Code != http.StatusBadRequest {

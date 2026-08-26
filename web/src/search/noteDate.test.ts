@@ -102,4 +102,17 @@ describe("parseNoteDate edge cases", () => {
     const { dates } = resolveNoteDates({ created: "2024-01-15 13:45:00Z" });
     expect(dates.created).toBeUndefined();
   });
+  it("rejects an invalid calendar date that JS would normalize (2024-02-30)", () => {
+    const { dates, warnings } = resolveNoteDates({ created: "2024-02-30" });
+    expect(dates.created).toBeUndefined();
+    expect(warnings.some((w) => w.reason === "invalid_calendar_date")).toBe(true);
+  });
+  it("rejects an invalid calendar date that JS would normalize (2024-04-31)", () => {
+    const { dates } = resolveNoteDates({ created: "2024-04-31" });
+    expect(dates.created).toBeUndefined();
+  });
+  it("accepts a valid leap day and rejects a non-leap one", () => {
+    expect(resolveNoteDates({ created: "2024-02-29" }).dates.created).toBeDefined();
+    expect(resolveNoteDates({ created: "2023-02-29" }).dates.created).toBeUndefined();
+  });
 });

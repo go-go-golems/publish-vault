@@ -212,3 +212,31 @@ func TestSearchAdvancedCompoundQuery(t *testing.T) {
 		t.Fatalf("compound total=%d slugs=%v, want only alpha", resp.Total, slugs(resp))
 	}
 }
+
+func TestSearchAdvancedDateRangeExclusiveUpperBound(t *testing.T) {
+	si := mustIndex(t, buildAdvancedVault(t))
+	// date_to=2024-02-20 must include a note whose display instant is exactly
+	// 2024-02-20 (Alpha's updated timestamp) but must NOT include a note at
+	// 2024-02-21T00:00:00Z. Alpha's updated is 2024-02-20T09:00:00Z, which is
+	// inside the [2024-02-20, 2024-02-21) window.
+	to, _ := ParseDateOnly("2024-02-20")
+	req, _ := NormalizeSearchRequest(SearchRequest{DateTo: &to, Sort: SearchSortNewest})
+	resp, err := si.SearchAdvanced(req)
+	if err != nil {
+		t.Fatalf("SearchAdvanced: %v", err)
+	}
+	for _, r := range resp.Results {
+		if r.Slug == "research/kb/beta" {
+			t.Fatalf("date_to=2024-02-20 must exclude beta (2024-03-01); got %v", slugs(resp))
+		}
+	}
+	found := false
+	for _, r := range resp.Results {
+		if r.Slug == "research/kb/alpha" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("date_to=2024-02-20 must include alpha (2024-02-20T09:00:00Z); got %v", slugs(resp))
+	}
+}

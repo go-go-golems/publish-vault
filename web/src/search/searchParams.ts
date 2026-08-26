@@ -42,13 +42,20 @@ const STRICT_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function parseDateOnly(value: string): DateOnly | null {
   if (!STRICT_DATE_ONLY.test(value)) return null;
-  const instant = new Date(`${value}T00:00:00Z`);
+  const [y, m, d] = value.split("-").map((s) => Number.parseInt(s, 10));
+  const instant = new Date(Date.UTC(y, m - 1, d));
   if (Number.isNaN(instant.getTime())) return null;
-  return {
-    year: instant.getUTCFullYear(),
-    month: instant.getUTCMonth() + 1,
-    day: instant.getUTCDate(),
-  };
+  // JavaScript's Date normalizes nonexistent calendar dates (e.g. 2024-02-30
+  // becomes March 1). Reject them by round-tripping the components so an
+  // invalid authored or URL date is surfaced rather than silently shifted.
+  if (
+    instant.getUTCFullYear() !== y ||
+    instant.getUTCMonth() + 1 !== m ||
+    instant.getUTCDate() !== d
+  ) {
+    return null;
+  }
+  return { year: y, month: m, day: d };
 }
 
 function dateOnlyToInstant(d: DateOnly): Date {
@@ -291,8 +298,8 @@ export function decodeSearchParams(params: URLSearchParams): { request: SearchRe
     dateFrom: parseDateOnlyOpt(singleton("date_from"), "date_from", errors),
     dateTo: parseDateOnlyOpt(singleton("date_to"), "date_to", errors),
     sort: (singleton("sort") as SearchSort | "") || "relevance",
-    limit: parseIntOpt(singleton("limit"), DEFAULT_LIMIT, "limit", errors),
-    offset: parseIntOpt(singleton("offset"), 0, "offset", errors),
+    limit: parseIntOpt(singleton("limit"), DEFAULT_LIMIT, "limit", errors, 1, MAX_LIMIT),
+    offset: parseIntOpt(singleton("offset"), 0, "offset", errors, 0, MAX_OFFSET),
   };
   return { request: req, errors };
 }
@@ -316,11 +323,20 @@ function parseIntOpt(
   fallback: number,
   field: string,
   errors: FieldError[],
+  min: number,
+  max: number,
 ): number {
   if (value === undefined) return fallback;
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n)) {
+  // Require the entire value to be an integer representation; Number.parseInt
+  // accepts a numeric prefix ("10junk" -> 10, "2.5" -> 2, "1e2" -> 1), which
+  // would silently execute a different canonical request than the URL states.
+  if (!/^-?\d+$/.test(value)) {
     errors.push({ field, code: `${field}_out_of_range`, message: `${field} must be an integer.` });
+    return fallback;
+  }
+  const n = Number.parseInt(value, 10);
+  if (n < min || n > max) {
+    errors.push({ field, code: `${field}_out_of_range`, message: `${field} must be between ${min} and ${max}.` });
     return fallback;
   }
   return n;

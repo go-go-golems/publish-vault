@@ -773,3 +773,122 @@ advanced endpoint: 200 envelope + 400 contract verified
 app memory (demo): ~14.7 MiB
 PR: pending
 ```
+
+## Step 7: PR #27 review corrections
+
+PR #27 review raised five issues: an inclusive day-after upper bound on the
+date range (P1), silent acceptance of JS-normalized invalid calendar dates
+(P2), an explicit `limit=0` silently becoming the default (P2), partial
+numeric parsing in the URL codec (P2), and ignored backend search failures
+(P2). All five are addressed with regression tests.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues: https://github.com/go-go-golems/publish-vault/pull/27"
+
+**Assistant interpretation:** Inspect every inline review thread on PR #27, fix each with code-backed decisions, add regression tests, validate, and reply to the threads.
+
+**Inferred user intent:** Make PR #27 correct before merge: date boundaries, invalid-date rejection, limit/offset parsing, and error surfacing.
+
+**Commit (code):** pending review-correction commit
+
+### What I did
+
+- **P1 (search.go):** Confirmed with a focused test that `date_to=2024-03-01`
+  wrongly included `2024-03-02T00:00:00Z` because `inclEnd` was true on the
+  day-after endpoint. Read Bleve's `date_range.go` to confirm a zero time is an
+  open bound regardless of the inclusive flag, then set the end exclusive. Added
+  `TestSearchAdvancedDateRangeExclusiveUpperBound` as a permanent contract test.
+- **P2 dates (searchParams.ts, noteDate.ts):** `parseDateOnly` and
+  `parseNoteDate` now construct the instant from the parsed components and
+  round-trip the UTC year/month/day against the input, so `2024-02-30` is
+  rejected instead of silently shifted to March 1. Added six TS tests.
+- **P2 limit=0 (search_request.go):** The HTTP parser now rejects an explicitly
+  supplied `limit=0` as out of range before normalization can turn it into the
+  default of 30. Added `TestAdvancedSearchExplicitZeroLimitRejected`.
+- **P2 numeric parse (searchParams.ts):** `parseIntOpt` now requires the entire
+  value to match `^-?\d+$` and takes `min`/`max`, so `10junk`, `2.5`, and `1e2`
+  decode as errors instead of a silently different request. Limit uses 1-100,
+  offset uses 0-10000. Added TS tests.
+- **P2 error surfacing (SearchPage.tsx):** The page now reads `isError` and
+  `refetch` from `useSearchAdvancedQuery` and renders a "Search is temporarily
+  unavailable" state with a Retry button, distinct from a successful empty
+  response.
+
+### Why
+
+- The half-open `[from, to+1day)` range is the documented contract; an inclusive
+  day-after endpoint matched a note on the wrong calendar day.
+- JS `Date` normalizes nonexistent dates, so without a round-trip check the
+  static mode accepted authored dates the Go backend rejected.
+- `0` is the internal omitted-value sentinel, so an explicit `limit=0` had to
+  be rejected at the boundary that knows the parameter was present.
+- `Number.parseInt` accepts a numeric prefix, so a malformed shared URL had to
+  be rejected rather than silently executing a different request.
+- A backend outage is not an empty search; the page must distinguish them.
+
+### What worked
+
+- The Bleve source confirmed the open-bound semantics, so the exclusive-end fix
+  needed no special-casing for the open upper bound.
+- Go `ParseDateOnly` already round-tripped, so the date fix was TS-only.
+- `refetch` from RTK Query is the correct retry primitive; re-committing the
+  same URL would not invalidate the cache.
+
+### What didn't work
+
+- The edit tool rejected several multi-edit calls with "must be object" on
+  payloads containing Go string literals with parentheses and template
+  backticks; fell back to single edits and a Python insertion for the Go test.
+
+### What I learned
+
+- Bleve treats a zero `time.Time` as an open bound in `parseEndpoints`
+  (`min=-Inf`/`max=+Inf`), so the inclusive flags only matter for finite bounds.
+- `Number.parseInt("2.5")` returns `2` and `Number.parseInt("1e2")` returns `1`;
+  a strict integer regex is the only reliable guard.
+
+### What was tricky to build
+
+The `limit=0` fix had to live at the HTTP boundary, because the typed
+`SearchRequest.Limit` field uses zero as its omitted-value sentinel and
+`NormalizeSearchRequest` cannot distinguish "omitted" from "explicit zero". The
+parser is the only layer that knows the parameter was present, so it owns the
+rejection; normalization's range check still guards direct programmatic callers.
+
+### What warrants a second pair of eyes
+
+- Confirm the static `dateOnlyToInstant`/`dateOnlyNextDayInstant` helpers only
+  receive already-validated `DateOnly` values (they do; the only callers pass
+  `req.DateFrom`/`req.DateTo` from a normalized request).
+- Confirm the Retry button's `refetch` re-runs the query against the current
+  canonical URL.
+
+### What should be done in the future
+
+- Consider exporting the limit/offset bounds from the search package so the HTTP
+  parser and URL codec share one source of truth rather than re-declaring the
+  constants.
+
+### Code review instructions
+
+- Run `GOWORK=off go test ./pkg/search/ ./pkg/api/` and
+  `pnpm --dir web vitest run`.
+- Verify `TestSearchAdvancedDateRangeExclusiveUpperBound`,
+  `TestAdvancedSearchExplicitZeroLimitRejected`, the new `parseDateOnly`
+  calendar tests, and the partial-numeric-parse tests.
+
+### Technical details
+
+```text
+review issues: 5 (1 P1, 4 P2)
+date range end: exclusive (inclEnd=false)
+invalid calendar dates: rejected in Go and TS via round-trip
+explicit limit=0: rejected at HTTP boundary
+partial numeric parse: rejected via strict integer regex
+search failures: surfaced with isError + refetch Retry
+web tests: 91/91
+go race: pass
+lint: 0 issues
+gosec: 0 issues
+```
