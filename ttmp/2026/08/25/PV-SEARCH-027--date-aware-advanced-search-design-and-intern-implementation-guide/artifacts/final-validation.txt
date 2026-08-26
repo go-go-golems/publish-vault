@@ -1,0 +1,18 @@
+RUN ci-check: make ci-check
+PASS ci-check
+RUN race: env GOWORK=off go test -race ./... -count=1
+PASS race
+RUN vitest: pnpm --dir web exec vitest run
+PASS vitest
+RUN web-build: pnpm --dir web build:all
+PASS web-build
+RUN storybook: pnpm --dir web build-storybook
+PASS storybook
+RUN date-probe: env GOWORK=off go run ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/scripts/01-probe-date-frontmatter/main.go
+PASS date-probe
+RUN range-probe: env GOWORK=off go run ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/scripts/02-probe-bleve-date-range/main.go
+PASS range-probe
+RUN filter-probe: env GOWORK=off go run ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/scripts/03-probe-bleve-filter-composition/main.go
+PASS filter-probe
+RUN diff-check: git diff --check
+PASS diff-check

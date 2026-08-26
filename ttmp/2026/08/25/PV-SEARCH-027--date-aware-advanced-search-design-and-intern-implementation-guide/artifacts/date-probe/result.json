@@ -1,0 +1,40 @@
+{
+  "observations": [
+    {
+      "name": "date-only",
+      "key": "date",
+      "go_type": "string",
+      "json_type": "string",
+      "value": "2024-01-15"
+    },
+    {
+      "name": "created-date-only",
+      "key": "created",
+      "go_type": "string",
+      "json_type": "string",
+      "value": "2024-01-15"
+    },
+    {
+      "name": "updated-rfc3339",
+      "key": "updated",
+      "go_type": "string",
+      "json_type": "string",
+      "value": "2024-01-15T13:45:00-05:00"
+    },
+    {
+      "name": "quoted-date",
+      "key": "created",
+      "go_type": "string",
+      "json_type": "string",
+      "value": "2024-01-15"
+    },
+    {
+      "name": "invalid-date",
+      "key": "date",
+      "go_type": "string",
+      "json_type": "string",
+      "value": "January someday"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "queries": {
+    "go_and_date_2024_01_16": [
+      "b"
+    ],
+    "path_research_go": [
+      "a",
+      "b"
+    ],
+    "tag_go": [
+      "a",
+      "b"
+    ],
+    "tags_go_and_search": [
+      "a"
+    ],
+    "tags_go_or_search": [
+      "a",
+      "b",
+      "c"
+    ]
+  }
+}
