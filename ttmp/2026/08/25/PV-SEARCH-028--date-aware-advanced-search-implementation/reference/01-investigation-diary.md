@@ -686,3 +686,90 @@ SearchPage: URL-driven via useSearchAdvancedQuery
 NoteCard: <time dateTime> date + path breadcrumb
 pagination: offset-based Prev/Next
 ```
+
+## Step 6: Phase F — full validation, Docker/Compose smoke, and PR
+
+Phase F closes the loop. The full gate suite passes, the production Docker image
+builds and serves the new endpoint, and the validation evidence is recorded. The
+PR is the gate to merge and then roll out.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Run every repository gate, smoke the Docker/Compose image, record evidence, and open the PR.
+
+**Inferred user intent:** Prove the feature is shippable and ready for review/rollout.
+
+**Commit (code):** 283591f (validation evidence)
+
+### What I did
+
+- Ran `make ci-check` (exit 0), `go test -race ./... -count=1` (all pass),
+  `pnpm vitest run` (82/82), `pnpm build`, and `pnpm build-storybook`.
+- Built the Docker image and ran `docker compose up -d --build` against the demo
+  vault.
+- Verified `/api/healthz`, `/api/search/advanced` (tag filter, envelope, path,
+  date omitted when absent), the 400 `before_date_from` envelope, and the
+  legacy `/api/search` bare array.
+- Recorded evidence in `artifacts/final/01-phase-f-validation.md`.
+- Marked all six phase tasks complete and pushed the branch.
+
+### Why
+
+- A feature is not done until the production image proves it and the gates are
+  green; the smoke catches embed/build issues that unit tests miss.
+- The `date` field being omitted for notes without authored dates confirms the
+  truthful-absence behavior end to end.
+
+### What worked
+
+- The advanced endpoint, 400 contract, and legacy adapter all worked in the
+  production image on first try.
+- App memory for the demo vault was ~14.7 MiB, far under budget.
+
+### What didn't work
+
+- `q=zettel` returns empty in both legacy and advanced search because Bleve
+  tokenizes `zettelkasten` as one token and `zettel` is edit-distance >1; this
+  is existing Bleve behavior, not a regression, and the tag filter matches.
+
+### What I learned
+
+- The demo vault has no authored dates, so the `date` field is `omitempty`-omitted
+  in live responses; the date reconstruction path is proven by the Go and static
+  unit tests instead.
+
+### What was tricky to build
+
+Nothing new in Phase F; the work was validation and evidence capture.
+
+### What warrants a second pair of eyes
+
+- Run a full-vault memory/index measurement against the private vault before the
+  GitOps rollout to confirm the bounded peak stays within 1 GiB request / 2 GiB
+  limit (the bounded-batch mechanism is unchanged).
+
+### What should be done in the future
+
+- After merge: publish the optimized image, bump the GitOps tag, and roll out
+  with `maxSurge: 0, maxUnavailable: 1`.
+- Deprecate `useSearchQuery` once the frontend migration is confirmed stable.
+
+### Code review instructions
+
+- Read `artifacts/final/01-phase-f-validation.md`.
+- Re-run `make ci-check` and the Docker/Compose smoke if needed.
+
+### Technical details
+
+```text
+make ci-check: exit 0
+race: all pass
+web tests: 82/82
+docker build: pass
+compose smoke: pass
+advanced endpoint: 200 envelope + 400 contract verified
+app memory (demo): ~14.7 MiB
+PR: pending
+```
