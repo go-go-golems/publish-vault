@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "description": "Shared canonical note-date resolution cases consumed by Go (pkg/vault) and TypeScript (web/src/search) tests. Expected values use the API projection: date precision keeps the original literal; timestamp precision is a normalized UTC RFC3339 instant.",
+  "cases": [
+    {
+      "name": "none",
+      "frontmatter": {},
+      "created": null,
+      "updated": null,
+      "display_kind": "",
+      "display_value": null,
+      "display_precision": "",
+      "warnings": []
+    },
+    {
+      "name": "created-date-only",
+      "frontmatter": { "created": "2024-01-15" },
+      "created": { "value": "2024-01-15", "precision": "date", "source_key": "created" },
+      "updated": null,
+      "display_kind": "created",
+      "display_value": "2024-01-15",
+      "display_precision": "date",
+      "warnings": []
+    },
+    {
+      "name": "date-alias",
+      "frontmatter": { "date": "2024-01-15" },
+      "created": { "value": "2024-01-15", "precision": "date", "source_key": "date" },
+      "updated": null,
+      "display_kind": "created",
+      "display_value": "2024-01-15",
+      "display_precision": "date",
+      "warnings": []
+    },
+    {
+      "name": "created-wins-over-date",
+      "frontmatter": { "created": "2024-01-15", "date": "2023-12-01" },
+      "created": { "value": "2024-01-15", "precision": "date", "source_key": "created" },
+      "updated": null,
+      "display_kind": "created",
+      "display_value": "2024-01-15",
+      "display_precision": "date",
+      "warnings": []
+    },
+    {
+      "name": "updated-rfc3339",
+      "frontmatter": { "updated": "2024-01-15T13:45:00-05:00" },
+      "created": null,
+      "updated": { "value": "2024-01-15T18:45:00Z", "precision": "timestamp", "source_key": "updated" },
+      "display_kind": "updated",
+      "display_value": "2024-01-15T18:45:00Z",
+      "display_precision": "timestamp",
+      "warnings": []
+    },
+    {
+      "name": "created-and-updated",
+      "frontmatter": { "created": "2024-01-15", "updated": "2024-02-20T09:00:00Z" },
+      "created": { "value": "2024-01-15", "precision": "date", "source_key": "created" },
+      "updated": { "value": "2024-02-20T09:00:00Z", "precision": "timestamp", "source_key": "updated" },
+      "display_kind": "updated",
+      "display_value": "2024-02-20T09:00:00Z",
+      "display_precision": "timestamp",
+      "warnings": []
+    },
+    {
+      "name": "invalid-created-no-fallthrough",
+      "frontmatter": { "created": "January someday", "date": "2023-12-01" },
+      "created": null,
+      "updated": null,
+      "display_kind": "",
+      "display_value": null,
+      "display_precision": "",
+      "warnings": [ { "concept": "created", "reason": "invalid_format" } ]
+    },
+    {
+      "name": "timezone-timestamp",
+      "frontmatter": { "created": "2024-01-15T13:45:00-05:00" },
+      "created": { "value": "2024-01-15T18:45:00Z", "precision": "timestamp", "source_key": "created" },
+      "updated": null,
+      "display_kind": "created",
+      "display_value": "2024-01-15T18:45:00Z",
+      "display_precision": "timestamp",
+      "warnings": []
+    },
+    {
+      "name": "non-string-value",
+      "frontmatter": { "created": 2024 },
+      "created": null,
+      "updated": null,
+      "display_kind": "",
+      "display_value": null,
+      "display_precision": "",
+      "warnings": [ { "concept": "created", "reason": "wrong_type" } ]
+    },
+    {
+      "name": "updated-alias-modified",
+      "frontmatter": { "modified": "2024-03-03" },
+      "created": null,
+      "updated": { "value": "2024-03-03", "precision": "date", "source_key": "modified" },
+      "display_kind": "updated",
+      "display_value": "2024-03-03",
+      "display_precision": "date",
+      "warnings": []
+    },
+    {
+      "name": "invalid-format",
+      "frontmatter": { "created": "01/15/2024" },
+      "created": null,
+      "updated": null,
+      "display_kind": "",
+      "display_value": null,
+      "display_precision": "",
+      "warnings": [ { "concept": "created", "reason": "invalid_format" } ]
+    },
+    {
+      "name": "invalid-calendar",
+      "frontmatter": { "created": "2024-13-40" },
+      "created": null,
+      "updated": null,
+      "display_kind": "",
+      "display_value": null,
+      "display_precision": "",
+      "warnings": [ { "concept": "created", "reason": "invalid_calendar_date" } ]
+    },
+    {
+      "name": "case-insensitive",
+      "frontmatter": { "Created": "2024-01-15" },
+      "created": { "value": "2024-01-15", "precision": "date", "source_key": "created" },
+      "updated": null,
+      "display_kind": "created",
+      "display_value": "2024-01-15",
+      "display_precision": "date",
+      "warnings": []
+    }
+  ]
+}

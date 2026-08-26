@@ -1,6 +1,10 @@
 // Central type definitions for the vault system.
 // vaultApi.ts imports from here; components import from here too.
 
+import type { NoteDates } from "../search/noteDate";
+
+export type { NoteDates };
+
 export interface SiteConfig {
   vaultName: string;
   pageTitle: string;
@@ -34,6 +38,7 @@ export interface Note {
   wikiLinks: WikiLinkRef[];
   backlinks: string[];
   modTime: string;
+  dates?: NoteDates;
   rawMarkdown?: string;
 }
 
@@ -50,7 +55,54 @@ export interface SearchResult {
   title: string;
   excerpt: string;
   tags: string[];
+  path: string;
   score: number;
+  date?: SearchResultDate;
+}
+
+export interface SearchResultDate {
+  value: string;
+  kind: string;
+  precision: string;
+}
+
+export type TagMode = "all" | "any";
+
+export type DateField = "display" | "created" | "updated";
+
+export type SearchSort = "relevance" | "newest" | "oldest";
+
+export interface DateOnly {
+  year: number;
+  month: number;
+  day: number;
+}
+
+export interface FieldError {
+  field: string;
+  code: string;
+  message: string;
+}
+
+export interface SearchRequest {
+  query: string;
+  tags: string[];
+  tagMode: TagMode | "";
+  pathPrefixes: string[];
+  dateField: DateField | "";
+  dateFrom?: DateOnly;
+  dateTo?: DateOnly;
+  sort: SearchSort | "";
+  limit: number;
+  offset: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: SearchSort;
 }
 
 export interface TagCount {

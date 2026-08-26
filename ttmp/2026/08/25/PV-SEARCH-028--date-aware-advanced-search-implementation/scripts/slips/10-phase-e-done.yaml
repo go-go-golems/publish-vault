@@ -1,0 +1,102 @@
+almanach_studio_version: 1
+theme: brutalist
+paperWidth: 384
+bodyScale: 1
+feedLines: 8
+blocks:
+- id: head
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: PV-SEARCH-028
+      preset: micro
+    - w: 1fr
+      text: P-E DONE
+      preset: micro
+      align: right
+- id: r1
+  type: rule
+  data:
+    weight: heavy
+- id: gap1
+  type: space
+  data:
+    size: s
+- id: title
+  type: text
+  data:
+    text: 'Phase E: Search UI'
+    preset: h1
+    lines: 3
+- id: gap2
+  type: space
+  data:
+    size: s
+- id: summary
+  type: text
+  data:
+    text: URL-driven SearchPage with accessible filter panel, sort, chips, pagination, and NoteCard authored-date/path rendering;
+      web build and Storybook pass.
+    preset: body
+- id: gap3
+  type: space
+  data:
+    size: m
+- id: did
+  type: list
+  data:
+    marker: —
+    lines: 2
+    items:
+    - URL-driven SearchPage
+    - filter panel + chips + sort
+    - NoteCard date + path
+    - stories + builds pass
+- id: gap4
+  type: space
+  data:
+    size: s
+- id: tricky
+  type: list
+  data:
+    marker: '!'
+    lines: 2
+    items:
+    - URL vs Redux source of truth
+- id: r2
+  type: rule
+  data:
+    weight: hair
+- id: facts
+  type: kv
+  data:
+    items:
+    - - COMMIT
+      - e8da33d
+    - - NEXT
+      - 'Phase F: validation + rollout'
+    - - PHASE
+      - E
+    - - WEB
+      - 82/82
+    - - STORYBOOK
+      - pass
+- id: r3
+  type: rule
+  data:
+    weight: hair
+- id: decide
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: SCAN FOR COMMIT
+      preset: caption
+    - w: 120
+      blocks:
+      - id: qr
+        type: qr
+        data:
+          value: https://github.com/go-go-golems/publish-vault/commit/e8da33d
+          size: 110

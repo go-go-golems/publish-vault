@@ -14,13 +14,16 @@ import type {
   NoteListItem,
   FileNode,
   SearchResult,
+  SearchRequest,
+  SearchResponse,
   TagCount,
   WikiLinkRef,
   SiteConfig,
 } from "../types";
+import { encodeSearchParams, canonicalizeSearchRequest } from "../search/searchParams";
 
 // Re-export types so consumers can import from one place
-export type { Note, NoteListItem, FileNode, SearchResult, TagCount, WikiLinkRef, SiteConfig };
+export type { Note, NoteListItem, FileNode, SearchResult, SearchRequest, SearchResponse, TagCount, WikiLinkRef, SiteConfig };
 
 // ── Mode detection ────────────────────────────────────────────────
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || "";
@@ -152,6 +155,25 @@ export const vaultApi = createApi({
         : { query: (q: string) => `/api/search?q=${encodeURIComponent(q)}` }
     ),
 
+    // ── Advanced typed search ──────────────────────────────────
+    searchAdvanced: builder.query<SearchResponse, SearchRequest>(
+      IS_STATIC
+        ? {
+            queryFn: async (request: SearchRequest): Promise<{ data: SearchResponse }> => {
+              const s = await getStatic();
+              return ok(s.staticSearchAdvanced(request));
+            },
+            serializeQueryArgs: ({ endpointName, queryArgs }) =>
+              `${endpointName}:${encodeSearchParams(canonicalizeSearchRequest(queryArgs)).toString()}`,
+          }
+        : {
+            query: (request: SearchRequest) =>
+              `/api/search/advanced?${encodeSearchParams(canonicalizeSearchRequest(request)).toString()}`,
+            serializeQueryArgs: ({ endpointName, queryArgs }) =>
+              `${endpointName}:${encodeSearchParams(canonicalizeSearchRequest(queryArgs)).toString()}`,
+          }
+    ),
+
     // ── Tags ────────────────────────────────────────────────────
     listTags: builder.query<TagCount[], void>(
       IS_STATIC
@@ -177,5 +199,6 @@ export const {
   useGetNoteRawQuery,
   useGetTreeQuery,
   useSearchQuery,
+  useSearchAdvancedQuery,
   useListTagsQuery,
 } = vaultApi;
