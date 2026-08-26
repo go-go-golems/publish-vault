@@ -65,3 +65,12 @@ PV-SEARCH-027 complete: audit commit 76bf93e pushed, Phase 5 completion slip pri
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/scripts/slips/12-phase-5-done.yaml — Printed final completion evidence
+
+## 2026-08-25
+
+Addressed PR #26 review: preserve static RFC3339 scalars with JSON_SCHEMA/buildVault fixtures and define dynamic prefix/fuzziness as canonical legacy tag inclusion for static migration (ec76d28).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/02-canonical-note-date-model-and-bleve-date-contract.md — Static YAML scalar preservation contract
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/03-advanced-search-request-index-url-and-interaction-design.md — Canonical legacy tag inclusion contract

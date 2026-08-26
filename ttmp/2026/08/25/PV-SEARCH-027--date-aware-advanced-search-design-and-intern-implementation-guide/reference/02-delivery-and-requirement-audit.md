@@ -128,3 +128,14 @@ Every option has rationale, consequences, tests, and a file-level implementation
 5. Final doctor, diff, clean-worktree, and branch-synchronization checks passed.
 
 The ticket is complete as a research/design deliverable. Feature implementation remains future work beginning with primary guide Phase A.
+
+## Post-delivery review correction
+
+PR #26 review found two actionable gaps after the initial delivery audit:
+
+| Review finding | Corrected contract | Evidence |
+|---|---|---|
+| Default `js-yaml` parsing plus `serializeFrontmatter` can truncate unquoted RFC3339 values before resolution | Parse static frontmatter with `JSON_SCHEMA`; remove the lossy `Date` path from authored-date handling; test quoted/unquoted values through `buildVault` | `ec76d28`; design docs `01` and `02`; architecture map Section 10 |
+| Dynamic prefix/fuzzy and static exact legacy tag behavior contradict a single parity requirement | Preserve current dynamic inclusion as canonical, pin it in backend tests, and migrate static mode using shared expected-ID fixtures | `ec76d28`; design docs `01` and `03`; architecture map Section 10 |
+
+The corrections alter implementation instructions, not shipped application behavior. The existing reMarkable PDF was not force-overwritten because replacement deletes recipient annotations; the Git ticket and PR are canonical for this correction.

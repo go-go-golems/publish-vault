@@ -671,3 +671,88 @@ all ticket tasks: complete
 implementation changes: none
 PR: https://github.com/go-go-golems/publish-vault/pull/26
 ```
+
+## Step 7: Resolve static date-scalar and legacy-tag review gaps
+
+The PR review identified two places where the original parity language was not implementable as written. I traced each finding back to the current static and dynamic code paths, selected explicit contracts, and revised the architecture map, focused designs, and primary intern guide.
+
+The corrected plan preserves RFC3339 scalar precision before static date resolution and chooses current dynamic legacy-tag inclusion as canonical. Static exact-only tag discovery must migrate to shared prefix/fuzziness expected-ID fixtures; structured tag filters remain exact.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issue: https://github.com/go-go-golems/publish-vault/pull/26
+
+[REMINDER] Output a <summary>...</summary> block at the VERY END of your response. This is mandatory."
+
+**Assistant interpretation:** Inspect every PR review thread, correct the design package with code-backed decisions, validate the ticket, push the fixes, and resolve or respond to the review threads.
+
+**Inferred user intent:** Make PR #26 technically actionable and remove contradictions that would cause an intern to implement broken static date handling or incompatible tag semantics.
+
+**Commit (code):** `ec76d28` — `docs(PV-SEARCH-027): resolve static search parity gaps`
+
+### What I did
+
+- Retrieved PR review metadata and both inline review comments through GitHub APIs.
+- Re-read `parseFrontmatter`, `serializeFrontmatter`, `buildVault`, `staticSearch`, and backend `searchByTag`.
+- Required `js-yaml` `JSON_SCHEMA` at the static parsing boundary so unquoted RFC3339 scalars remain strings.
+- Required an integration fixture through the actual `buildVault` path, not only a pure resolver test.
+- Selected current dynamic legacy-tag inclusion as canonical: normalized prefix matching for queries up to three characters and fuzziness one for longer terms.
+- Required static exact-only discovery to migrate to the pinned dynamic contract with shared expected-ID fixtures.
+- Updated the primary guide's Phase A, B, and D tasks and gates.
+
+### Why
+
+- The default `js-yaml` schema creates `Date` objects for unquoted timestamps, and current serialization truncates them to dates before resolution.
+- Backend and static legacy tag search currently produce different inclusion sets, so “preserve current behavior” was ambiguous and contradictory.
+
+### What worked
+
+- Both review findings mapped to concrete current symbols and could be resolved without feature-code changes.
+- The chosen YAML schema preserves strings before any lossy serializer boundary.
+- The tag decision preserves deployed dynamic behavior while giving static mode and fixtures one explicit migration target.
+- Documentation diff checks and focused contract searches passed before commit.
+
+### What didn't work
+
+- The initial design assumed the static resolver would receive strings but did not inspect `js-yaml`'s default timestamp resolution and the serializer together.
+- The initial parity requirement referred to one “current” legacy tag behavior even though dynamic prefix/fuzzy and static exact behavior differ.
+
+### What I learned
+
+- Cross-runtime parity must begin at parsing, before normalized domain objects exist.
+- Inclusion and score parity are separate: static mode can match expected IDs without reproducing Bleve scores.
+- Compatibility claims need a named canonical implementation when current implementations disagree.
+
+### What was tricky to build
+
+The static bug spans two functions: YAML parsing creates a `Date`, then serialization silently removes its time and offset. Correcting only the future resolver would be too late. The plan now changes the schema at `yamlLoad` and tests the entire `buildVault` route.
+
+Legacy fuzzy matching can also depend on analyzer behavior. The guide now requires the backend behavior to be pinned behind focused normalized query tests before TypeScript reproduces it, rather than asking TypeScript to approximate undocumented Bleve behavior.
+
+### What warrants a second pair of eyes
+
+- Confirm `JSON_SCHEMA` preserves all currently supported frontmatter scalar behavior needed by static mode.
+- Review the precise normalized-term/fuzziness contract before implementation.
+- Confirm shared fixtures cover prefix, one-edit, two-edit, quoted, and unquoted cases.
+
+### What should be done in the future
+
+- Implement these corrected gates in primary-guide Phases A, B, and D.
+- Do not overwrite the existing reMarkable PDF automatically because `--force` deletes any annotations; upload a revised copy only if requested.
+
+### Code review instructions
+
+- Start with the changed static-parity sections in design docs `01`, `02`, and `03`.
+- Compare claims against `web/src/vault/staticVault.ts` (`parseFrontmatter`, `serializeFrontmatter`, `staticSearch`) and `pkg/search/search.go` (`searchByTag`).
+- Run `docmgr doctor --ticket PV-SEARCH-027`, `git diff --check`, and inspect PR #26 checks.
+
+### Technical details
+
+```text
+review comments: 2
+P1 date scalar preservation: addressed
+P2 legacy tag inclusion contract: addressed
+feature code changed: no
+canonical YAML schema: JSON_SCHEMA
+canonical legacy tag inclusion: current dynamic prefix/fuzziness behavior
+```
