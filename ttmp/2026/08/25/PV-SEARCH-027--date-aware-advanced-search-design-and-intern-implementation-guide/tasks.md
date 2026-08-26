@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Phase 0: freeze scope, evidence map, open questions, and acceptance gates <!-- t:l9ly -->
+- [x] Phase 0: freeze scope, evidence map, open questions, and acceptance gates <!-- t:l9ly -->
 - [ ] Phase 1: map backend, Bleve, API, frontend, URL-state, and test architecture <!-- t:i0s7 -->
 - [ ] Phase 2: define canonical note-date semantics, precedence, indexing, and display contracts <!-- t:vfwl -->
 - [ ] Phase 3: design advanced query/filter grammar, API contract, and accessible responsive UX <!-- t:xdxg -->

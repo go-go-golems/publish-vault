@@ -53,7 +53,7 @@ go ahead"
 
 **Inferred user intent:** Make the next search feature safe to delegate. The intern should receive a precise model of the existing architecture, explicit contracts and decisions, and a reviewable implementation sequence rather than an underspecified feature request.
 
-**Commit (code):** pending Phase 0 documentation commit
+**Commit (code):** `e2d37ac` — `docs(PV-SEARCH-027): define search design scope`
 
 ### What I did
 
@@ -148,5 +148,7 @@ workspace: /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault
 phase count: 6
 master slip printed: yes
 P0 start slip printed: yes
+P0 completion slip printed after commit: yes
+Phase 0 task: complete
 implementation changes: none
 ```
