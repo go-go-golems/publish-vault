@@ -20,3 +20,11 @@ Phase 1 mapped dynamic and static note/search architecture and exposed the confl
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/analysis/02-current-search-and-metadata-architecture-map.md — Current-state architecture and gap matrix
+
+## 2026-08-25
+
+Phase 2 defined strict authored created/updated dates, no ModTime fallback, UTC inclusive-day ranges, three Bleve datetime fields, provenance-aware result display, and static parity; parser and Bleve probes passed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/design-doc/02-canonical-note-date-model-and-bleve-date-contract.md — Canonical date decision and API/index contract

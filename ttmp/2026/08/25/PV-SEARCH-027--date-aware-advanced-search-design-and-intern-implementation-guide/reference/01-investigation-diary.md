@@ -252,3 +252,103 @@ P1 completion slip printed after commit: yes
 Phase 1 task: complete
 implementation changes: none
 ```
+
+## Step 3: Define authored date semantics and verify Bleve range behavior
+
+Phase 2 replaced the overloaded `modTime` concept with an explicit authored-date model. The design retains separate created and updated values, resolves one display date with provenance, preserves date-only versus timestamp precision, and leaves dates absent rather than inventing checkout or build-time values.
+
+Two public probes support the decision. The parser probe confirms that current frontmatter date forms reach the vault layer as strings. The Bleve probe confirms v2.6.0 datetime mapping, inclusive-start/exclusive-end ranges, stored fields, descending date sort, and `_id` tie-breaking.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Make date provenance, aliases, parsing, ranges, sorting, indexing, transport, display, missing values, and static parity explicit before designing the full filter contract.
+
+**Inferred user intent:** Prevent an intern from displaying misleading Git checkout timestamps or implementing incompatible date behavior in Go and TypeScript.
+
+**Commit (code):** pending Phase 2 documentation commit
+
+### What I did
+
+- Printed and preserved `scripts/slips/05-phase-2-start.yaml` before date research.
+- Inspected `normalizeFrontmatter` and verified it preserves scalar strings.
+- Added `scripts/01-probe-date-frontmatter/main.go` and retained content-free output for date-only, RFC3339, quoted, and invalid values.
+- Inspected the pinned Bleve v2.6.0 mapping, date range, term query, and sort APIs.
+- Added `scripts/02-probe-bleve-date-range/main.go` and proved a same-day half-open interval plus descending date/ID sort.
+- Searched committed public fixtures and found `created` as the established sample-vault property.
+- Wrote `design-doc/02-canonical-note-date-model-and-bleve-date-contract.md` with domain types, precedence, parsing, API projection, mapping, range, sorting, static parity, decision records, and tests.
+
+### Why
+
+Date filtering cannot be correct until “date” has one domain meaning. Index and UI work built on current `modTime` would preserve contradictory behavior: checkout timestamps in backend mode and `created`-or-today in static mode.
+
+### What worked
+
+The parser returned every probe value as a JSON-encodable Go string, so a strict resolver can operate without YAML-specific date types. Bleve accepted Go `time.Time`, filtered `[2024-01-16, 2024-01-17)`, returned only the two January 16 documents, and sorted them newest first with ID tie support.
+
+The current derived-index architecture makes the mapping transition straightforward operationally: each snapshot builds a fresh index, so no in-place index migration or compatibility reader is required.
+
+### What didn't work
+
+The first Phase 2 commit attempt failed in the repository pre-commit backend test and lint hooks because both standalone probes initially occupied one Go package and each declared `main`:
+
+```text
+scripts/02-probe-bleve-date-range.go:22:6: main redeclared in this block
+scripts/01-probe-date-frontmatter.go:19:6: other declaration of main
+```
+
+Each probe ran successfully by filename, but `go test ./...` compiles directories as packages. I moved them to separate numbered directories (`scripts/01-probe-date-frontmatter/main.go` and `scripts/02-probe-bleve-date-range/main.go`), updated relations/references, then reran both probes and the full hook. The same doctor pass also warned that `Status: proposed` was outside repository vocabulary; I changed the document workflow status to `active` while retaining “proposed” inside decision-record prose.
+
+One probe result requires careful interpretation: Bleve's `hit.Sort` values for datetime fields are opaque encoded strings. They are valid internal sort/cursor material but must not be exposed as API date values. Search results should return the stored canonical date fields instead.
+
+The Bleve `DateRangeQuery` API uses zero `time.Time` values to represent open endpoints despite comments discussing nil endpoints. The implementation guide must wrap this behavior behind a query builder rather than spread zero-time conventions through handlers.
+
+### What I learned
+
+- Goldmark-meta does not create a reliable `time.Time` date contract here; strict application parsing is required.
+- Date-only values need a retained precision marker even when indexed as midnight UTC.
+- `created` and `updated` should both be retained; display precedence does not replace field-specific filtering.
+- Missing dates must remain absent to avoid unstable static builds.
+- User date ranges are best expressed as inclusive calendar dates and translated to half-open UTC instants.
+
+### What was tricky to build
+
+A single `time.Time` cannot preserve whether the author supplied a date or an instant. The domain model therefore carries precision separately and formats date-only API values from their canonical literal.
+
+Timestamp normalization can shift calendar dates. Version 1 defines range dates in UTC to keep Go, static mode, SSR, and clients deterministic. Supporting user-local calendar ranges later requires an explicit timezone parameter, not implicit browser behavior.
+
+### What warrants a second pair of eyes
+
+- Review the alias sets: created/date and updated/modified/last_updated.
+- Review the decision not to fall through from an invalid higher-priority alias.
+- Confirm updated-over-created is the right single-card display precedence.
+- Confirm missing dates sort last and do not match range filters.
+- Review whether three datetime fields justify their index cost; Phase 4 must require measurement.
+
+### What should be done in the future
+
+Phase 3 must embed this date model into a full typed `SearchRequest`, exact tag and path fields, Bleve conjunction/disjunction queries, URL codec, response envelope, and accessible responsive advanced-search controls.
+
+### Code review instructions
+
+- Run both probe programs with `GOWORK=off go run` and compare retained JSON.
+- Review `DateRangeQuery` inclusion flags in the pinned module source.
+- Read decision records DR-1 and DR-2.
+- Verify no recommendation calls filesystem `ModTime` an authored date.
+- Confirm every date behavior has a static-mode counterpart.
+
+### Technical details
+
+```text
+accepted date forms: YYYY-MM-DD, RFC3339
+created aliases: created, date
+updated aliases: updated, modified, last_updated
+display precedence: updated, then created, else absent
+range semantics: inclusive dates -> [start, end+1day)
+timezone: UTC in v1
+Bleve date fields: created_at, updated_at, display_at
+sort tie-breaker: _id ascending
+raw/private data used: none
+implementation changes: none
+```
