@@ -1,0 +1,14 @@
+# Changelog
+
+## 2026-08-25
+
+- Initial workspace created
+
+
+## 2026-08-25
+
+Phase 0 froze requested behavior, architecture invariants, evidence sources, open questions, six research phases, and acceptance gates; master and start slips printed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-027--date-aware-advanced-search-design-and-intern-implementation-guide/analysis/01-scope-evidence-map-and-acceptance-gates.md — Phase 0 scope and acceptance contract
