@@ -69,7 +69,7 @@ Canonical contracts (from the design):
 
 ## Status
 
-Current status: **active — Phase A in progress**
+Current status: **active — Phase A complete, Phase B next**
 
 ## Topics
 

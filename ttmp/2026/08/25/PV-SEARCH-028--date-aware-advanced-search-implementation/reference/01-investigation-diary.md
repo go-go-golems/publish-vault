@@ -93,3 +93,131 @@ phases: A B C D E F
 go parser date type: string (no schema change)
 static schema change: JSON_SCHEMA required
 ```
+
+## Step 1: Phase A — shared date fixtures and Go/TS canonical date domain
+
+Phase A establishes the authored-date contract before any indexing, API, or UI
+work. The Go vault layer now resolves created/updated/display dates from strict
+frontmatter aliases, exposes a content-free invalid-date counter, and streams
+the resolved instants through `SearchDocument`. A shared JSON fixture drives both
+Go and TypeScript resolver tests so the two runtimes cannot silently diverge.
+The static vault now parses frontmatter with `js-yaml` `JSON_SCHEMA` so
+unquoted RFC3339 scalars survive as strings instead of being truncated to
+`YYYY-MM-DD` by the serializer.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 0)
+
+**Assistant interpretation:** Implement Phase A from the merged design: canonical date domain, shared fixtures, and the static scalar-preservation fix, with tests and a diary.
+
+**Inferred user intent:** Build the verified foundation that Phase B (Bleve mapping) and Phase D (static parity) depend on.
+
+**Commit (code):** pending Phase A commit
+
+### What I did
+
+- Added `pkg/vault/date.go` with `NoteDate`, `NoteDates`, `NoteDateKind`,
+  `DatePrecision`, `InvalidDateReason`, `ResolveNoteDates`, and helpers
+  (`noteDateInstant`, `noteDateDisplayInstant`, `noteDateKindString`,
+  `dateWarningKey`).
+- Added `pkg/vault/date_test.go` (fixture-driven + unit tests) and
+  `pkg/vault/date_integration_test.go` (note population, SearchDocument dates,
+  invalid-date counter).
+- Added the shared fixture `testdata/search-date-cases.json` (13 cases).
+- Updated `pkg/vault/vault.go`: added `Note.Dates`, `SearchDocument` date
+  fields, `loadNote` returns date warnings, both callers aggregate into
+  `v.invalidDateCounts`, `InvalidDateCounts()` method, and a load log line.
+- Added `web/src/search/noteDate.ts` and `noteDate.test.ts` mirroring the Go
+  contract and consuming the same fixture.
+- Switched `web/src/vault/staticVault.ts` `parseFrontmatter` to `JSON_SCHEMA`,
+  exported `parseFrontmatter`/`serializeFrontmatter`, and added
+  `staticVault.frontmatter.test.ts` proving quoted/unquoted scalars survive.
+
+### Why
+
+- Dates must be authored metadata with deterministic precision before any
+  index/API/UI consumes them.
+- The default js-yaml schema was the P1 review finding: it created `Date`
+  objects that the serializer truncated, losing RFC3339 instants.
+- A shared fixture is the only way to prove Go and TypeScript agree without
+  duplicating prose assumptions.
+
+### What worked
+
+- The Go parser already returns frontmatter dates as strings, so no Go schema
+  change was needed; only the static side needed `JSON_SCHEMA`.
+- `toUTCSecond` formats JS Dates at second precision to match Go's RFC3339
+  output exactly (`2024-01-15T18:45:00Z`, no milliseconds).
+- All 13 fixture cases pass in both Go and TypeScript.
+
+### What didn't work
+
+- First build failed: `parseNoteDate` returned a `NoteDate` value but
+  `resolveConcept` returned `*NoteDate`; fixed by returning `&nd`.
+- The first fixture test compared warnings with `reflect.DeepEqual`, which
+  distinguishes nil from non-nil empty slices; replaced with length/element
+  comparison and removed the now-unused `reflect` import.
+- `golangci-lint nonamedreturns` flagged `lookupAlias`'s named returns;
+  switched to unnamed returns.
+
+### What I learned
+
+- `omitempty` on a struct value field never omits the struct; `NoteDates` inner
+  pointers carry `omitempty` so absent dates serialize cleanly.
+- JS `new Date("01/15/2024")` is valid, so the TS resolver must use a strict
+  RFC3339 regex rather than relying on Date parsing to reject non-RFC3339.
+- `loadNote` is called outside the lock by `ReloadNote`, so date-warning
+  aggregation must happen in the callers under their locks, not inside
+  `loadNote`.
+
+### What was tricky to build
+
+The no-fallthrough rule interacts with alias precedence: when the
+highest-precedence alias exists but is invalid, the resolver returns nil and a
+warning rather than trying the next alias. This makes an author mistake visible
+instead of masking it with a stale lower-priority value, but it means a valid
+`date` is ignored when an invalid `created` is present. The fixture case
+`invalid-created-no-fallthrough` pins this behavior in both runtimes.
+
+The timestamp-precision mismatch was the other sharp edge: Go's `time.RFC3339`
+has second precision while JS `toISOString()` includes milliseconds. Without a
+shared `toUTCSecond` formatter the two runtimes would emit different API values
+for the same input.
+
+### What warrants a second pair of eyes
+
+- Confirm `JSON_SCHEMA` preserves all scalar types the static vault relies on
+  (it does for strings, numbers, booleans, arrays, objects per the added test).
+- Confirm the invalid-date counter is content-free (it keys only on
+  `concept:reason`, never key spelling or value).
+- Confirm `Note.Dates` JSON addition to `/api/notes/{slug}` is acceptable as a
+  backward-compatible field.
+
+### What should be done in the future
+
+- Phase B should store `CreatedAt`/`UpdatedAt`/`DisplayAt`/`DateKind` in the
+  Bleve `noteDoc` and add datetime/keyword mappings.
+- Phase D should put resolved `NoteDates` on the static `Note` and remove the
+  `new Date()` modTime fallback from the authored-date path.
+
+### Code review instructions
+
+- Start at `pkg/vault/date.go` and `web/src/search/noteDate.ts`.
+- Run `GOWORK=off go test ./pkg/vault/` and `pnpm --dir web vitest run`.
+- Inspect `loadNote` and both callers for the warning aggregation.
+- Verify the shared fixture path works from both package dirs and web.
+
+### Technical details
+
+```text
+fixture cases: 13
+Go tests: pkg/vault pass (race + count=1)
+TS tests: 61/61 (17 noteDate + 6 static frontmatter added)
+lint: 0 issues
+gosec: 0 issues
+static schema: JSON_SCHEMA
+date precision: date | timestamp (separate from time.Time)
+display precedence: updated > created > absent
+invalid-date counter: content-free, keyed concept:reason
+```

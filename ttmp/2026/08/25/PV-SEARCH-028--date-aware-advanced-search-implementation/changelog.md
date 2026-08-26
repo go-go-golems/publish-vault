@@ -3,3 +3,12 @@
 ## 2026-08-25
 
 - Initial workspace created
+
+## 2026-08-25
+
+Phase A: canonical authored-date domain in Go and TS, shared fixture, invalid-date counter, and static JSON_SCHEMA scalar preservation.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/pkg/vault/date.go — Date resolver
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/vault/staticVault.ts — JSON_SCHEMA frontmatter parsing

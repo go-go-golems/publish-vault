@@ -48,6 +48,7 @@ type Note struct {
 	WikiLinks   []WikiLinkRef          `json:"wikiLinks"`
 	Backlinks   []string               `json:"backlinks"` // slugs that link to this note
 	ModTime     time.Time              `json:"modTime"`
+	Dates       NoteDates              `json:"dates"`
 	Publish     bool                   `json:"-"` // false => excluded from publication
 
 	// sourceHTML is the parser output before vault-level link, asset, and embed
@@ -96,11 +97,15 @@ type FileNode struct {
 // SearchDocument is the plain-text representation used by the full-text index.
 // It is built from Markdown source on demand instead of from rendered HTML.
 type SearchDocument struct {
-	Slug    string
-	Title   string
-	Body    string
-	Tags    []string
-	Excerpt string
+	Slug      string
+	Title     string
+	Body      string
+	Tags      []string
+	Excerpt   string
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	DisplayAt *time.Time
+	DateKind  string
 }
 
 // LoadStage is a finite, content-free vault build phase suitable for traces and metrics.
@@ -131,16 +136,17 @@ type LoadObserver func(LoadProgress)
 
 // Vault holds all notes and provides lookup methods.
 type Vault struct {
-	mu            sync.RWMutex
-	notes         map[string]*Note // keyed by slug
-	excluded      map[string]ExclusionReason
-	normalizedIdx map[string]string    // normalizeSlug(slug) -> canonical slug
-	wikiLinkIndex map[string]string    // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
-	assetIndex    map[string]string    // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
-	root          string               // absolute path to vault directory
-	ignore        *ignore.Ignore       // compiled .vault-ignore; nil/empty means exclude nothing
-	configMatcher *vaultconfig.Matcher // compiled .publish/config.yaml blacklist; nil/empty means exclude nothing
-	loadObserver  LoadObserver         // optional bounded lifecycle callback
+	mu                sync.RWMutex
+	notes             map[string]*Note // keyed by slug
+	excluded          map[string]ExclusionReason
+	normalizedIdx     map[string]string    // normalizeSlug(slug) -> canonical slug
+	wikiLinkIndex     map[string]string    // short slug -> full vault slug (e.g., "tribal/foo" -> "research/kb/tribal/foo")
+	assetIndex        map[string]string    // lowercased basename and vault-relative path -> vault-relative path (![[pic.png]] resolution)
+	root              string               // absolute path to vault directory
+	ignore            *ignore.Ignore       // compiled .vault-ignore; nil/empty means exclude nothing
+	configMatcher     *vaultconfig.Matcher // compiled .publish/config.yaml blacklist; nil/empty means exclude nothing
+	loadObserver      LoadObserver         // optional bounded lifecycle callback
+	invalidDateCounts map[string]int       // content-free rejected-date counts by "concept:reason"
 }
 
 // Option configures a Vault.
@@ -237,6 +243,7 @@ func (v *Vault) LoadAll() error {
 	v.notes = make(map[string]*Note)
 	v.assetIndex = make(map[string]string)
 	v.excluded = make(map[string]ExclusionReason)
+	v.invalidDateCounts = make(map[string]int)
 
 	// Counts, not one line per file: a vault with broad ignore rules drops
 	// thousands of paths and per-path logging would bury the two reasons that
@@ -295,7 +302,7 @@ func (v *Vault) LoadAll() error {
 			Stage: LoadStageWalkParse, ProcessedNotes: processedNotes, TotalNotes: totalNotes,
 			ProcessedBytes: processedBytes, TotalBytes: totalBytes,
 		})
-		note, err := v.loadNote(path, info)
+		note, dateWarnings, err := v.loadNote(path, info)
 		if err != nil {
 			// Always individual and always visible: an unparseable note is a
 			// content bug the author needs to know about, and it is the one
@@ -303,6 +310,9 @@ func (v *Vault) LoadAll() error {
 			drop(path, ExcludedByParse)
 			log.Printf("warning: note excluded path=%q reason=%s err=%v", v.relPath(path), ExcludedByParse, err)
 			return nil
+		}
+		for _, w := range dateWarnings {
+			v.invalidDateCounts[dateWarningKey(w)]++
 		}
 		// A note carrying publish: false is parsed but not stored, so it is
 		// absent from every consumer that reads v.notes (API, file tree,
@@ -340,6 +350,10 @@ func (v *Vault) LoadAll() error {
 			len(v.notes), formatExclusionCounts(counts), collisions)
 	}
 
+	if len(v.invalidDateCounts) > 0 {
+		log.Printf("vault load: rejected authored dates %s", formatDateCounts(v.invalidDateCounts))
+	}
+
 	v.observeLoad(LoadProgress{Stage: LoadStageNormalize, TotalNotes: 1})
 	v.buildNormalizedIndex()
 	v.observeLoad(LoadProgress{Stage: LoadStageNormalize, ProcessedNotes: 1, TotalNotes: 1})
@@ -356,15 +370,15 @@ func (v *Vault) LoadAll() error {
 }
 
 // loadNote parses a single .md file into a Note (caller must hold lock or be in init).
-func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
+func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, []DateWarning, error) {
 	src, err := os.ReadFile(absPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	parsed, err := parser.Parse(src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	relPath, _ := filepath.Rel(v.root, absPath)
@@ -395,6 +409,8 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		})
 	}
 
+	dates, dateWarnings := ResolveNoteDates(frontmatter)
+
 	return &Note{
 		Slug:        slug,
 		Title:       title,
@@ -406,8 +422,9 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, error) {
 		sourceHTML:  parsed.HTML,
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
+		Dates:       dates,
 		Publish:     publishFlag(frontmatter),
-	}, nil
+	}, dateWarnings, nil
 }
 
 // publishFlag reads the "publish" frontmatter key case-insensitively and returns
@@ -796,7 +813,7 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	note, err := v.loadNote(absPath, info)
+	note, dateWarnings, err := v.loadNote(absPath, info)
 	if err != nil {
 		return nil, err
 	}
@@ -807,6 +824,9 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 		return nil, ErrUnpublished
 	}
 	v.mu.Lock()
+	for _, w := range dateWarnings {
+		v.invalidDateCounts[dateWarningKey(w)]++
+	}
 	// Drop whatever slug this path currently holds before reinserting. A note
 	// whose slug was disambiguated does not live at its natural slug, so
 	// inserting under a freshly computed one would overwrite the note that owns
@@ -1114,6 +1134,35 @@ func formatExclusionCounts(counts map[ExclusionReason]int) string {
 	return strings.Join(parts, " ")
 }
 
+// formatDateCounts renders content-free rejected-date counts in a stable order
+// for the load log. Keys are "concept:reason" with finite values on both
+// sides, so no frontmatter key spelling or value reaches the log.
+func formatDateCounts(counts map[string]int) string {
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, counts[k]))
+	}
+	return strings.Join(parts, " ")
+}
+
+// InvalidDateCounts returns a copy of the content-free rejected-date counts
+// keyed by "concept:reason" (e.g. "created:invalid_format"). It is safe for
+// metrics and logs; no frontmatter key spelling or raw value is encoded.
+func (v *Vault) InvalidDateCounts() map[string]int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	out := make(map[string]int, len(v.invalidDateCounts))
+	for k, n := range v.invalidDateCounts {
+		out[k] = n
+	}
+	return out
+}
+
 // AllNotes returns a snapshot of all notes.
 func (v *Vault) Count() int {
 	v.mu.RLock()
@@ -1137,11 +1186,15 @@ func (v *Vault) SearchDocument(note *Note) (SearchDocument, error) {
 		return SearchDocument{}, err
 	}
 	return SearchDocument{
-		Slug:    note.Slug,
-		Title:   note.Title,
-		Body:    parser.PlainText(raw),
-		Tags:    append([]string(nil), note.Tags...),
-		Excerpt: note.Excerpt,
+		Slug:      note.Slug,
+		Title:     note.Title,
+		Body:      parser.PlainText(raw),
+		Tags:      append([]string(nil), note.Tags...),
+		Excerpt:   note.Excerpt,
+		CreatedAt: noteDateInstant(note.Dates.Created),
+		UpdatedAt: noteDateInstant(note.Dates.Updated),
+		DisplayAt: noteDateDisplayInstant(note.Dates),
+		DateKind:  noteDateKindString(note.Dates),
 	}, nil
 }
 

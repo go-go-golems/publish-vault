@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Phase A: shared date fixtures and Go/TS canonical date domain <!-- t:1qkj -->
+- [x] Phase A: shared date fixtures and Go/TS canonical date domain <!-- t:1qkj -->
 - [ ] Phase B: typed search request, Bleve date/tag/path mapping, query builder <!-- t:bab7 -->
 - [ ] Phase C: advanced HTTP API endpoint and validation <!-- t:kja8 -->
 - [ ] Phase D: shared TS types, URL codec, and static search parity <!-- t:wocz -->

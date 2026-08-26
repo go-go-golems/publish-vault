@@ -8,7 +8,7 @@
  * This module is the "static backend" used when VITE_API_URL is not set.
  */
 
-import { load as yamlLoad } from "js-yaml";
+import { JSON_SCHEMA, load as yamlLoad } from "js-yaml";
 import { marked } from "marked";
 import type {
   Note,
@@ -63,8 +63,14 @@ const rawFiles = import.meta.glob("./notes/**/*.md", {
 
 // ── Frontmatter parser ────────────────────────────────────────────
 
-/** Parse YAML frontmatter from a raw Markdown string. */
-function parseFrontmatter(raw: string): {
+/** Parse YAML frontmatter from a raw Markdown string.
+ *
+ * Uses js-yaml JSON_SCHEMA so unquoted date and RFC3339 scalars are preserved
+ * as strings rather than resolved to JavaScript Date objects. The default
+ * YAML schema would turn `updated: 2024-01-15T13:45:00-05:00` into a Date,
+ * and serializeFrontmatter would then truncate it to YYYY-MM-DD, losing the
+ * instant and timestamp precision before authored-date resolution runs. */
+export function parseFrontmatter(raw: string): {
   data: Record<string, unknown>;
   content: string;
 } {
@@ -72,7 +78,10 @@ function parseFrontmatter(raw: string): {
   const m = raw.match(FENCE);
   if (!m) return { data: {}, content: raw };
   try {
-    const data = (yamlLoad(m[1]) ?? {}) as Record<string, unknown>;
+    const data = (yamlLoad(m[1], { schema: JSON_SCHEMA }) ?? {}) as Record<
+      string,
+      unknown
+    >;
     return { data, content: raw.slice(m[0].length) };
   } catch {
     return { data: {}, content: raw.slice(m[0].length) };
@@ -172,11 +181,11 @@ function preprocessWikiLinks(content: string, allSlugs: Set<string>): string {
 
 // ── Serialization helper ─────────────────────────────────────────
 
-/**
- * Recursively convert any Date objects in a frontmatter record to ISO strings.
- * This prevents Redux's "non-serializable value" warning.
- */
-function serializeFrontmatter(obj: Record<string, unknown>): Record<string, unknown> {
+/** Recursively convert any Date objects in a frontmatter record to ISO strings.
+ * This prevents Redux's "non-serializable value" warning. */
+export function serializeFrontmatter(
+  obj: Record<string, unknown>,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v instanceof Date) {
