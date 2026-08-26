@@ -152,3 +152,101 @@ P0 completion slip printed after commit: yes
 Phase 0 task: complete
 implementation changes: none
 ```
+
+## Step 2: Map dynamic and static search from source metadata to result cards
+
+Phase 1 traced the complete search path in both supported runtime modes. The main architectural finding is that the existing `modTime` contract is already inconsistent: backend mode exposes filesystem modification time, while static mode treats `created` frontmatter as `modTime` and substitutes today's date when it is absent.
+
+The map also identifies a compatibility constraint that shapes the eventual Bleve design. Existing `#tag` search is fuzzy or prefix discovery over an analyzed, flattened tags field. Proper exact advanced filtering should add a distinct filter representation instead of silently changing that behavior.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Build a file- and symbol-backed architecture map before choosing date precedence, query parameters, Bleve fields, or UI controls.
+
+**Inferred user intent:** Give an intern the system model necessary to modify all implementations consistently and preserve reload, static-build, and current search behavior.
+
+**Commit (code):** pending Phase 1 documentation commit
+
+### What I did
+
+- Printed and preserved `scripts/slips/03-phase-1-start.yaml` before inspecting architecture.
+- Enumerated Go note, parser, search, API, runtime, watcher, and test symbols.
+- Enumerated React types, RTK Query, SearchPage, SearchBar, NoteCard, Redux state, router use, static-vault implementation, stories, and tests.
+- Read the prior RETRO-TAG-010 guide to distinguish historical intent from current code.
+- Compared dynamic and static date behavior.
+- Mapped current Bleve fields, analyzers, stored-field behavior, general search, tag search, limits, and missing sort/pagination/filter contracts.
+- Wrote `analysis/02-current-search-and-metadata-architecture-map.md` with four diagrams and an architecture gap matrix.
+
+### Why
+
+The feature crosses two search engines and three state representations: URL, Redux, and RTK Query cache arguments. A backend-only design would leave static builds incompatible. A component-only design would duplicate filter parsing and provide no stable API to other clients.
+
+### What worked
+
+- Current main has explicit `Note.ModTime`, so date transport can be designed without adding filesystem collection.
+- `NoteCard` already supports optional date rendering, reducing visual component work.
+- Persistent indexes are rebuilt per snapshot, so mapping evolution is a derived-state rebuild rather than an in-place data migration.
+- Existing tests already protect tag behavior, batch equivalence, deletion, rollback, reload serialization, and delayed cleanup.
+
+### What didn't work
+
+The first broad repository search included a generated embedded JavaScript artifact under a package directory and returned a massive minified line. The command was syntactically valid but produced poor evidence:
+
+```text
+rg -n 'type Note struct|ModTime|Frontmatter|Metadata|SearchDocument|ForEachSearchDocument|func \\(.*SearchDocument|Date' pkg internal -S
+```
+
+I narrowed subsequent reads to named source files and used targeted symbol searches. No generated output was used as architectural evidence.
+
+No committed PV-SEARCH-026 document was present on current main, despite prior session context referring to one. Rather than importing an unavailable conclusion, this phase re-established the architecture from current code and the committed RETRO-TAG-010 history.
+
+### What I learned
+
+- Dynamic `Note.ModTime` is `os.FileInfo.ModTime()` from checkout state.
+- Static `Note.modTime` is frontmatter `created` or the current date; this is unstable and semantically different.
+- The current API returns a bare array with a hard-coded limit of 30 and generic 500 errors.
+- A text query shorter than two characters suppresses frontend search, which blocks filter-only requests.
+- The current tag field is suited to discovery but not exact multi-value filtering.
+- Static search does not search the full body and already has ranking differences from Bleve; inclusion parity is a more realistic contract than score parity.
+
+### What was tricky to build
+
+The architecture map had to distinguish fields that happen to share a TypeScript property name from fields that have the same semantics. `modTime` fails that test. The map therefore follows provenance, fallback, normalization, and transport rather than matching names only.
+
+The proposed future state must also preserve PV-MEM-002's bounded indexing. Adding path, exact tags, and dates increases staged document bytes and persistent index size, so implementation acceptance must include updated memory and index-size evidence.
+
+### What warrants a second pair of eyes
+
+- Confirm static mode remains a supported first-class target rather than being deprecated by this feature.
+- Review the conclusion that exact tag filtering needs a new field while `tags` remains analyzed.
+- Review whether URL state should fully replace committed Redux search state or whether Redux remains only for draft controls.
+- Confirm the result contract should expose date provenance rather than an unlabelled `modTime` string.
+
+### What should be done in the future
+
+Phase 2 must define canonical created, updated, filesystem, and display-date semantics; normalize date-only versus timestamp values; specify precedence and invalid/missing behavior; and verify Bleve date/keyword mapping APIs against v2.6.0.
+
+### Code review instructions
+
+- Read `analysis/02-current-search-and-metadata-architecture-map.md` from sections 1 through 13.
+- Verify each named symbol in `pkg/vault/vault.go`, `pkg/search/search.go`, `pkg/api/api.go`, `web/src/store/vaultApi.ts`, `SearchPage.tsx`, and `staticVault.ts`.
+- Compare dynamic `loadNote` with static `buildVault` date derivation.
+- Confirm the gap matrix does not present a Phase 2 decision as current behavior.
+
+### Technical details
+
+```text
+backend search implementation: pkg/search/search.go
+static search implementation: web/src/vault/staticVault.ts
+backend date source: os.FileInfo.ModTime
+static date source: frontmatter.created or current date
+Bleve version: v2.6.0
+current API: GET /api/search?q=..., hard limit 30
+current URL state: q only
+current result date field: none
+current card date prop: optional modTime
+architecture diagrams: 3
+implementation changes: none
+```
