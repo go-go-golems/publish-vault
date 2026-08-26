@@ -391,7 +391,17 @@ Keep the old `useSearchQuery(string)` only for legacy consumers during the compa
 
 ## 12. Static search semantics
 
-Static mode cannot reproduce Bleve score exactly. It must reproduce:
+Static mode cannot reproduce Bleve score exactly. Legacy tag inclusion is nevertheless a compatibility contract and must no longer diverge. Version 1 selects the current dynamic behavior as canonical:
+
+```text
+normalize one complete tag value using the established lower-case tag normalization
+query length <= 3: tag starts with query
+query length > 3: tag matches the backend's explicitly pinned fuzziness-1 term contract
+```
+
+The backend implementation must first replace analyzer-dependent implicit behavior with a focused, tested helper/query contract over normalized tag terms. Static mode then implements the same predicate (including a bounded edit-distance-one helper for longer tags). Shared expected-ID fixtures must include `#go` against `go` and `golang`, a one-edit longer tag, and a two-edit non-match. This intentionally migrates today's exact-only static `#tag` behavior to the established dynamic inclusion behavior; it does not change exact structured `tag=` filters.
+
+Static mode must reproduce:
 
 - date resolution;
 - exact tag all/any inclusion;
@@ -400,11 +410,11 @@ Static mode cannot reproduce Bleve score exactly. It must reproduce:
 - filter-only requests;
 - newest/oldest ordering and ID tie-break;
 - limits, offsets, and total count;
-- legacy `#tag` inclusion behavior as currently documented.
+- the canonical dynamic legacy `#tag` prefix/fuzziness inclusion contract defined above.
 
 Text ranking may remain implementation-specific. The response should not promise score comparability between modes.
 
-Shared JSON fixtures should contain normalized notes and requests with expected ordered IDs for all filter/sort cases. Go and TypeScript tests consume the same fixtures.
+Shared JSON fixtures should contain normalized notes and requests with expected ordered IDs for all filter/sort cases. Go and TypeScript tests consume the same fixtures. Legacy tag fixtures are inclusion fixtures; relevance scores may still differ.
 
 ## 13. Interaction model
 
@@ -602,7 +612,7 @@ The advanced dialog uses full available width and scrollable content. Apply/Canc
 
 **Rationale.** Discovery and filtering have different semantics. One mapping cannot provide both without ambiguity.
 
-**Consequences.** Index size increases and must be measured. Current `#tag` behavior remains stable.
+**Consequences.** Index size increases and must be measured. Dynamic `#tag` inclusion remains stable; static exact-only legacy tag matching migrates to the pinned dynamic prefix/fuzziness contract. Structured `tag=` filters remain exact.
 
 **Status.** Proposed.
 

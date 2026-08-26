@@ -389,7 +389,17 @@ The card should use `<time dateTime={date.value}>`. Initial SSR and hydrated tex
 
 ## 12. Static-mode parity
 
-Static mode must reuse a TypeScript translation of the same pure contract:
+Static mode must reuse a TypeScript translation of the same pure contract. Before date resolution, it must also preserve authored YAML date scalars as strings. The current default `js-yaml` schema resolves unquoted timestamps to JavaScript `Date` objects, and `serializeFrontmatter` truncates those objects with `toISOString().slice(0, 10)`. That destroys the source instant, timezone offset, and `timestamp` precision before the proposed resolver can inspect them.
+
+The implementation must import `JSON_SCHEMA` from `js-yaml` and parse frontmatter with `yamlLoad(source, { schema: JSON_SCHEMA })`. The JSON schema does not apply YAML timestamp resolution, so quoted and unquoted date/RFC3339 scalars reach the resolver as strings while ordinary JSON-compatible scalar types remain typed. Do not repair this after `serializeFrontmatter`: once a `Date` has been truncated, the original timestamp cannot be reconstructed.
+
+```ts
+import { JSON_SCHEMA, load as yamlLoad } from "js-yaml";
+
+const data = yamlLoad(frontmatterSource, { schema: JSON_SCHEMA });
+```
+
+Then static mode must reuse this TypeScript contract:
 
 ```ts
 type NoteDate = {
@@ -407,6 +417,8 @@ type NoteDates = {
 
 It must:
 
+- configure `parseFrontmatter` with `JSON_SCHEMA` before any serialization or date resolution;
+- remove the `Date`-specific truncation path from the authored-date pipeline;
 - apply the same alias order;
 - accept the same strict formats;
 - normalize timestamps to UTC;
@@ -415,7 +427,7 @@ It must:
 - compare index instants for range and sort behavior;
 - pass a shared JSON fixture matrix also consumed by Go tests.
 
-A cross-language golden fixture is preferable to duplicating prose assumptions in two independent test tables.
+A cross-language golden fixture is preferable to duplicating prose assumptions in two independent test tables. A separate static integration fixture must exercise the real `buildVault` path with both quoted and unquoted `created` and RFC3339 `updated` scalars. It must assert that the RFC3339 instant and `timestamp` precision survive YAML parsing, frontmatter serialization, note construction, and `staticSearchAdvanced`; testing `resolveNoteDates` alone is insufficient.
 
 ## 13. Decision record DR-1: authored dates over filesystem fallback
 
@@ -459,6 +471,8 @@ The implementation should share cases such as:
 | created + updated | both | both | updated | valid |
 | invalid `created` + valid `date` | absent | absent | absent | warning; no fallthrough |
 | timezone timestamp | normalized UTC | — | created | exact instant |
+| unquoted RFC3339 through static `buildVault` | preserved UTC instant | — | created | timestamp precision retained |
+| quoted/unquoted equivalent static scalars | identical | identical | identical | JSON-schema parity |
 | non-string value | absent | — | absent | wrong-type warning |
 
 Range tests must cover same-day inclusivity, open endpoints, leap days, invalid order, missing fields, timestamp boundary instants, and deterministic tie sorting.
@@ -467,6 +481,7 @@ Range tests must cover same-day inclusivity, open endpoints, leap days, invalid 
 
 - Using `time.Time` alone loses date-only precision; retain precision separately.
 - Parsing permissive natural-language dates creates backend/static divergence.
+- Using the default `js-yaml` schema creates `Date` objects and the current serializer truncates RFC3339 timestamps; configure `JSON_SCHEMA` before parsing.
 - Converting timestamps to browser-local dates during SSR can shift the displayed calendar day and cause hydration mismatch.
 - Falling back to `ModTime` reintroduces checkout-time semantics.
 - Falling through from invalid high-priority aliases hides author errors.

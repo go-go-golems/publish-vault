@@ -513,9 +513,9 @@ It must share expected IDs/order fixtures with Go for:
 - newest/oldest and tie order;
 - limit/offset/total.
 
-Do not promise Bleve score parity. Preserve current static text behavior unless a separate ticket aligns text search.
+Do not promise Bleve score parity. Preserve current static free-text behavior unless a separate ticket aligns text ranking. Legacy `#tag` inclusion is narrower than ranking: pin the current dynamic contract (prefix for normalized queries of at most three characters, fuzziness one for longer terms) in Go, migrate static exact-only legacy tag matching to that contract, and share expected-ID fixtures. Exact structured `tag=` filters remain exact.
 
-Remove static fallback `new Date()` for missing created metadata.
+Before resolving dates, configure `parseFrontmatter` with `js-yaml` `JSON_SCHEMA`. The default schema converts unquoted RFC3339 scalars to `Date`, and the current `serializeFrontmatter` truncates them to `YYYY-MM-DD`. Remove that lossy `Date` path from authored-date processing, preserve quoted and unquoted date scalars as strings, and test through the real `buildVault` path. Also remove static fallback `new Date()` for missing created metadata.
 
 ## 11. Implementation sequence
 
@@ -538,6 +538,8 @@ Work:
 4. Add created/updated/display resolution.
 5. Add finite invalid-reason counters/log behavior.
 6. Make Go and TypeScript consume the same fixture cases.
+7. Parse static frontmatter with `JSON_SCHEMA` so unquoted date and RFC3339 scalars remain strings.
+8. Add a static `buildVault` integration fixture proving quoted/unquoted RFC3339 instants retain timestamp precision after serialization and note construction.
 
 Gate:
 
@@ -563,9 +565,10 @@ Work:
 2. Add keyword/date/path fields.
 3. Add query builder with independent clauses.
 4. Add deterministic sorts.
-5. Return total and pagination metadata.
-6. Preserve `Search(query, limit)` as a thin adapter only if required by current internal call sites; do not duplicate query logic.
-7. Update batch byte accounting.
+5. Pin legacy dynamic `#tag` inclusion behind tested normalized prefix/fuzziness helpers so TypeScript can reproduce expected IDs.
+6. Return total and pagination metadata.
+7. Preserve `Search(query, limit)` as a thin adapter only if required by current internal call sites; do not duplicate query logic.
+8. Update batch byte accounting.
 
 Gate:
 
@@ -617,13 +620,16 @@ Work:
 2. Implement pure decode/encode/canonicalize functions.
 3. Add RTK Query advanced endpoint with canonical cache key.
 4. Implement static filters, sort, total, and pagination.
-5. Consume shared fixtures.
+5. Migrate static exact-only `#tag` matching to the pinned dynamic prefix/fuzziness inclusion contract.
+6. Consume shared date/filter/legacy-tag fixtures.
 
 Gate:
 
 ```text
 URL round-trip/property cases pass
 backend and static expected ID/order fixtures pass
+quoted/unquoted RFC3339 static build fixture preserves instant and precision
+legacy `#go`/fuzzy expected-ID fixtures match in backend and static modes
 invalid URL remains visible to UI
 filter-only request executes
 ```
@@ -704,7 +710,7 @@ Do not lower memory limits because this feature adds fields. Accept the mapping 
 - path one/many prefixes;
 - display/created/updated ranges;
 - text plus every filter category;
-- legacy `#`/`tag:` unchanged;
+- dynamic legacy `#`/`tag:` inclusion unchanged and static mode migrated to the same pinned contract;
 - relevance/newest/oldest deterministic ties;
 - missing dates last;
 - total, offset, limit;

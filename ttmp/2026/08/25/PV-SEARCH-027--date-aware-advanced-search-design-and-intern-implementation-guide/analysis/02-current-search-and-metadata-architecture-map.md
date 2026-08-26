@@ -255,7 +255,9 @@ if (fm.created instanceof Date) {
 
 Static `modTime` is therefore a resolved `created` frontmatter value when present and **today's build/runtime date** when absent. Dynamic `modTime` is filesystem modification time. The same `Note.modTime` property has different authority and fallback semantics in the two modes.
 
-`staticSearch` scans every note, uses substring tests over title, normalized tags, and excerpt, and sorts by a hand-built score. It does not search the full body, does not use fuzzy matching, and reproduces `#`/`tag:` handling separately. Exact backend/static ranking parity does not exist today, but result/filter inclusion parity is achievable and should be tested.
+There is an earlier scalar-loss boundary as well. `parseFrontmatter` calls `yamlLoad` with the default schema, which resolves unquoted YAML timestamps into JavaScript `Date` objects. `serializeFrontmatter` then converts every `Date` to `toISOString().slice(0, 10)`. An authored RFC3339 value can therefore lose its instant, timezone offset, and timestamp precision before a future static date resolver runs. Static parity requires selecting a no-timestamp-resolution YAML schema such as `JSON_SCHEMA` before parsing and exercising the complete `buildVault` path in tests.
+
+`staticSearch` scans every note, uses substring tests over title, normalized tags, and excerpt, and sorts by a hand-built score. It does not search the full body and reproduces `#`/`tag:` handling separately. Its legacy tag inclusion differs materially from Bleve: static mode requires an exact normalized tag, while `searchByTag` uses prefix matching for queries of at most three characters and fuzziness one for longer queries. For example, `#go` may include `golang` dynamically but not statically. The design must select one canonical behavior rather than calling both current; it selects the established dynamic behavior and migrates static mode to shared expected-ID fixtures.
 
 Phase 2 must replace both date implementations with one documented resolver contract and mode-specific source inputs. A missing date must remain missing; using the current date creates unstable sorting and false metadata.
 
