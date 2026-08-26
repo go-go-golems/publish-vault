@@ -1,0 +1,103 @@
+almanach_studio_version: 1
+theme: brutalist
+paperWidth: 384
+bodyScale: 1
+feedLines: 8
+blocks:
+- id: head
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: PV-SEARCH-028
+      preset: micro
+    - w: 1fr
+      text: P-B DONE
+      preset: micro
+      align: right
+- id: r1
+  type: rule
+  data:
+    weight: heavy
+- id: gap1
+  type: space
+  data:
+    size: s
+- id: title
+  type: text
+  data:
+    text: 'Phase B: Bleve Query'
+    preset: h1
+    lines: 3
+- id: gap2
+  type: space
+  data:
+    size: s
+- id: summary
+  type: text
+  data:
+    text: Typed SearchRequest, Bleve date/tag/path keyword fields, compound query builder, deterministic sorts, pagination,
+      and date-aware result extraction all pass contract tests.
+    preset: body
+- id: gap3
+  type: space
+  data:
+    size: m
+- id: did
+  type: list
+  data:
+    marker: —
+    lines: 2
+    items:
+    - request.go types + validate
+    - noteDoc + mapping fields
+    - query builder + sorts + page
+    - 11 contract tests pass
+- id: gap4
+  type: space
+  data:
+    size: s
+- id: tricky
+  type: list
+  data:
+    marker: '!'
+    lines: 2
+    items:
+    - missing-date sort last (Bleve default)
+    - date reconstruct from stored instant
+- id: r2
+  type: rule
+  data:
+    weight: hair
+- id: facts
+  type: kv
+  data:
+    items:
+    - - COMMIT
+      - b7763ab
+    - - NEXT
+      - 'Phase C: advanced HTTP API'
+    - - PHASE
+      - B
+    - - LINT
+      - '0'
+    - - RACE
+      - pass
+- id: r3
+  type: rule
+  data:
+    weight: hair
+- id: decide
+  type: row
+  data:
+    cols:
+    - w: 1fr
+      text: SCAN FOR COMMIT
+      preset: caption
+    - w: 120
+      blocks:
+      - id: qr
+        type: qr
+        data:
+          value: https://github.com/go-go-golems/publish-vault/commit/b7763ab
+          size: 110
