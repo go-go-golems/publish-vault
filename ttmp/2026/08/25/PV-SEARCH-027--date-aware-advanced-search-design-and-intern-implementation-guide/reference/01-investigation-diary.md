@@ -612,7 +612,15 @@ OK: uploaded PV-SEARCH-027 Date Aware Advanced Search Guide.pdf -> /ai/2026/08/2
 
 ### What didn't work
 
-No Phase 5 command has failed so far. The final completion slip remains deliberately unprinted until the audit commit is pushed; this is an ordering constraint, not missing work.
+The required Phase 5 validation and upload commands did not fail. After closure, PR #26 was created successfully, but the chained inspection command omitted the required PR number when `--repo` was present:
+
+```text
+argument required when using the --repo flag
+```
+
+The creation output had already returned `https://github.com/go-go-golems/publish-vault/pull/26`. I reran inspection as `gh pr view 26 --repo go-go-golems/publish-vault ...`; no PR mutation or evidence was lost.
+
+The final completion slip was deliberately withheld until the audit commit had pushed; this was an ordering constraint, not missing work.
 
 ### What I learned
 
@@ -661,4 +669,5 @@ P5 completion slip printed after push: yes
 Phase 5 task: complete
 all ticket tasks: complete
 implementation changes: none
+PR: https://github.com/go-go-golems/publish-vault/pull/26
 ```
