@@ -1,7 +1,7 @@
 ---
 Title: Current search and metadata architecture map
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - frontend

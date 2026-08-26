@@ -1,7 +1,7 @@
 ---
 Title: Canonical note-date model and Bleve date contract
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - backend

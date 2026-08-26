@@ -1,7 +1,7 @@
 ---
 Title: Advanced search request index URL and interaction design
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - frontend

@@ -1,7 +1,7 @@
 ---
 Title: Scope evidence map and acceptance gates
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - frontend

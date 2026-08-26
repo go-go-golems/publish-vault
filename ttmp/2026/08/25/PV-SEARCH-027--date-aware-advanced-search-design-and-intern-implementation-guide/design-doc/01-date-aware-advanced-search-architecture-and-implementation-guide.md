@@ -1,7 +1,7 @@
 ---
 Title: Date-aware advanced search architecture and implementation guide
 Ticket: PV-SEARCH-027
-Status: active
+Status: complete
 Topics:
     - search
     - frontend

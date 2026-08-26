@@ -556,3 +556,106 @@ P4 completion slip printed after commit: yes
 Phase 4 task: complete
 implementation changes in ticket: none
 ```
+
+## Step 6: Validate the complete package and deliver it to reMarkable
+
+Phase 5 ran the repository and document gates against the committed design package, then rendered and uploaded one ordered seven-document PDF bundle. All codebase checks, race tests, frontend tests/builds, Storybook build, executable probes, metadata checks, and diff checks passed.
+
+The delivery audit maps every user and process requirement to concrete evidence. Ticket closure remains intentionally ordered: commit and push the audit first, print the Phase 5 completion slip only after that push, then commit/push the slip and verify the final clean synchronized state.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Audit the research package as a deliverable, prove it renders and uploads, preserve validation evidence, and do not print the final completion slip before remote delivery succeeds.
+
+**Inferred user intent:** Receive a durable ticket and readable reMarkable handoff whose completeness can be reviewed independently of this conversation.
+
+**Commit (code):** pending Phase 5 audit/delivery commit
+
+### What I did
+
+- Printed and preserved `scripts/slips/11-phase-5-start.yaml` before final validation.
+- Ran `make ci-check`, full race tests, Vitest, client/SSR builds, and Storybook build.
+- Reran all three public probes and retained PASS statuses.
+- Ran ticket doctor, diff checks, frontmatter/word/diagram/style checks, and requirement mapping.
+- Created `artifacts/final-validation.txt` with one-line command/pass evidence.
+- Created `reference/02-delivery-and-requirement-audit.md`.
+- Performed the required reMarkable bundle dry-run.
+- Uploaded seven ordered docs with ToC depth 2 to `/ai/2026/08/26/PV-SEARCH-027`.
+- Received explicit `OK: uploaded` confirmation.
+
+### Why
+
+Documentation can be logically correct but fail as a deliverable because of malformed frontmatter, code fences, diagrams, generated scripts, or PDF rendering. The final phase validates both repository integrity and the actual delivery path.
+
+### What worked
+
+```text
+make ci-check: PASS
+go test -race ./...: PASS
+Vitest: 5 files, 38 tests PASS
+client + SSR build: PASS
+Storybook build: PASS
+three probes: PASS
+diff check: PASS
+docmgr doctor: PASS
+reMarkable dry-run: PASS
+reMarkable upload: PASS
+```
+
+The bundle upload returned:
+
+```text
+OK: uploaded PV-SEARCH-027 Date Aware Advanced Search Guide.pdf -> /ai/2026/08/26/PV-SEARCH-027
+```
+
+### What didn't work
+
+No Phase 5 command has failed so far. The final completion slip remains deliberately unprinted until the audit commit is pushed; this is an ordering constraint, not missing work.
+
+### What I learned
+
+- Ticket probe packages now participate in full repository race and test discovery, which is useful validation of their isolation.
+- Storybook builds successfully with the current component set, so the implementation plan can require stories without first repairing Storybook infrastructure.
+- A seven-document bundle remains renderable and provides a clearer reading order than uploading each document separately.
+
+### What was tricky to build
+
+The final evidence has a circularity risk: a completion slip cannot truthfully claim push success before the slip itself exists in Git. The resolution is two commits. The first carries all technical/delivery evidence and is pushed. The completion slip is then printed, committed, pushed, and followed by a clean synchronization check.
+
+The audit distinguishes proposed implementation decisions from incomplete research. This ticket designs work; it does not claim that date/filter feature code is already implemented.
+
+### What warrants a second pair of eyes
+
+- Review the delivery audit's PASS/PENDING distinctions before final closure.
+- Confirm the bundle document order is useful to an intern.
+- Confirm no private data appears in probe inputs or retained artifacts.
+- Verify final branch contains only ticket documentation, public probes, artifacts, and slips.
+
+### What should be done in the future
+
+After final push and completion slip, implementation can begin with primary guide Phase A. It should not start with React controls.
+
+### Code review instructions
+
+- Read `reference/02-delivery-and-requirement-audit.md`.
+- Inspect `artifacts/final-validation.txt` and rerun selected commands if needed.
+- Verify all twelve expected start/done slip sources after closure.
+- Confirm the remote reMarkable path from upload output.
+- Run final `git status`, branch sync, doctor, and diff checks.
+
+### Technical details
+
+```text
+bundle documents: 7
+bundle ToC depth: 2
+remote path: /ai/2026/08/26/PV-SEARCH-027
+primary guide words: 4220
+design/research words excluding diary/audit: 13334
+ticket Mermaid diagrams: 6
+Vitest: 38/38
+reMarkable upload: succeeded
+Phase 5 task: pending final push/slip sequence
+implementation changes: none
+```
