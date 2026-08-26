@@ -267,7 +267,7 @@ Two public probes support the decision. The parser probe confirms that current f
 
 **Inferred user intent:** Prevent an intern from displaying misleading Git checkout timestamps or implementing incompatible date behavior in Go and TypeScript.
 
-**Commit (code):** pending Phase 2 documentation commit
+**Commit (code):** `35463aa` — `docs(PV-SEARCH-027): define canonical note dates`
 
 ### What I did
 
@@ -350,5 +350,7 @@ timezone: UTC in v1
 Bleve date fields: created_at, updated_at, display_at
 sort tie-breaker: _id ascending
 raw/private data used: none
+P2 completion slip printed after commit: yes
+Phase 2 task: complete
 implementation changes: none
 ```
