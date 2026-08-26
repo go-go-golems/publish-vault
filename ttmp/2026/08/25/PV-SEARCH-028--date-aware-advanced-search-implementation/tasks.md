@@ -7,4 +7,4 @@
 - [x] Phase C: advanced HTTP API endpoint and validation <!-- t:kja8 -->
 - [x] Phase D: shared TS types, URL codec, and static search parity <!-- t:wocz -->
 - [x] Phase E: advanced-search UI controls and result date rendering <!-- t:nc9h -->
-- [ ] Phase F: full validation, measurement, Docker/Compose, and rollout <!-- t:zgb1 -->
+- [x] Phase F: full validation, measurement, Docker/Compose, and rollout <!-- t:zgb1 -->

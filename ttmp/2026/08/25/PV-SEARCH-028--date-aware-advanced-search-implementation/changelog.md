@@ -44,3 +44,11 @@ Phase E: URL-driven SearchPage with accessible filter panel, sort, applied chips
 ### Related Files
 
 - /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/web/src/components/pages/SearchPage/SearchPage.tsx — URL-driven search
+
+## 2026-08-25
+
+Phase F: full validation (ci-check, race, web, storybook), Docker/Compose smoke, and validation evidence.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-25/publish-vault-mem/publish-vault/ttmp/2026/08/25/PV-SEARCH-028--date-aware-advanced-search-implementation/artifacts/final/01-phase-f-validation.md — Phase F evidence
