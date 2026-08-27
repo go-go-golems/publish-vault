@@ -150,12 +150,20 @@ function normalizePathPrefixes(paths: string[]): { paths: string[]; errors: Fiel
   return { paths: out, errors };
 }
 
-/** Normalize, validate, and apply defaults to an advanced-search request. */
+/** Normalize, validate, and apply defaults to an advanced-search request.
+ *
+ * The query is NOT trimmed here. Trimming the query would strip leading and
+ * trailing spaces the user is actively typing into the controlled search
+ * field: the field's value is derived from this normalized request, so a trim
+ * here would round-trip through the URL and overwrite the user's space. The
+ * search backends (the Go API tokenizer and the static-vault matcher) trim and
+ * word-split on their own, so preserving spaces here does not change search
+ * results. Whitespace-only queries are treated as empty by isEffective and
+ * omitted from the URL by encodeSearchParams (both gate on query.trim()). */
 export function normalizeSearchRequest(raw: SearchRequest): { request: SearchRequest; errors: FieldError[] } {
   const req: SearchRequest = { ...raw, tags: [...raw.tags], pathPrefixes: [...raw.pathPrefixes] };
   const errors: FieldError[] = [];
 
-  req.query = req.query.trim();
   if (req.query.length > 0 && req.query.length > MAX_QUERY_BYTES) {
     errors.push({ field: "q", code: "query_too_long", message: "Query is too long." });
   }
@@ -196,7 +204,7 @@ export function normalizeSearchRequest(raw: SearchRequest): { request: SearchReq
     req.sort = "relevance";
   }
   if (!req.sort) {
-    req.sort = req.query ? "relevance" : "newest";
+    req.sort = req.query.trim() ? "relevance" : "newest";
   }
 
   if (req.limit === 0) req.limit = DEFAULT_LIMIT;
@@ -210,10 +218,12 @@ export function normalizeSearchRequest(raw: SearchRequest): { request: SearchReq
   return { request: req, errors };
 }
 
-/** A request is effective when it has text or at least one structured filter. */
+/** A request is effective when it has non-whitespace text or at least one
+ * structured filter. A whitespace-only query is not effective so typing a
+ * space into an empty field does not trigger a search. */
 export function isEffective(req: SearchRequest): boolean {
   return (
-    req.query !== "" ||
+    req.query.trim() !== "" ||
     req.tags.length > 0 ||
     req.pathPrefixes.length > 0 ||
     req.dateFrom !== undefined ||
@@ -221,10 +231,15 @@ export function isEffective(req: SearchRequest): boolean {
   );
 }
 
-/** Canonicalize a request so equivalent inputs produce identical URL state. */
+/** Canonicalize a request so equivalent inputs produce identical URL state.
+ *
+ * The query is preserved verbatim (not trimmed) for the same reason as
+ * normalizeSearchRequest: the canonical form feeds the controlled search
+ * field's value via the URL, and trimming here would strip spaces the user is
+ * typing. The search backends trim on their own. */
 export function canonicalizeSearchRequest(req: SearchRequest): SearchRequest {
   return {
-    query: req.query.trim(),
+    query: req.query,
     tags: [...req.tags].sort(),
     tagMode: req.tagMode || "all",
     pathPrefixes: [...req.pathPrefixes].sort(),
@@ -241,7 +256,10 @@ export function canonicalizeSearchRequest(req: SearchRequest): SearchRequest {
 export function encodeSearchParams(req: SearchRequest): URLSearchParams {
   const c = canonicalizeSearchRequest(req);
   const params = new URLSearchParams();
-  if (c.query) params.set("q", c.query);
+  // Emit q only when the query has non-whitespace content, but preserve the
+  // user's exact spacing (leading/trailing/internal) in the emitted value so
+  // the controlled search field round-trips without stripping typed spaces.
+  if (c.query.trim()) params.set("q", c.query);
   for (const t of c.tags) params.append("tag", t);
   if (c.tags.length > 0) params.set("tag_mode", c.tagMode);
   for (const p of c.pathPrefixes) params.append("path", p);

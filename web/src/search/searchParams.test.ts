@@ -77,6 +77,30 @@ describe("normalizeSearchRequest", () => {
 });
 
 describe("URL codec round-trip", () => {
+  it("preserves leading, trailing, and internal spaces in the query so the controlled search field does not strip typed spaces", () => {
+    // A user typing "hello world" must not have the space between words, or a
+    // trailing space while typing, stripped by the canonical/URL round-trip.
+    const req: SearchRequest = { ...emptyRequest(), query: "  hello world  " };
+    const encoded = encodeSearchParams(req);
+    expect(encoded.get("q")).toBe("  hello world  ");
+    const { request: decoded } = decodeSearchParams(encoded);
+    expect(decoded.query).toBe("  hello world  ");
+    // normalizeSearchRequest preserves the spaces too (the controlled value is
+    // derived from it).
+    const { request: norm } = normalizeSearchRequest(decoded);
+    expect(norm.query).toBe("  hello world  ");
+    // canonicalize is idempotent and preserves spaces.
+    expect(canonicalizeSearchRequest(norm).query).toBe("  hello world  ");
+  });
+
+  it("treats a whitespace-only query as empty: omits q, is not effective, defaults sort to newest", () => {
+    const req: SearchRequest = { ...emptyRequest(), query: "   " };
+    expect(encodeSearchParams(req).has("q")).toBe(false);
+    const { request: norm } = normalizeSearchRequest(req);
+    expect(isEffective(norm)).toBe(false);
+    expect(norm.sort).toBe("newest");
+  });
+
   it("encodes and decodes a full request preserving the contract", () => {
     const req: SearchRequest = {
       query: "memory",
