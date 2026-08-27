@@ -475,3 +475,60 @@ func TestRegularSearchUnchanged(t *testing.T) {
 		t.Error("Search(philosophy): expected results, got none")
 	}
 }
+
+// TestStopwordsAreIndexed proves the no-stopword analyzer keeps common English
+// stopwords in the index. The bleve "standard" analyzer dropped words like
+// "what", "this", "that", "with", "from" at indexing time, so querying them
+// returned nothing despite the words being present in the notes. With the
+// custom "nostop" analyzer these stopwords are indexed and searchable.
+func TestStopwordsAreIndexed(t *testing.T) {
+	root := t.TempDir()
+	writeTestNote(t, root, "what-note.md", "# What is bleve\n\nThis explains what bleve does with from and why that matters.")
+	writeTestNote(t, root, "other-note.md", "# Other\n\nUnrelated note about golang.")
+
+	v, err := vault.New(root)
+	if err != nil {
+		t.Fatalf("vault.New: %v", err)
+	}
+	idx, err := New(v)
+	if err != nil {
+		t.Fatalf("search.New: %v", err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+
+	// Each of these is an English stopword that the old standard analyzer would
+	// have dropped. They are 4+ characters, so they take the analyzed MatchQuery
+	// path (the one that exposed the bug), not the <=3-char prefix special case.
+	for _, w := range []string{"what", "this", "that", "with", "from"} {
+		results, err := idx.Search(w, 20)
+		if err != nil {
+			t.Fatalf("Search(%q): %v", w, err)
+		}
+		if len(results) == 0 {
+			t.Errorf("Search(%q): expected results (stopword should be indexed), got none", w)
+		}
+	}
+
+	// "what" should match the what-note specifically (title contains "what").
+	results, err := idx.Search("what", 20)
+	if err != nil {
+		t.Fatalf("Search(what): %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.Slug == "what-note" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Search(what): expected what-note in results, got %v", slugsSimple(results))
+	}
+}
+
+func slugsSimple(results []SearchResult) []string {
+	out := make([]string, 0, len(results))
+	for _, r := range results {
+		out = append(out, r.Slug)
+	}
+	return out
+}

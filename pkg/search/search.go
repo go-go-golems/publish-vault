@@ -397,7 +397,16 @@ func tokenizeQuery(q string) []string {
 func buildMapping() mapping.IndexMapping {
 	im := bleve.NewIndexMapping()
 
+	// Make "nostop" the index-wide default analyzer. bleve's IndexMappingImpl
+	// defaults its DefaultAnalyzer to the "standard" analyzer (which applies the
+	// English stop filter), and that default governs the _all composite field and
+	// any text field without an explicit Analyzer. A MatchQuery with no SetField
+	// searches _all, so without this the query side would still drop stopwords
+	// even though the per-field analyzers were changed to nostop.
+	im.DefaultAnalyzer = nostopAnalyzerName
+
 	dm := bleve.NewDocumentMapping()
+	dm.DefaultAnalyzer = nostopAnalyzerName
 
 	titleField := bleve.NewTextFieldMapping()
 	titleField.Analyzer = nostopAnalyzerName
