@@ -65,3 +65,56 @@ Replace bleve's `standard` analyzer (lowercase + English stop filter) with a cus
 ### Technical details
 - Analyzer chain: unicode tokenizer → lowercase filter. No stop filter, no stemmer.
 - Fields using `nostop`: title, body, tags, excerpt. Keyword fields (tags_kw, path, path_kw, dates) unchanged.
+
+## Step P2: Tests + reindex verification
+
+Added a stopword-indexing test and discovered (and fixed) the second half of the bug: the per-field `nostop` analyzer was not enough because a `MatchQuery` with no `SetField` searches bleve's `_all` composite field, whose analyzer is the IndexMapping's `DefaultAnalyzer` — which bleve defaults to `standard` (with the stop filter). Set `im.DefaultAnalyzer` (and the document mapping's) to `nostop`. Verified the live deploy rebuilds the index fresh on startup, so no manual reindex is needed.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see P1)
+
+**Assistant interpretation:** Add tests proving stopwords are indexed/returned and verify the reindex path.
+
+**Inferred user intent:** Lock the fix with a regression test and confirm the live index will pick up the new mapping on deploy.
+
+**Commit (code):** 194c000 — "fix(search): set nostop as the index default analyzer + stopword index test"
+
+### What I did
+- `pkg/search/search_test.go`: added `TestStopwordsAreIndexed` — indexes a note containing `what/this/that/with/from` plus an unrelated note, and asserts each stopword is searchable (4+ chars → MatchQuery path, the one that exposed the bug) and that "what" matches the what-note.
+- `pkg/search/search.go:buildMapping`: `im.DefaultAnalyzer = nostopAnalyzerName` and `dm.DefaultAnalyzer = nostopAnalyzerName`.
+- `go test ./pkg/search/` and `go test ./...` green.
+
+### Why
+- A `MatchQuery` with no `SetField` searches the `_all` composite field. `_all`'s analyzer is the IndexMapping's `DefaultAnalyzer`, which bleve's `NewIndexMapping()` sets to `standard.Name` (bleve `mapping/index.go:37 const defaultAnalyzer = standard.Name`). So even with `nostop` on every text field, the query side still dropped stopwords via `_all`. Setting the default to `nostop` makes both indexing and querying consistent.
+- The test pins the exact regression: 4+ char stopwords must be searchable via the MatchQuery path.
+
+### What worked
+- After setting `DefaultAnalyzer`, "what"/"this"/"that" passed immediately. "with"/"from" initially failed — because my first test note didn't contain them; fixed the note text. The test then caught a real content gap rather than a code gap, which is the right behavior.
+
+### What didn't work
+- First test note omitted "with"/"from"; the test correctly reported 0 for them, which looked like a code failure but was a test-data gap.
+
+### What I learned
+- bleve's `_all` field analyzer is the IndexMapping `DefaultAnalyzer`, not inherited from the per-field mappings. Any analyzer change must set the default too, or query-time `_all` searches keep the old analyzer.
+- The live index is rebuilt fresh on every startup/vault-reload via `buildSearchIndex` → `search.NewPersistentWithOptions` (removes the build dir, calls `bleve.New(buildIndexDir, buildMapping())`), keyed by vault revision. So the new mapping takes effect on the next pod restart — no manual reindex command.
+
+### What was tricky to build
+- Distinguishing "the analyzer is wrong" from "the word isn't in the corpus." The test failure message for "with"/"from" was identical to "what"/"this" before the DefaultAnalyzer fix, so the root cause wasn't obvious until I checked the test note content.
+
+### What warrants a second pair of eyes
+- That `DefaultAnalyzer` is set on both the IndexMapping and the document mapping (belt and suspenders; the document-mapping default is what `defaultAnalyzerName` walks).
+- That no other code path constructs an index without `buildMapping` (grep confirms `buildMapping` is the single mapping factory).
+
+### What should be done in the future
+- Reconsider the `<=3` prefix special case now that stopwords are indexed (no longer inconsistent, but still arbitrary). Out of scope.
+- Consider an analyzer-config knob. Out of scope.
+
+### Code review instructions
+- `pkg/search/search_test.go:TestStopwordsAreIndexed`.
+- `pkg/search/search.go:buildMapping` (the two `DefaultAnalyzer = nostopAnalyzerName` lines).
+- `go test ./pkg/search/ -run TestStopwordsAreIndexed -v`.
+
+### Technical details
+- `_all` analyzer = IndexMapping.DefaultAnalyzer (defaults to "standard").
+- Live reindex: `pkg/server/runtime.go:buildSearchIndex` → `search.NewPersistentWithOptions` (removes + rebuilds).
