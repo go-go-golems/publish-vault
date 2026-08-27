@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve/v2"
-	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
 	bq "github.com/blevesearch/bleve/v2/search/query"
 
@@ -378,24 +377,40 @@ func tokenizeQuery(q string) []string {
 	return tokens
 }
 
-// buildMapping creates the bleve index mapping with English analyzer.
+// buildMapping creates the bleve index mapping with a no-stopword analyzer.
+//
+// The text fields (title, body, tags, excerpt) are analyzed with a custom
+// analyzer ("nostop") that is the unicode tokenizer + the lowercase token
+// filter, intentionally WITHOUT the English stop-word filter that bleve's
+// built-in "standard" analyzer applies. The stop filter drops common English
+// words (what, this, that, with, from, have, your, they, them, ...) from the
+// index at indexing time, so they can never be matched by any query. For a
+// personal note vault every word can be a legitimate, intentional query, and
+// the index-size cost of keeping stopwords is negligible at this scale, so the
+// stop filter is the wrong default here. Removing it also aligns the Go bleve
+// search path with the static-vault client-side matcher, which is a plain
+// substring match and has no stopword logic.
+//
+// No stemmer is applied: exact token semantics are preserved (code
+// identifiers, filenames); fuzziness on MatchQuery covers typos without stem
+// surprises.
 func buildMapping() mapping.IndexMapping {
 	im := bleve.NewIndexMapping()
 
 	dm := bleve.NewDocumentMapping()
 
 	titleField := bleve.NewTextFieldMapping()
-	titleField.Analyzer = standard.Name
+	titleField.Analyzer = nostopAnalyzerName
 	titleField.Store = true
 	dm.AddFieldMappingsAt("title", titleField)
 
 	bodyField := bleve.NewTextFieldMapping()
-	bodyField.Analyzer = standard.Name
+	bodyField.Analyzer = nostopAnalyzerName
 	bodyField.Store = false
 	dm.AddFieldMappingsAt("body", bodyField)
 
 	tagsField := bleve.NewTextFieldMapping()
-	tagsField.Analyzer = standard.Name
+	tagsField.Analyzer = nostopAnalyzerName
 	tagsField.Store = true
 	dm.AddFieldMappingsAt("tags", tagsField)
 
@@ -404,6 +419,7 @@ func buildMapping() mapping.IndexMapping {
 	dm.AddFieldMappingsAt("tags_kw", tagsKwField)
 
 	excerptField := bleve.NewTextFieldMapping()
+	excerptField.Analyzer = nostopAnalyzerName
 	excerptField.Store = true
 	dm.AddFieldMappingsAt("excerpt", excerptField)
 
