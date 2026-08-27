@@ -33,3 +33,8 @@ P3: pushed main -> CI built sha-1d9c02d -> GitOps PRs #325 + #326 merged -> Argo
 
 - /home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml — image bumped to sha-1d9c02d via GitOps PR #325
 
+
+## 2026-08-27
+
+P4: verified live on parc.yolo — what 1933, this 1919, that 1944, with 1948, from 1909, have 1429, your 1489, they 2000, them 1999 (all were 0); non-stopwords unchanged
+

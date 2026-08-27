@@ -163,3 +163,47 @@ Pushed main -> CI built publish-vault + publish-vault-ssr (sha-1d9c02d) -> opene
 
 ### Technical details
 - New image: sha-1d9c02d (app + ssr). Argo apps: retro-obsidian-publish, obsidian-vault-publish (both Synced/Healthy).
+
+## Step P4: Verify live
+
+Confirmed on https://parc.yolo.scapegoat.dev that every previously-broken stopword now returns results, and non-stopwords are unchanged. The index rebuilt fresh on pod startup with the no-stopword mapping.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see P1)
+
+**Assistant interpretation:** Prove the fix works on the live site.
+
+**Commit (code):** none (verification only).
+
+### What I did
+- Confirmed the running pod is `sha-1d9c02d`, ready, age matches the rollout.
+- Live API `/api/search/advanced?q=<word>` totals (were 0, now): what 1933, this 1919, that 1944, with 1948, from 1909, have 1429, your 1489, they 2000, them 1999.
+- Sanity: knowledge 486, go 1759, the 2000, system 1594 (unchanged). Multi-word "what is this" -> 1878 (ANDs on all words incl. stopwords).
+
+### Why
+- The numbers are the proof: stopwords are now indexed (the index rebuilt on startup) and searchable.
+
+### What worked
+- All 9 stopwords returned >0 on the first query after the rollout completed.
+
+### What didn't work
+- Nothing.
+
+### What I learned
+- The live index rebuild on startup (NewPersistentWithOptions) makes analyzer changes take effect with no manual reindex — the key operational property that made this a one-PR fix.
+
+### What was tricky to build
+- None operationally.
+
+### What warrants a second pair of eyes
+- That the totals are plausible (what 1933 in a ~2000-note vault is expected — "what" is common).
+
+### What should be done in the future
+- Reconsider the <=3 prefix special case. Out of scope.
+
+### Code review instructions
+- `curl 'https://parc.yolo.scapegoat.dev/api/search/advanced?q=what'` -> total > 0.
+
+### Technical details
+- Live totals: what 1933, this 1919, that 1944, with 1948, from 1909, have 1429, your 1489, they 2000, them 1999.
