@@ -24,3 +24,12 @@ P2: set nostop as index DefaultAnalyzer (the _all composite field still used sta
 - /home/manuel/code/wesen/go-go-golems/publish-vault/pkg/search/search.go — im.DefaultAnalyzer=nostop so _all field drops no stopwords
 - /home/manuel/code/wesen/go-go-golems/publish-vault/pkg/search/search_test.go — TestStopwordsAreIndexed regression test
 
+
+## 2026-08-27
+
+P3: pushed main -> CI built sha-1d9c02d -> GitOps PRs #325 + #326 merged -> Argo synced -> both deployments on sha-1d9c02d; index rebuilt fresh on startup
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-03-27--hetzner-k3s/gitops/kustomize/retro-obsidian-publish/deployment.yaml — image bumped to sha-1d9c02d via GitOps PR #325
+
