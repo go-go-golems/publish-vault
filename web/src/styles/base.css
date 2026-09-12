@@ -8,10 +8,6 @@
 
   html {
     font-size: 14px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: unset;
-    font-smooth: never;
-    image-rendering: pixelated;
   }
 
   body {
