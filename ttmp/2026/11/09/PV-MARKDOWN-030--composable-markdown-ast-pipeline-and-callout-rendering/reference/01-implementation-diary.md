@@ -935,3 +935,6 @@ While rechecking the completion contract I found one remaining duplicate renderi
 
 
 **Shared-math validation:** `make ci-check > /tmp/pv-markdown-030-ci-shared-math.log 2>&1` passed all project stages, including lint, Go/plugin tests, gosec, govulncheck, frontend type-check and build. The scanner reported zero called vulnerabilities and separately noted uncalled dependency findings. `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, an embedded build plus help, `docmgr doctor` and `git diff --check` passed. Vault remote main still matched report commit `11a6fa1da29c8cea455c8520382ea56da26507aa`.
+
+
+**Shared-math final browser check:** Served the freshly built `/tmp/pv-030-shared-math` against the local fixture on loopback port 18201. Playwright reported zero hard breaks in the paragraph, the expected callout and `/note/target` link, both table cells, and `done` for inline and display math. Visually inspected `reference/assets/shared-math-final.png`, then stopped the server. The fixture's absent favicons produce two expected 404s; this is not a live-production check.
