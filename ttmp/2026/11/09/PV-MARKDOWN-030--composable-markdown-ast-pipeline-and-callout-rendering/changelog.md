@@ -55,3 +55,7 @@ Added bounded structural parser fuzz coverage; 43,718 executions passed.
 ## 2026-11-10
 
 Removed duplicate Goldmark GFM extension registrations; targeted tests and same-corpus inventory matched the pre-cleanup implementation.
+
+## 2026-11-10
+
+Completed requirement-to-evidence audit for the structural pipeline, validation, reMarkable design and pushed Obsidian report.

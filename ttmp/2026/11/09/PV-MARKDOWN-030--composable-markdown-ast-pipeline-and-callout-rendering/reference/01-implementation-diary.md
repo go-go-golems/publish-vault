@@ -846,3 +846,45 @@ The completion audit found that `newMarkdown` explicitly registered Table, Strik
 
 
 **Final validation after deduplication:** `make ci-check > /tmp/pv-markdown-030-ci-final-audit.log 2>&1` passed formatting, backend lint, logcopter, all Go/plugin tests, gosec, govulncheck, frontend type-check and the frontend build. Govulncheck reported zero called vulnerabilities and separately noted uncalled findings in dependencies. `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, an embedded build and help smoke, `docmgr doctor`, and `git diff --check` also passed. The vault's remote main still points to report commit `11a6fa1da29c8cea455c8520382ea56da26507aa` and the vault working tree is clean.
+
+## Step 19: Audit the completion contract
+
+I mapped each explicit goal requirement to source, tests, validation output, documentation, commits and the verified vault remote. The audit explicitly distinguishes local checks from deployment and bounded corpus measurements from exhaustive equivalence.
+
+### Prompt Context
+**User prompt:** See Steps 6, 9, 10 and 12; the active goal requires a fresh completion audit.
+**Assistant interpretation:** Verify the requested work and delivery rather than inferring completion from the number of commits or checked tasks.
+**Inferred user intent:** A defensible handoff with clear limits.
+**Commit (code):** 0185f51 — "refactor(parser): avoid duplicate GFM registrations".
+
+### What I did
+- Added `reference/02-completion-audit-and-evidence-map.md` mapping requirements to artifacts and noted limitations.
+- Rechecked `docmgr doctor`, ticket tasks, branch status, validation log and the Obsidian vault's `HEAD` and remote main.
+
+### Why
+- The user asked for all migrations, validation, a detailed diary and a pushed report; each has a distinct evidence source and must not be inferred from another.
+
+### What worked
+- All ticket tasks are checked and doctor passed. `git ls-remote origin refs/heads/main` in `go-go-parc` matched local report commit `11a6fa1da29c8cea455c8520382ea56da26507aa`. Final CI, race, build, local browser and fuzz results are recorded in Steps 15–18.
+- Search of the changed production files found no TODO/FIXME/HACK or old sentinel/whole-HTML rewrite function names. The tracked code diff is committed; unrelated pre-existing untracked files remain untouched.
+
+### What didn't work
+- No failures observed in this audit step. Prior failed checks and their fixes remain documented in earlier steps.
+
+### What I learned
+- Corpus counts, a short fuzz run and a local browser fixture support specific claims but cannot establish exhaustive correctness or production deployment.
+
+### What was tricky to build
+- The design report uploaded to reMarkable precedes implementation, whereas the later pushed vault article describes the implemented branch; their delivery evidence and scopes must stay separate.
+
+### What warrants a second pair of eyes
+- Raw HTML is deliberately trusted, and unusual Markdown nesting may need future tests if real input demonstrates a new defect. Neither caveat is a claim that production was deployed.
+
+### What should be done in the future
+- Deploy and verify the public site only when requested through the deployment workflow.
+
+### Code review instructions
+- Start with the evidence map, then follow the linked implementation guide and commits. Check the public page separately after a future deployment.
+
+### Technical details
+- The goal requires local implementation, validation, documentation and the vault report push; it does not authorize or require a production deployment.
