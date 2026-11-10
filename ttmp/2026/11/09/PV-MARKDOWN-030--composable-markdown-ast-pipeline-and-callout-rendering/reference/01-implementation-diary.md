@@ -888,3 +888,6 @@ I mapped each explicit goal requirement to source, tests, validation output, doc
 
 ### Technical details
 - The goal requires local implementation, validation, documentation and the vault report push; it does not authorize or require a production deployment.
+
+
+**Final-revision browser smoke:** Built `/tmp/pv-030-audit` after the GFM deduplication and served the temporary fixture on loopback port 18200. Playwright inspection showed `hardBreaks: 0`, a callout, `/note/target`, both table cells `One` and `Two`, and `done` for the inline and display math elements. Visually inspected `reference/assets/final-audit-smoke.png`; stopped the temporary server. The fixture lacks a favicon and produced the same two expected favicon 404s; this is not a production deployment check.
