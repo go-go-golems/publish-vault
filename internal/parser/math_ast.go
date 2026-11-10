@@ -252,24 +252,33 @@ func (mathBlockTransformer) Transform(doc *ast.Document, _ text.Reader, _ goldpa
 	}
 }
 
+// renderMathElement is shared by math nodes and math in wiki-link labels so
+// escaping and browser enhancement hooks have one definition.
+func renderMathElement(tex string, display, block bool) string {
+	class, tag := "math-inline", "span"
+	if display {
+		class = "math-display"
+	}
+	if block {
+		tag = "div"
+	}
+	return "<" + tag + ` class="math ` + class + `">` + html.EscapeString(tex) + "</" + tag + ">"
+}
+
 type mathRenderer struct{}
 
 func (mathRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(kindInlineMath, func(w util.BufWriter, _ []byte, n ast.Node, enter bool) (ast.WalkStatus, error) {
 		if enter {
 			math := n.(*inlineMath)
-			class := "math-inline"
-			if math.display {
-				class = "math-display"
-			}
-			_, err := w.WriteString(`<span class="math ` + class + `">` + html.EscapeString(math.tex) + `</span>`)
+			_, err := w.WriteString(renderMathElement(math.tex, math.display, false))
 			return ast.WalkSkipChildren, err
 		}
 		return ast.WalkContinue, nil
 	})
 	reg.Register(kindDisplayMath, func(w util.BufWriter, _ []byte, n ast.Node, enter bool) (ast.WalkStatus, error) {
 		if enter {
-			_, err := w.WriteString(`<div class="math math-display">` + html.EscapeString(n.(*displayMath).tex) + `</div>`)
+			_, err := w.WriteString(renderMathElement(n.(*displayMath).tex, true, true))
 			return ast.WalkSkipChildren, err
 		}
 		return ast.WalkContinue, nil

@@ -59,3 +59,7 @@ Removed duplicate Goldmark GFM extension registrations; targeted tests and same-
 ## 2026-11-10
 
 Completed requirement-to-evidence audit for the structural pipeline, validation, reMarkable design and pushed Obsidian report.
+
+## 2026-11-10
+
+Unified math element markup and escaping for structural nodes and wiki labels.

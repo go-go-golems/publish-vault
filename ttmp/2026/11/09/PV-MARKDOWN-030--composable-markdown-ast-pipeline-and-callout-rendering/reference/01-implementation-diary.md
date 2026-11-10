@@ -891,3 +891,47 @@ I mapped each explicit goal requirement to source, tests, validation output, doc
 
 
 **Final-revision browser smoke:** Built `/tmp/pv-030-audit` after the GFM deduplication and served the temporary fixture on loopback port 18200. Playwright inspection showed `hardBreaks: 0`, a callout, `/note/target`, both table cells `One` and `Two`, and `done` for the inline and display math elements. Visually inspected `reference/assets/final-audit-smoke.png`; stopped the temporary server. The fixture lacks a favicon and produced the same two expected favicon 404s; this is not a production deployment check.
+
+## Step 20: Share math markup between nodes and wiki labels
+
+While rechecking the completion contract I found one remaining duplicate rendering definition: the math node renderer and the wiki-label renderer each constructed the same MathJax wrapper independently. Both were structural render-time operations, but the duplicated HTML and escaping could diverge later. I moved that output to one `renderMathElement` helper used by both paths.
+
+### Prompt Context
+**User prompt:** See Steps 6, 10 and 12; the active goal explicitly requires no duplicated logic.
+**Assistant interpretation:** Correct a concrete duplication found during the completion audit before marking the goal complete.
+**Inferred user intent:** Keep the final implementation coherent and simple.
+**Commit (prior audit):** d868bbf — "docs(PV-MARKDOWN-030): record completion evidence audit".
+
+### What I did
+- Replaced duplicate inline/display math tag construction in `internal/parser/math_ast.go` and `wikilink_ast.go` with one helper.
+- Ran the focused parser/vault package tests after formatting.
+
+### Why
+- MathJax class names and TeX escaping are an output contract; maintaining two independent string constructions risks divergence.
+
+### What worked
+- `GOWORK=off go test ./internal/parser ./pkg/vault` and `git diff --check` passed after the change.
+
+### What didn't work
+- No failures observed in the focused check. The earlier full CI predates this production edit and must be rerun before the audit can be considered current.
+
+### What I learned
+- The first audit's broad search for old sentinel and HTML-rewrite functions did not by itself rule out duplicated markup construction. A focused source review was necessary.
+
+### What was tricky to build
+- Wiki-label math is inline even when its source delimiters are interpreted within a label; the helper preserves that existing class/tag choice while allowing block math nodes to request a `div`.
+
+### What warrants a second pair of eyes
+- Future changes to MathJax hooks must use the shared helper rather than reintroducing another independent wrapper.
+
+### What should be done in the future
+- Run the final project gate and race checks on this change, then update the audit evidence before marking the active goal complete.
+
+### Code review instructions
+- Inspect `renderMathElement`, `mathRenderer.RegisterFuncs` and `renderMathLabel`; run `go test ./internal/parser ./pkg/vault`.
+
+### Technical details
+- The math delimiter scanner and HTML escaping semantics did not change in this step.
+
+
+**Shared-math validation:** `make ci-check > /tmp/pv-markdown-030-ci-shared-math.log 2>&1` passed all project stages, including lint, Go/plugin tests, gosec, govulncheck, frontend type-check and build. The scanner reported zero called vulnerabilities and separately noted uncalled dependency findings. `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, an embedded build plus help, `docmgr doctor` and `git diff --check` passed. Vault remote main still matched report commit `11a6fa1da29c8cea455c8520382ea56da26507aa`.

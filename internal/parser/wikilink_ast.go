@@ -215,7 +215,7 @@ func renderMathLabel(s string) string {
 	prev := 0
 	for _, span := range spans {
 		b.WriteString(html.EscapeString(s[prev:span.Start]))
-		b.WriteString(`<span class="math math-inline">` + html.EscapeString(span.TeX) + `</span>`)
+		b.WriteString(renderMathElement(span.TeX, false, false))
 		prev = span.End
 	}
 	b.WriteString(html.EscapeString(s[prev:]))
