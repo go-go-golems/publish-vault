@@ -419,3 +419,43 @@ The user requested a detailed textbook-style project report in the Obsidian vaul
 
 ### Technical details
 - No vault files were changed, committed, or pushed during this checkpoint.
+
+## Step 10: Map the remaining all-at-once migration boundary
+
+The user directed that all remaining features be migrated before running validation, rather than repeatedly testing intermediate edits. I inspected the math scanner, Goldmark inline parsing, and vault rebuild dependencies to identify what must be replaced together. No implementation changes or validation commands were made in this step.
+
+### Prompt Context
+**User prompt (verbatim):** "migrate them all, and _then_ validate. easier to do it all at once than do it every couple of edits."
+**Assistant interpretation:** Complete math and vault resolution migrations as a coherent feature boundary before running the integration gate.
+**Inferred user intent:** Avoid repeated broad validation between small edits while still delivering a complete structural design.
+
+### What I did
+- Inspected `internal/parser/math.go`, `pkg/vault/vault.go`, and Goldmark's inline parser loop; identified remaining source sentinels and HTML rewrite functions.
+- Verified the existing task list still records math, structural vault resolution, final validation and the post-completion Obsidian report as unfinished.
+
+### Why
+- Display math can span lines and block boundaries, while vault links require a complete note and heading index. A simple inline parser or a renamed string pre-pass would not satisfy the requested migration.
+
+### What worked
+- Source inspection identified Goldmark's parser trigger rule and the vault's reload-dependent resolution boundary.
+
+### What didn't work
+- No commands failed; implementation has not yet been completed.
+
+### What I learned
+- Goldmark's inline loop only invokes parsers at selected punctuation, spaces, or the beginning of a line; current private-use Unicode sentinels cannot simply be registered as normal trigger bytes. Display math also needs a block-aware design.
+
+### What was tricky to build
+- A structural renderer must retain or recreate document ASTs with their source bytes, preserve exact generated heading IDs, and render repeatedly against changing vault indexes without mutating shared documents. The memory and reload implications require an explicit implementation rather than wrapping the old HTML post-passes.
+
+### What warrants a second pair of eyes
+- Multiline math within blockquotes and lists, AST source ownership and retained memory, and correctness under reloads and missing references.
+
+### What should be done in the future
+- Implement the complete math and resolver migration together, then run the full validation gate and produce the requested Obsidian report.
+
+### Code review instructions
+- Begin with `internal/parser/math.go:54`, Goldmark `parser/parser.go:1200`, and `pkg/vault/vault.go:616`.
+
+### Technical details
+- No code or vault changes were made and no tests were run in this step.
