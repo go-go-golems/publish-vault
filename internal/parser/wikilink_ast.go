@@ -15,7 +15,8 @@ var kindWikiLink = ast.NewNodeKind("VaultWikiLink")
 
 type wikiLinkNode struct {
 	ast.BaseInline
-	raw []byte
+	raw  []byte
+	link WikiLink
 }
 
 func (*wikiLinkNode) Kind() ast.NodeKind              { return kindWikiLink }
@@ -38,8 +39,14 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 		return nil
 	}
 	raw := bytes.Clone(line[:loc[1]])
+	inner := raw
+	embed := raw[0] == '!'
+	if embed {
+		inner = inner[1:]
+	}
+	target, alias, heading := parseWikiLinkInner(string(inner[2 : len(inner)-2]))
 	r.Advance(loc[1])
-	return &wikiLinkNode{raw: raw}
+	return &wikiLinkNode{raw: raw, link: WikiLink{Target: target, Alias: alias, Heading: heading, IsEmbed: embed}}
 }
 
 type wikiNodeRenderer struct{ math []MathSpan }
@@ -49,7 +56,7 @@ func (r wikiNodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer)
 }
 func (r wikiNodeRenderer) render(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
-		_, err := w.Write(wikiLinkHTML(node.(*wikiLinkNode).raw, r.math))
+		_, err := w.Write(wikiLinkHTML(node.(*wikiLinkNode), r.math))
 		return ast.WalkSkipChildren, err
 	}
 	return ast.WalkContinue, nil
@@ -87,13 +94,11 @@ func wikiReferences(doc ast.Node, frontmatter []byte, spans []MathSpan) []WikiLi
 		if !ok {
 			return ast.WalkContinue, nil
 		}
-		raw := n.raw
-		embed := raw[0] == '!'
-		if embed {
-			raw = raw[1:]
-		}
-		target, alias, heading := parseWikiLinkInner(string(raw[2 : len(raw)-2]))
-		add(WikiLink{Target: RestoreMathText(target, spans), Alias: RestoreMathText(alias, spans), Heading: RestoreMathText(heading, spans), IsEmbed: embed})
+		link := n.link
+		link.Target = RestoreMathText(link.Target, spans)
+		link.Alias = RestoreMathText(link.Alias, spans)
+		link.Heading = RestoreMathText(link.Heading, spans)
+		add(link)
 		return ast.WalkContinue, nil
 	})
 	return links

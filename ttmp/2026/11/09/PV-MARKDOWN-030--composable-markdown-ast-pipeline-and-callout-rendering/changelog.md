@@ -31,3 +31,7 @@ Validated structural callout slice with full Go tests, backend lint, plugin test
 ## 2026-11-09
 
 Migrated wiki-link body parsing and reference collection onto Goldmark AST nodes; removed duplicate code-region pre-scanner.
+
+## 2026-11-09
+
+Stored parsed wiki-link fields on AST nodes and escaped alias text instead of emitting raw markup.

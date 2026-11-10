@@ -335,3 +335,44 @@ I replaced the wiki-link body pre-pass with a Goldmark inline extension. The sam
 
 
 **Commit-hook failure and recovery:** The initial `git commit -m 'refactor(parser): parse wiki links into AST nodes'` was rejected by backend lint: `internal/parser/wikilink_ast.go:28:71: S1016: should convert e (type wikiLinkExtension) to wikiNodeRenderer instead of using struct literal`. The full Go tests and Python plugin test passed in the same hook. Changed the equivalent struct literal to the suggested explicit type conversion and retried the commit.
+
+## Step 8: Make wiki nodes carry semantic fields and escape display text
+
+I tightened the initial wiki-node implementation so parsing the link syntax happens once: the node carries target, alias, heading and embed status, and both analysis and rendering consume those fields. During review I also found that the old renderer inserted an alias directly into HTML; the renderer now escapes that text.
+
+### Prompt Context
+**User prompt:** See Step 6.
+**Assistant interpretation:** Eliminate duplicate interpretation and make rendering safer as part of the structural migration.
+**Inferred user intent:** A simple, coherent representation with predictable HTML output.
+**Commit (code):** 9d47f60 — "refactor(parser): parse wiki links into AST nodes".
+
+### What I did
+- Refactored `wikiLinkNode` to hold `WikiLink` semantic fields and updated the existing output function and AST reference visitor to use them.
+- Escaped wiki link display text and added `TestWikiLinkDisplayIsEscaped`.
+
+### Why
+- An AST node that stores only raw source and reparses it separately in two consumers would preserve an avoidable duplication. Text inside an HTML anchor must not be interpreted as markup.
+
+### What worked
+- `go test ./internal/parser ./pkg/vault` passed, including existing math-in-link cases and the new escaping regression.
+
+### What didn't work
+- No failures observed in this step.
+
+### What I learned
+- Existing math sentinel restoration still participates in both reference analysis and output; semantic wiki nodes alone do not finish the math migration.
+
+### What was tricky to build
+- Math placeholders embedded in a link must survive text escaping until the later math restoration pass, whereas raw alias markup must not be emitted as trusted HTML.
+
+### What warrants a second pair of eyes
+- Wiki alias escaping and inline-math labels, plus any authored notes that relied on raw HTML in aliases.
+
+### What should be done in the future
+- Implement structural math and vault resolution; keep the overall migration tasks open.
+
+### Code review instructions
+- Review `wikiLinkNode`, `wikiReferences`, `wikiLinkHTML`, and `TestWikiLinkDisplayIsEscaped`; run `go test ./internal/parser ./pkg/vault`.
+
+### Technical details
+- The HTML attribute and text escaping use `html.EscapeString`; the transitional math sentinels are restored after rendering.

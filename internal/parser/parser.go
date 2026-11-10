@@ -231,15 +231,9 @@ func splitSource(src []byte) sourceParts {
 	return sourceParts{body: src}
 }
 
-func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
-	isEmbed := match[0] == '!'
-	inner := string(match)
-	if isEmbed {
-		inner = inner[3 : len(inner)-2] // strip ![[  ]]
-	} else {
-		inner = inner[2 : len(inner)-2] // strip [[  ]]
-	}
-	target, alias, heading := parseWikiLinkInner(inner)
+func wikiLinkHTML(node *wikiLinkNode, spans []MathSpan) []byte {
+	isEmbed := node.link.IsEmbed
+	target, alias, heading := node.link.Target, node.link.Alias, node.link.Heading
 	// Attribute values must carry TeX rather than math sentinels: RestoreMath
 	// runs over the whole document afterwards and would inject a <span> into the
 	// attribute, whose quotes end it early (see RestoreMathText). display is
@@ -270,7 +264,7 @@ func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
 		// rendered the headings, so emit a placeholder for
 		// resolveSelfHeadingLinks to finish.
 		if heading == "" {
-			return match // degenerate [[#]] / [[|x]]: leave the source text alone
+			return []byte(stdhtml.EscapeString(string(node.raw))) // degenerate link remains text
 		}
 		if display == "" {
 			display = heading
@@ -286,7 +280,7 @@ func wikiLinkHTML(match []byte, spans []MathSpan) []byte {
 		// lost it.
 		href += "#" + slugify(attrHeading)
 	}
-	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + display + `</a>`)
+	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + stdhtml.EscapeString(display) + `</a>`)
 }
 
 var (

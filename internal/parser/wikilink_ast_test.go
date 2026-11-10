@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+func TestWikiLinkDisplayIsEscaped(t *testing.T) {
+	note, err := Parse([]byte(`[[Target|<img src=x onerror=alert(1)>]]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(note.HTML, `<img src=x`) || !strings.Contains(note.HTML, `&lt;img`) {
+		t.Fatalf("link display is not escaped: %s", note.HTML)
+	}
+}
+
 func TestWikiASTReferencesMatchRenderedLinks(t *testing.T) {
 	src := "---\nrelated: '[[Metadata]]'\n---\n\n[[Rendered]] and `[[Inline Code]]`.\n\n    [[Indented Code]]\n\n```\n[[Fenced Code]]\n```\n\n> [!note] [[Title Link]]\n> [[Body Link]]\n"
 	note, err := Parse([]byte(src))
