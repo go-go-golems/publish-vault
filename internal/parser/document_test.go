@@ -283,3 +283,22 @@ func TestStructuralMathContexts(t *testing.T) {
 		t.Errorf("block math nested in paragraph: %s", note.HTML)
 	}
 }
+
+// FuzzStructuralParse checks that arbitrary document bytes do not panic the
+// structural extensions, including nested containers and table segments.
+func FuzzStructuralParse(f *testing.F) {
+	for _, seed := range []string{
+		"> - $$\n>   x\n>   $$\n", "| A |\n| - |\n| [[X|Y]] | $a|b$ |\n", "\t$$\n\tfoo\n\t$$\n", "$$unterminated\n", "\x00\xff\n",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		if len(input) > 1<<16 {
+			t.Skip()
+		}
+		_, err := Parse([]byte(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+}

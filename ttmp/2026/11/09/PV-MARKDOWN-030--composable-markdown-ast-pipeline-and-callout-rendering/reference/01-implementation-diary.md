@@ -713,3 +713,89 @@ I completed the source-owned document, structural math and vault-resolution migr
 
 ### Technical details
 - The latest run's full log is `/tmp/pv-markdown-030-ci-qualified.log`; it is local ephemeral evidence rather than a tracked artifact.
+
+## Step 16: Write and deliver the Obsidian technical report
+
+After the implementation commit, I wrote a standalone project report in the vault, reviewed it as a newcomer-facing explanation, rendered its Mermaid diagram through the local embedded application, and pushed only that report. The report distinguishes the implemented branch from an actual production deployment.
+
+### Prompt Context
+**User prompt:** See Step 9 for the verbatim report request; Step 12 for the diary and commit request.
+**Assistant interpretation:** Produce a detailed technical article without analogies, then commit and push only the intended vault note.
+**Inferred user intent:** Preserve durable explanations of the architecture, tradeoffs, evidence and operational status.
+**Commit (code):** b4384c3 — "refactor(parser): render vault documents from structural nodes".
+**Commit (vault):** 11a6fa1da29c8cea455c8520382ea56da26507aa — "docs: explain Publish Vault structural Markdown pipeline".
+
+### What I did
+- Created `/home/manuel/code/wesen/go-go-golems/go-go-parc/Projects/2026/11/10/PROJECT REPORT - Publish Vault - A Structural Markdown Rendering Pipeline.md` as a new 2,830-word note with frontmatter, concrete examples, a Mermaid diagram, architecture, tradeoffs, tests and source references.
+- Read the complete draft and checked that the proposed and implemented designs, source ownership, missing-target behavior, local performance measurements and deployment state were described separately.
+- Served a temporary copy through the embedded local application and inspected the rendered diagram. The initial horizontal layout was very small; changing it to vertical improved size. The next image exposed white text on pale fills, so I explicitly set dark text and re-rendered. The final inspected diagram is `reference/assets/report-diagram.png`.
+- Fetched `origin/main` before committing; `git rev-list --left-right --count HEAD...origin/main` returned `0 0`. Staged and committed only the new note, then pushed `HEAD:main` without force.
+
+### Why
+- The user requested a textbook-style deep dive without analogies and a vault commit/push. A diagram must be inspected as rendered rather than assumed legible from Mermaid syntax alone.
+
+### What worked
+- `git -C /home/manuel/code/wesen/go-go-golems/go-go-parc push origin HEAD:main` advanced `b42c6b9..11a6fa1`. `git ls-remote origin refs/heads/main` returned the exact local commit `11a6fa1da29c8cea455c8520382ea56da26507aa`.
+- The final local browser showed the revised diagram with readable dark labels. The temporary server was stopped; the vault working tree was clean after push.
+
+### What didn't work
+- No command failed in this step. Two visual deficiencies were identified and corrected: an overly compressed horizontal diagram and insufficient text contrast on colored nodes.
+
+### What I learned
+- Syntax-valid Mermaid can render at an unusable scale or contrast; both appearance changes required a fresh render and visual review.
+
+### What was tricky to build
+- The report describes the initial design's sentinel pipeline as historical, the current document API as implemented, and the live site as not deployed. Conflating those states would mislead future readers.
+
+### What warrants a second pair of eyes
+- The report's experimental performance comparison consists of single local samples, not statistical performance claims; the raw HTML trust policy and alias-collision behavior are deliberate technical tradeoffs.
+
+### What should be done in the future
+- Deployment is a separate operation. Re-verify the live note after deploying; this report and local tests do not imply production has changed.
+
+### Code review instructions
+- Review `b4384c3`, ticket design documents, and the vault note at the path above; verify the vault commit with `git -C /home/manuel/code/wesen/go-go-golems/go-go-parc show --stat 11a6fa1`.
+
+### Technical details
+- The source note contains one Mermaid diagram, not an externally linked image. Only the report was staged and pushed to the vault. The local diagram screenshot is investigation evidence in this ticket, not a vault dependency.
+
+## Step 17: Exercise malformed input before the final audit
+
+As a narrow risk check after the structural migration, I added a parser fuzz target seeded with nested math, table syntax, invalid bytes and unterminated delimiters. This is not a replacement for the integrated test suite or a proof that all inputs are correct; it specifically checks that parsing arbitrary bounded input does not panic.
+
+### Prompt Context
+**User prompt:** See Steps 10, 12 and 13.
+**Assistant interpretation:** Audit the completed implementation with a targeted check for malformed input before declaring completion.
+**Inferred user intent:** Robust parsing without an unbounded cycle of repeated broad validation.
+**Commit (code):** b4384c3 — "refactor(parser): render vault documents from structural nodes".
+
+### What I did
+- Added `FuzzStructuralParse` in `internal/parser/document_test.go`, with a 64 KiB input limit and representative structural seeds.
+- Ran `GOWORK=off go test ./internal/parser -run '^$' -fuzz '^FuzzStructuralParse$' -fuzztime=8s -parallel=2`.
+
+### Why
+- Math lookahead and table segment handling consume offsets derived from arbitrary authored text, which creates a concrete risk of a panic even when example-based tests pass.
+
+### What worked
+- The fuzz command passed after 43,718 executions and discovered 163 additional interesting inputs during the run. The Go fuzz cache is local, not a committed corpus.
+
+### What didn't work
+- No failures observed in this step.
+
+### What I learned
+- The targeted run provides bounded evidence about parser termination and panics, not exhaustive correctness or proof that every input finishes within a fixed time.
+
+### What was tricky to build
+- No production logic changed. The input-size bound limits the test's memory cost; malformed Unicode is included among seeds.
+
+### What warrants a second pair of eyes
+- Corpus-specific rendering semantics and adversarial performance remain separate from the absence of panics in this short run.
+
+### What should be done in the future
+- Complete the final requirement-to-evidence audit and retain the dated vault report and exact remote push receipt.
+
+### Code review instructions
+- Inspect the fuzz target at the end of `internal/parser/document_test.go`; rerun the command above if a reproducible seed is added.
+
+### Technical details
+- The previous `make ci-check` qualified production code before this test-only addition; the repository pre-commit hook will rerun its required backend gates for the added test.

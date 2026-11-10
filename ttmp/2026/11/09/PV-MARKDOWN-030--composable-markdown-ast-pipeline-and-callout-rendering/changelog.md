@@ -43,3 +43,11 @@ Recorded requested post-migration Obsidian deep-dive and verified existing vault
 ## 2026-11-10
 
 Completed structural math, wiki and asset resolution with document-owned AST, deterministic vault indexing and integrated validation.
+
+## 2026-11-10
+
+Committed structural renderer as b4384c3; wrote, visually reviewed and pushed the go-go-parc deep-dive report as 11a6fa1.
+
+## 2026-11-10
+
+Added bounded structural parser fuzz coverage; 43,718 executions passed.
