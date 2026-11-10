@@ -4,3 +4,7 @@
 - [x] Investigate parser and vault architecture and write intern guide <!-- t:3vfu -->
 - [x] Implement composable AST callouts and correct soft breaks <!-- t:fgdq -->
 - [x] Validate integration, commit milestones, and deliver guide to reMarkable <!-- t:of0n -->
+- [x] Migrate wiki link parsing and reference extraction to AST nodes <!-- t:7p9p -->
+- [ ] Migrate math recognition and rendering to AST nodes <!-- t:y78w -->
+- [ ] Migrate vault link, heading and asset resolution to structural rendering <!-- t:favp -->
+- [ ] Validate broad migration, document changes and commit coherent milestones <!-- t:34vw -->

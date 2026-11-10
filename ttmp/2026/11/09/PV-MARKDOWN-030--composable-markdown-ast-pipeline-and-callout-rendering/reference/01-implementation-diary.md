@@ -248,3 +248,90 @@ The follow-up code commit packaged the extension and fixed the sibling traversal
 
 ### Technical details
 - Previously requested reMarkable upload was performed before implementation, so the delivered copy is the design baseline rather than the updated checkpoint note.
+
+## Step 6: Start the broad AST migration
+
+The user requested the broader migration, including coherent structural treatment of wiki links, math and vault-specific resolution. I reopened the work as explicit ticket tasks and traced the existing pipeline and its tests before choosing a first slice.
+
+### Prompt Context
+**User prompt (verbatim):** "Now do the broad AST migration.  We want a coherent and strong and simpe codebase."
+
+**Additional user prompt (verbatim):** "Commit at appropriate intervals and keep a detaile ddiary (see diary format skill), backfill if nevessary."
+
+**Assistant interpretation:** Migrate the remaining Markdown features and vault resolution away from placeholder/HTML-string pipelines in validated, committed increments.
+**Inferred user intent:** A consistently composable implementation, not just the earlier callout-only fix.
+
+### What I did
+- Added explicit tasks for wiki links, math, vault resolution, and end-to-end validation.
+- Inspected `Parse`, `wikiLinkHTML`, math placeholders, and `Vault.rebuildHTML`; checked Goldmark v1.8.2 inline parser and reader APIs.
+
+### Why
+- The vault requires all notes indexed before cross-note resolution; this requires a separate analysis/index/render lifecycle, not merely replacing a single regex.
+
+### What worked
+- Existing branch and three previous implementation commits are present; unrelated untracked files remain untouched.
+
+### What didn't work
+- No failures observed in this investigation step.
+
+### What I learned
+- Existing tests explicitly expect wiki references inside YAML frontmatter, although frontmatter is not rendered. A structural migration needs an explicit metadata reference policy rather than silently dropping backlinks.
+
+### What was tricky to build
+- Math currently masks source before wiki scanning, and Goldmark normally handles code spans and blocks itself. Replacing either scanner changes precedence; reference collection and rendering must use the same nodes.
+
+### What warrants a second pair of eyes
+- AST source ownership and memory, source-specific heading IDs, reload invalidation, and preserving frontmatter reference behavior.
+
+### What should be done in the future
+- Implement incremental parser and vault migrations, validate affected behavior, and record each meaningful commit.
+
+### Code review instructions
+- Start at `internal/parser/parser.go:56`, then `internal/parser/math.go` and `pkg/vault/vault.go:616`.
+
+### Technical details
+- Goldmark inline parsers register trigger bytes and consume a `text.Reader`; their registration priorities determine precedence with standard Markdown link parsing.
+
+## Step 7: Parse wiki links into AST nodes
+
+I replaced the wiki-link body pre-pass with a Goldmark inline extension. The same node now drives both HTML emission and reference collection, so Goldmark's own code-block and code-span recognition determines where links exist. Frontmatter links remain a deliberate separate metadata input.
+
+### Prompt Context
+**User prompt:** See Step 6.
+**Assistant interpretation:** Begin the broad migration with one independently validated structural feature.
+**Inferred user intent:** Fewer independent parsers and a simpler source of truth.
+
+### What I did
+- Added `internal/parser/wikilink_ast.go`; `Parse` explicitly parses a document, analyzes wiki nodes, then renders it.
+- Removed body wiki-link source replacement and its redundant code-region scanner from `parser.go`. Existing math masking and HTML resolution remain for later phases.
+- Added `wikilink_ast_test.go` for frontmatter, callout titles/bodies, inline code, fenced code and indented code.
+
+### Why
+- The old regex scanner and renderer performed separate analyses. They omitted indented code recognition, which could create links and backlinks from code. Goldmark's syntax tree can own that distinction.
+
+### What worked
+- `go test ./internal/parser ./pkg/vault` passed after the migration, including the new code-context test and existing math/wiki cross-feature tests.
+
+### What didn't work
+- One edit command did not match the exact original text (`Could not find edits[1] in internal/parser/parser.go`). I corrected the exact match and retried successfully; no partial edit was applied.
+
+### What I learned
+- Frontmatter references have an existing behavior separate from rendered content, so they cannot be recovered by walking only the Markdown document AST.
+
+### What was tricky to build
+- Math is still masked before wiki parsing; the node renderer passes the existing span context to the legacy output formatter to preserve math in link labels and attributes. This is a transitional boundary, not completion of the requested migration.
+
+### What warrants a second pair of eyes
+- Inline parser precedence and source line boundaries, frontmatter reference deduplication, HTML escaping and nested markup.
+
+### What should be done in the future
+- Remove remaining math sentinels and migrate vault resolution away from rewriting HTML; expand integration tests.
+
+### Code review instructions
+- Review `wikilink_ast.go`, its `Parse` registration and the new tests; run `go test ./internal/parser ./pkg/vault`.
+
+### Technical details
+- Link recognition currently uses Goldmark inline trigger bytes `[` and `!` with priority 50. References come from node traversal; YAML metadata references use a separate simple scan.
+
+
+**Commit-hook failure and recovery:** The initial `git commit -m 'refactor(parser): parse wiki links into AST nodes'` was rejected by backend lint: `internal/parser/wikilink_ast.go:28:71: S1016: should convert e (type wikiLinkExtension) to wikiNodeRenderer instead of using struct literal`. The full Go tests and Python plugin test passed in the same hook. Changed the equivalent struct literal to the suggested explicit type conversion and retried the commit.

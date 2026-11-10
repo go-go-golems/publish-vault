@@ -27,3 +27,7 @@ Fixed sibling traversal mutation by collecting callout nodes in postorder before
 ## 2026-11-09
 
 Validated structural callout slice with full Go tests, backend lint, plugin test and vault integration; guide previously delivered to reMarkable.
+
+## 2026-11-09
+
+Migrated wiki-link body parsing and reference collection onto Goldmark AST nodes; removed duplicate code-region pre-scanner.

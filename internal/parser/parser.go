@@ -1,5 +1,5 @@
 // Package parser handles Markdown parsing with frontmatter and wiki-link support.
-// Design: goldmark pipeline with custom AST transformers for [[wiki links]] and ![[embeds]].
+// Design: Goldmark extensions represent callouts and wiki links as AST nodes.
 package parser
 
 import (
@@ -16,6 +16,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 )
 
 // WikiLink represents a parsed [[wiki link]] or ![[embed]].
@@ -61,15 +62,6 @@ func Parse(src []byte) (*ParsedNote, error) {
 	// post-pass.
 	processed, mathSpans := replaceMathInBody(src)
 
-	// --- Extract wiki links from the masked source, not the raw one ---
-	// `[[Foo]]` inside a formula is literal TeX, not a link. Scanning the raw
-	// source would still record it, and buildBacklinks would then give Foo a
-	// backlink pointing at a note that does not link to it.
-	wikiLinks := extractWikiLinks(processed, mathSpans)
-
-	// --- Replace [[wiki links]] with placeholder HTML so goldmark doesn't mangle them ---
-	processed = replaceWikiLinks(processed, mathSpans)
-
 	// --- Build goldmark with frontmatter ---
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -80,6 +72,7 @@ func Parse(src []byte) (*ParsedNote, error) {
 			extension.TaskList,
 			extension.Footnote,
 			calloutExtension{},
+			wikiLinkExtension{math: mathSpans},
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
@@ -91,8 +84,10 @@ func Parse(src []byte) (*ParsedNote, error) {
 	)
 
 	ctx := parser.NewContext()
+	doc := md.Parser().Parse(text.NewReader(processed), parser.WithContext(ctx))
+	wikiLinks := wikiReferences(doc, splitSource(processed).frontmatter, mathSpans)
 	var buf bytes.Buffer
-	if err := md.Convert(processed, &buf, parser.WithContext(ctx)); err != nil {
+	if err := md.Renderer().Render(&buf, processed, doc); err != nil {
 		return nil, err
 	}
 
@@ -128,71 +123,6 @@ func Parse(src []byte) (*ParsedNote, error) {
 		Title:       title,
 		Excerpt:     excerpt,
 	}, nil
-}
-
-// extractWikiLinks finds all [[wiki links]] and ![[embeds]] in the source.
-//
-// src is the math-masked body (a [[Foo]] inside a formula is literal TeX, not a
-// link), so the spans are needed to put any math a target or heading contains
-// back as TeX — these values reach the note JSON and the backlink graph, where
-// a sentinel is meaningless.
-//
-// Code regions are detected on the body only — frontmatter is split off first,
-// matching replaceWikiLinks. A backtick inside a frontmatter scalar is YAML,
-// not Markdown, so it must not pair with a body backtick and swallow a body
-// link as "code": replaceWikiLinks would still render that link as an anchor,
-// so dropping it here silently removed it from WikiLinks and the backlink
-// graph. Detecting code on the body only keeps the two passes in agreement
-// about what counts as code, the property the rest of this pre-pass relies on.
-// A [[X]] in a frontmatter value is still matched (frontmatter extraction is a
-// separate, filed question — see PV-WIKICODE-022), but it is never code.
-func extractWikiLinks(src []byte, spans []MathSpan) []WikiLink {
-	parts := splitSource(src)
-	matches := wikiLinkRegex.FindAllSubmatchIndex(src, -1)
-	code := newCodeCursor(parts.body)
-	seen := map[string]bool{}
-	var links []WikiLink
-	for _, m := range matches {
-		// A [[...]] shown inside a code sample is documentation of the syntax,
-		// not a reference. Recording it would give the named note a backlink
-		// from a note that never linked to it — the same reasoning that keeps
-		// links inside a formula out of this list. Only body offsets can be in
-		// a code region; a match in frontmatter (m[0] < bodyOffset) never is,
-		// and is not even queried, so the cursor's ascending-query invariant
-		// holds.
-		if m[0] >= parts.bodyOffset && code.contains(m[0]-parts.bodyOffset) {
-			continue
-		}
-		isEmbed := string(src[m[2]:m[3]]) == "!"
-		inner := string(src[m[4]:m[5]])
-		target, alias, heading := parseWikiLinkInner(inner)
-		target = RestoreMathText(target, spans)
-		alias = RestoreMathText(alias, spans)
-		heading = RestoreMathText(heading, spans)
-		// Image embeds are asset references, not note links; keeping them out
-		// of WikiLinks keeps backlinks and the wiki-link index clean. So is a
-		// [[#Heading]] link, which names an anchor in this very note: it used to
-		// enter the list with an empty Target, where it could only ever fail to
-		// resolve, and showed up as a blank entry in the agent Markdown view.
-		if isEmbed && isImageTarget(target) {
-			continue
-		}
-		if target == "" {
-			continue
-		}
-		key := target + "|" + alias
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		links = append(links, WikiLink{
-			Target:  target,
-			Alias:   alias,
-			IsEmbed: isEmbed,
-			Heading: heading,
-		})
-	}
-	return links
 }
 
 // parseWikiLinkInner parses "Target#Heading|Alias" into its parts.
@@ -240,115 +170,6 @@ func StripNoteExtension(target string) string {
 		return target
 	}
 	return target[:len(target)-len(".md")]
-}
-
-// replaceWikiLinks substitutes [[wiki links]] with HTML anchor placeholders.
-// The frontend renderer will later resolve slugs to actual paths.
-func replaceWikiLinks(src []byte, spans []MathSpan) []byte {
-	parts := splitSource(src)
-	replacedBody := replaceWikiLinksOutsideCode(parts.body, spans)
-	if !parts.hasFrontmatter() {
-		return replacedBody
-	}
-	out := make([]byte, 0, len(parts.frontmatter)+len(replacedBody))
-	out = append(out, parts.frontmatter...)
-	out = append(out, replacedBody...)
-	return out
-}
-
-// replaceWikiLinksOutsideCode substitutes every [[wiki link]] in body except
-// those inside a code span or a fenced code block.
-//
-// The substitution has to happen before goldmark runs, because goldmark would
-// otherwise parse the link text as Markdown. That ordering is what makes code
-// samples a problem: the anchor HTML is injected into the source, and goldmark
-// then escapes it into the code block, so a note documenting the syntax renders
-// `<a href="/note/some-note" class="wiki-link" ...>` as visible text where the
-// author wrote [[Some Note]].
-func replaceWikiLinksOutsideCode(body []byte, spans []MathSpan) []byte {
-	locs := wikiLinkRegex.FindAllIndex(body, -1)
-	if len(locs) == 0 {
-		return body
-	}
-	code := newCodeCursor(body)
-	out := make([]byte, 0, len(body))
-	last := 0
-	for _, loc := range locs {
-		if code.contains(loc[0]) {
-			continue
-		}
-		out = append(out, body[last:loc[0]]...)
-		out = append(out, wikiLinkHTML(body[loc[0]:loc[1]], spans)...)
-		last = loc[1]
-	}
-	return append(out, body[last:]...)
-}
-
-// codeCursor answers "is this offset inside code?" for offsets queried in
-// ascending order, which is how both callers walk their matches.
-type codeCursor struct {
-	regions [][2]int
-	i       int
-}
-
-func newCodeCursor(body []byte) *codeCursor {
-	return &codeCursor{regions: codeRegions(body)}
-}
-
-func (c *codeCursor) contains(off int) bool {
-	for c.i < len(c.regions) && c.regions[c.i][1] <= off {
-		c.i++
-	}
-	return c.i < len(c.regions) && off >= c.regions[c.i][0]
-}
-
-// codeRegions returns the byte ranges of body occupied by inline code spans and
-// fenced code blocks, in ascending order and non-overlapping.
-//
-// The scanners are the ones ScanMath already uses to keep `$100` in a code
-// sample from being read as math; the two passes now agree about what counts as
-// code. Indented (four-space) blocks are not treated as code here either, for
-// the reason documented on ScanMath: a four-space indent inside a list is a
-// continuation line, and dropping links from nested list items would be a worse
-// failure than rendering a link in an indented code block.
-//
-// Escaped backticks are not code-span delimiters: a backslash immediately
-// before a backtick makes that backtick a literal character in CommonMark, so
-// a wiki link written between two escaped backticks must not be wrapped in a
-// code span. The backslash branch consumes the escape the same way ScanMath
-// does, so a backtick right after a backslash is never seen as an opener here
-// — keeping the two passes in agreement about escaped backticks as well.
-func codeRegions(body []byte) [][2]int {
-	var regions [][2]int
-	i, n := 0, len(body)
-	for i < n {
-		if i == 0 || body[i-1] == '\n' {
-			if fenceChar, fenceLen, ok := fenceOpensAt(body, i); ok {
-				end := skipFencedBlock(body, i, fenceChar, fenceLen)
-				regions = append(regions, [2]int{i, end})
-				i = end
-				continue
-			}
-		}
-		if body[i] == '\\' && i+1 < n {
-			// Consume the escaped byte, mirroring ScanMath's backslash branch.
-			// The only byte this loop acts on (other than fences at line start)
-			// is '`', so the only observable effect is that a '`' right after a
-			// '\' no longer opens a code span; a backslash before anything else
-			// would have fallen through to i++ anyway.
-			i += 2
-			continue
-		}
-		if body[i] == '`' {
-			if end := skipCodeSpan(body, i); end > i {
-				regions = append(regions, [2]int{i, end})
-				i = end
-				continue
-			}
-		}
-		i++
-	}
-	return regions
 }
 
 // sourceParts is the result of splitting a Markdown source into an optional
