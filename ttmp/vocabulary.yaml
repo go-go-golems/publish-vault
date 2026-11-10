@@ -151,6 +151,8 @@ topics:
       description: YAML frontmatter parsing and frontmatter-driven behaviour (publish, title, tags)
     - slug: diary
       description: Chronological implementation diary for a ticket
+    - slug: markdown
+      description: Markdown parsing and rendering
 docTypes:
     - slug: design-doc
       description: Structured rationale and architecture notes
