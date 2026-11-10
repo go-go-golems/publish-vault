@@ -11,3 +11,7 @@ Created architectural guide and uploaded it to reMarkable; baseline parser and v
 ## 2026-11-09
 
 Recorded targeted failing soft-break and malformed callout regression probe; structural implementation remains open.
+
+## 2026-11-09
+
+Implemented AST-backed callouts and ordinary Markdown soft breaks; migrated regression probe into parser tests.

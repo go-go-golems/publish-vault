@@ -105,3 +105,48 @@ I wrote and delivered the architecture guide, then established executable regres
 
 ### Technical details
 - `parser.Parse` runs Goldmark block parsing, inline parsing, and then AST transformers in `github.com/yuin/goldmark/parser/parser.go` (v1.8.2). No production parser code was modified in this step.
+
+## Step 3: Implement a structural callout slice and normal soft breaks
+
+I moved callout recognition before Goldmark inline parsing, when the first physical source line is still represented as a segment, and moved rendering to dedicated AST nodes. This separates the callout header from its ordinary block children without using HTML line breaks. The remaining wiki-link and math pipelines have not yet been migrated.
+
+### Prompt Context
+**User prompt (verbatim):** "Implement, commit at appropriate intervals and keep a detailed diary as you work (using the diary format from the skill).
+
+Let's get going, we can test things properly once the work is done."
+**Assistant interpretation:** Implement the structural design in useful checkpoints, then run meaningful validation at the major boundary rather than repeatedly running broad suites.
+**Inferred user intent:** Complete the work, not just produce a plan.
+
+### What I did
+- Added `internal/parser/callout.go`: a paragraph transformer extracts the first-line header, inline parsing handles its title, a postorder AST transformer replaces callout blockquotes, and a node renderer composes the wrapper with regular child rendering.
+- Removed `html.WithHardWraps()` and the string-based `renderCallouts` post-pass from `internal/parser/parser.go`.
+- Promoted the regression probe to `internal/parser/softbreak_test.go` and added `callout_ast_test.go` covering formatted titles, nested callouts, normal blockquotes, math, wiki links, and hard breaks.
+
+### Why
+- A paragraph transformer runs before inline parsing, unlike an AST transformer. It can split on source lines without dissecting a formatted inline tree. The AST transformer then handles nested callouts bottom-up.
+
+### What worked
+- `go test ./internal/parser -run 'TestSoftBreaksAndExplicitBreaks|TestCalloutContainsStructuredBody|TestCallout|TestCollapsibleCallout|TestOpenCallout' -count=1` passed.
+- `go test ./internal/parser ./pkg/vault` passed.
+- `go test ./internal/parser -run TestStructuralCalloutComposition -count=1` passed.
+
+### What didn't work
+- No unexpected failures during this step. The preceding expected failure is recorded in Step 2.
+
+### What I learned
+- Goldmark's paragraph transformer provides a practical narrow structural seam; it lets inline title markup be parsed by the normal parser after the header is identified.
+
+### What was tricky to build
+- A blockquote can receive more blocks after its first paragraph is closed, so the paragraph transformer must not replace the entire still-open quote. It inserts a title node and leaves the quote in place; the later AST pass replaces it after all block parsing.
+
+### What warrants a second pair of eyes
+- Goldmark paragraph-transform ordering, nested callout traversal, behavior of lazy blockquote continuations, frontend folding, and escaping of source-derived values.
+
+### What should be done in the future
+- Review the complete pipeline architecture and implement remaining requested pieces; run full integration validation once feature work reaches a coherent boundary.
+
+### Code review instructions
+- Start at `internal/parser/callout.go` and its registration in `Parse`; run `go test ./internal/parser ./pkg/vault` and inspect the rendered output for nested and multi-block callouts.
+
+### Technical details
+- The type grammar limits class names to ASCII letters, digits and underscore. Header title children are rendered through Goldmark, not interpolated as attributes. `+` retains the existing always-open behavior and `-` starts collapsed.

@@ -15,7 +15,9 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 )
 
 // WikiLink represents a parsed [[wiki link]] or ![[embed]].
@@ -82,9 +84,11 @@ func Parse(src []byte) (*ParsedNote, error) {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
+			parser.WithParagraphTransformers(util.Prioritized(calloutParagraphTransformer{}, 50)),
+			parser.WithASTTransformers(util.Prioritized(calloutASTTransformer{}, 100)),
 		),
 		goldmark.WithRendererOptions(
-			html.WithHardWraps(),
+			renderer.WithNodeRenderers(util.Prioritized(calloutRenderer{}, 100)),
 			html.WithXHTML(),
 			html.WithUnsafe(), // allow raw HTML for our placeholders
 		),
@@ -98,9 +102,6 @@ func Parse(src []byte) (*ParsedNote, error) {
 
 	frontmatter := normalizeFrontmatter(meta.Get(ctx))
 	htmlOut := buf.String()
-
-	// --- Render callouts (admonitions) ---
-	htmlOut = renderCallouts(htmlOut)
 
 	// --- Put math back, before the heading pass and after every other one ---
 	htmlOut = RestoreMath(htmlOut, mathSpans)
@@ -722,98 +723,6 @@ func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) stri
 		return prefix + title + "</a>"
 	})
 	return html
-}
-
-// extractTitle returns the title from frontmatter "title" key, or the first H1.
-// renderCallouts transforms Obsidian-style callout blockquotes into styled divs.
-// Goldmark renders `> [!type] Title` as `<blockquote><p>[!type] Title<br/>...</p></blockquote>`.
-// This function detects that pattern and replaces it with a styled callout div.
-var calloutRe = regexp.MustCompile(`<blockquote>\s*<p>\[!(\w+)\]([+-])?([\s\S]*?)</blockquote>`)
-
-func renderCallouts(html string) string {
-	return calloutRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := calloutRe.FindStringSubmatch(match)
-		if len(sub) < 4 {
-			return match
-		}
-		calloutType := strings.ToLower(sub[1])
-		foldChar := sub[2] // "+" = default open, "-" = default closed, "" = default open
-		content := sub[3]
-		// Remove trailing </p> if present
-		content = strings.TrimSuffix(content, "</p>")
-		content = strings.TrimSuffix(content, "</p>\n")
-		content = strings.TrimSpace(content)
-
-		// Split content into optional title and body
-		// The title is text before the first <br />, the body is after
-		var title, body string
-		if idx := strings.Index(content, "<br />"); idx >= 0 {
-			title = strings.TrimSpace(content[:idx])
-			body = strings.TrimSpace(content[idx+6:])
-		} else if idx := strings.Index(content, "<br/>"); idx >= 0 {
-			title = strings.TrimSpace(content[:idx])
-			body = strings.TrimSpace(content[idx+5:])
-		} else {
-			body = strings.TrimSpace(content)
-		}
-
-		// Map callout types to icons/labels
-		label := titleASCII(calloutType)
-		switch calloutType {
-		case "summary":
-			label = "Summary"
-		case "note":
-			label = "Note"
-		case "tip":
-			label = "Tip"
-		case "warning":
-			label = "Warning"
-		case "important":
-			label = "Important"
-		case "caution":
-			label = "Caution"
-		case "info":
-			label = "Info"
-		case "question":
-			label = "Question"
-		case "quote":
-			label = "Quote"
-		case "example":
-			label = "Example"
-		case "abstract":
-			label = "Abstract"
-		}
-
-		var b strings.Builder
-		collapsible := foldChar == "-"
-		b.WriteString(`<div class="callout callout-` + calloutType)
-		if collapsible {
-			b.WriteString(` callout-collapsible`)
-		}
-		b.WriteString(`">`)
-		b.WriteString(`<div class="callout-title">`)
-		b.WriteString(`<span class="callout-icon">` + calloutIcon(calloutType) + `</span> `)
-		if collapsible {
-			b.WriteString(`<span class="callout-toggle">\u25BC</span> `)
-		}
-		if title != "" {
-			b.WriteString(title)
-		} else {
-			b.WriteString(label)
-		}
-		b.WriteString(`</div>`)
-		if body != "" {
-			b.WriteString(`<div class="callout-body"`)
-			if collapsible {
-				b.WriteString(` style="display:none"`)
-			}
-			b.WriteString(">\n")
-			b.WriteString(body)
-			b.WriteString(`</div>`)
-		}
-		b.WriteString(`</div>`)
-		return b.String()
-	})
 }
 
 func titleASCII(s string) string {
