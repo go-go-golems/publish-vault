@@ -35,3 +35,7 @@ Migrated wiki-link body parsing and reference collection onto Goldmark AST nodes
 ## 2026-11-09
 
 Stored parsed wiki-link fields on AST nodes and escaped alias text instead of emitting raw markup.
+
+## 2026-11-09
+
+Recorded requested post-migration Obsidian deep-dive and verified existing vault changes must be preserved.

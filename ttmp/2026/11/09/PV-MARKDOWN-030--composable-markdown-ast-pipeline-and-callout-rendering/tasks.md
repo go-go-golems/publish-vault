@@ -8,3 +8,4 @@
 - [ ] Migrate math recognition and rendering to AST nodes <!-- t:y78w -->
 - [ ] Migrate vault link, heading and asset resolution to structural rendering <!-- t:favp -->
 - [ ] Validate broad migration, document changes and commit coherent milestones <!-- t:34vw -->
+- [ ] After migration, write textbook-style deep-dive project report in go-go-parc and commit and push only the report <!-- t:0xra -->

@@ -376,3 +376,46 @@ I tightened the initial wiki-node implementation so parsing the link syntax happ
 
 ### Technical details
 - The HTML attribute and text escaping use `html.EscapeString`; the transitional math sentinels are restored after rendering.
+
+## Step 9: Record the requested report and remaining migration boundary
+
+The user requested a detailed textbook-style project report in the Obsidian vault after the implementation is finished, followed by a vault commit and push. I inspected the vault Git status before taking any action; existing untracked research and transcript directories must remain untouched. The report is intentionally not written or pushed at this intermediate checkpoint because the broad migration is still in progress.
+
+### Prompt Context
+**User prompt (verbatim):** "once you're finished,  write a detailed project report for the obsidian vault as a deep dive technical analysis blog post using a textbook writing style (no analogies, see skill).      
+ Commit and push the bsidian vault when done (go-go-parc vault)."
+**Assistant interpretation:** After finishing the migration, write an evidence-backed report in a new vault note and commit/push only the intended vault changes.
+**Inferred user intent:** A durable, accurate account of the completed implementation, not a premature success report.
+**Commit (code):** 0d184dc — "refactor(parser): store semantic wiki link fields".
+
+### What I did
+- Read the Obsidian vault writing and textbook-authoring skills; inspected `go-go-parc` status and remote.
+- Confirmed `go-go-parc` has unrelated untracked `Research/2026/11/` and `Transcripts/2026/11/` directories.
+- Confirmed commit 0d184dc's hooks passed full Go tests, backend lint and the Python plugin test.
+
+### Why
+- The report must describe the actual final architecture and cannot truthfully be called a completed-migration report while math and vault HTML rewriting remain.
+
+### What worked
+- `git -C /home/manuel/code/wesen/go-go-golems/go-go-parc status --short` and branch/remote inspection succeeded. The active vault branch is `main`, tracking `origin/main` at the time of inspection.
+
+### What didn't work
+- No failures in this checkpoint. The earlier lint failure is recorded in Step 7.
+
+### What I learned
+- There is pre-existing untracked vault content; staging the whole vault would risk including unrelated files.
+
+### What was tricky to build
+- The existing math scanner can identify regions spanning physical lines, including inline and display forms; replacing it requires preserving precedence with code and wiki links without relying on the old HTML sentinel restoration. Vault rebuilds additionally depend on cross-note heading indexes and reload behavior.
+
+### What warrants a second pair of eyes
+- Math precedence and block placement, reference resolution and document/source lifetime, as well as vault staging before any push.
+
+### What should be done in the future
+- Complete and validate math and vault AST migration, then write, review, commit and push the requested vault report without staging unrelated files.
+
+### Code review instructions
+- Review commits 9d47f60 and 0d184dc, then read `internal/parser/math.go` and `pkg/vault/vault.go:616` for the remaining non-AST pipeline.
+
+### Technical details
+- No vault files were changed, committed, or pushed during this checkpoint.
