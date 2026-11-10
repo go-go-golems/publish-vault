@@ -40,8 +40,8 @@ type Document struct {
 
 func newMarkdown(resolver *Resolver, headings *HeadingIndex) goldmark.Markdown {
 	return goldmark.New(
-		goldmark.WithExtensions(meta.Meta, extension.GFM, extension.Table, extension.Strikethrough,
-			extension.TaskList, extension.Footnote, expandedTableExtension{}, calloutExtension{}, mathExtension{}, wikiLinkExtension{resolver: resolver, headings: headings}),
+		goldmark.WithExtensions(meta.Meta, extension.GFM, extension.Footnote,
+			expandedTableExtension{}, calloutExtension{}, mathExtension{}, wikiLinkExtension{resolver: resolver, headings: headings}),
 		goldmark.WithParserOptions(goldparser.WithAutoHeadingID()),
 		goldmark.WithRendererOptions(htmlrenderer.WithXHTML(), htmlrenderer.WithUnsafe(),
 			renderer.WithNodeRenderers(util.Prioritized(imageRenderer{resolver: resolver}, 100))),

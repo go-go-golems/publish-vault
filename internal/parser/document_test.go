@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestGFMFeaturesRemainEnabled(t *testing.T) {
+	src := "- [x] completed\n\n~~deleted~~ and https://example.com\n\n| a | b |\n| - | - |\n| one | two |\n"
+	note, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`type="checkbox"`, `<del>deleted</del>`, `href="https://example.com"`, `<td>two</td>`} {
+		if !strings.Contains(note.HTML, want) {
+			t.Errorf("missing %q: %s", want, note.HTML)
+		}
+	}
+}
+
 func TestDocumentRendersAgainstResolverWithoutMutatingTree(t *testing.T) {
 	_, doc, err := ParseDocument([]byte("# Local Heading\n\n[[Target#Exact Heading]] [[Target|Alias]] [[Missing]] [[#Local Heading]] ![[pic.png]] ![[Gone]]\n"))
 	if err != nil {

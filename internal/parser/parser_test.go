@@ -553,10 +553,8 @@ func TestSelfHeadingLinkDegenerateFormsAreLeftAlone(t *testing.T) {
 	}
 }
 
-// TestResolveWikiLinkHeadings covers the fragment rewrite in isolation: the
-// provisional slugified fragment wikiLinkHTML wrote is replaced with whatever
-// the resolver says the target note actually rendered, and dropped when the
-// resolver declines rather than left pointing at an id known not to exist.
+// TestWikiLinkCarriesHeadingForLaterResolution verifies that standalone
+// rendering retains heading information for the structural resolver.
 func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 	parsed, err := Parse([]byte("# T\n\nSee [[Other Note#9.2 Kernel K0: canonical identity]].\n"))
 	if err != nil {
@@ -566,8 +564,8 @@ func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 		t.Fatalf("heading text not carried on the anchor: %s", parsed.HTML)
 	}
 
-	// A link with no heading still carries the attribute, empty — the fragment
-	// pass keys off a non-empty value, so it must be there to be absent.
+	// A headingless link still carries the empty data attribute expected by
+	// frontend consumers.
 	plain, err := Parse([]byte("# T\n\nSee [[Other Note]].\n"))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -577,13 +575,9 @@ func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 	}
 }
 
-// TestWikiLinkAttributesCarryTeXNotMathSentinels is the regression test for the
-// second P2 on PR #19. Math is lifted out of the source before wiki links are
-// replaced, so a heading like `$\sigma$ bound` reaches wikiLinkHTML as a
-// sentinel. RestoreMath then rewrites every sentinel in the document — including
-// ones sitting inside an attribute value, where the injected
-// `<span class="math math-inline">` ends the attribute at its first quote and
-// leaves malformed markup behind.
+// TestWikiLinkAttributesCarryTeXNotMathSentinels protects the PR #19
+// regression: math inside a wiki heading or alias must be plain TeX in
+// attributes and rendered math only in element content.
 func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
 	src := []byte("# T\n\n" +
 		"- self: [[#The $\\sigma$ bound]]\n" +

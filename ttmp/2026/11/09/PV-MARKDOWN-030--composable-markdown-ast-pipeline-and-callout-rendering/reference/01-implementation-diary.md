@@ -799,3 +799,50 @@ As a narrow risk check after the structural migration, I added a parser fuzz tar
 
 ### Technical details
 - The previous `make ci-check` qualified production code before this test-only addition; the repository pre-commit hook will rerun its required backend gates for the added test.
+
+## Step 18: Audit and remove duplicate Goldmark registrations
+
+The completion audit found that `newMarkdown` explicitly registered Table, Strikethrough and TaskList in addition to `extension.GFM`, which already registers all three. This duplication came from the baseline but was carried into the structural renderer. I removed the duplicate registrations and added a focused GFM behavior regression.
+
+### Prompt Context
+**User prompt:** See Steps 6, 10 and 12; the current tracked goal requires a requirement-by-requirement completion audit without duplicated logic.
+**Assistant interpretation:** Inspect the finished code for redundant registration and correct issues rather than declaring completion from earlier test passes alone.
+**Inferred user intent:** Keep the migrated codebase simple as well as functional.
+**Commit (prior checkpoint):** 291e25d — "test(parser): fuzz structural documents and record delivery".
+
+### What I did
+- Confirmed `github.com/yuin/goldmark/extension/gfm.go` registers Linkify, Table, Strikethrough and TaskList.
+- Removed the three redundant explicit extensions in `internal/parser/document.go`; retained Footnote, which GFM does not provide.
+- Added `TestGFMFeaturesRemainEnabled` and updated stale comments that described removed HTML-rewrite functions as current code.
+- Compared a fresh inventory of the same current vault against an archived `HEAD` using the existing ticket probe.
+
+### Why
+- Registering the same parser and renderer extensions twice is unnecessary work and makes priority interactions harder to reason about.
+
+### What worked
+- `GOWORK=off go test ./internal/parser ./pkg/vault` passed after the change.
+- A controlled fresh comparison against archived `HEAD` found 2,373 notes in each run and zero per-note changes in the probe's link, backlink, math, callout, image and broken-marker counts.
+
+### What didn't work
+- An initial comparison against `/tmp/pv-030-after4.json` showed 44 changed notes and one added note. That file predated later table/quote changes and the newly created vault report, so it was not a controlled comparison of this edit. I reran the baseline from archived current `HEAD` against the same vault; the controlled result is above. Aggregate equality does not prove byte-for-byte output equivalence.
+
+### What I learned
+- A previous local inventory is not a valid baseline after either the implementation or the vault changes. The fresh pair is the relevant evidence for the registration cleanup.
+
+### What was tricky to build
+- The user requested fewer repeated broad tests; the narrow tests and corpus inventory address the specific duplication risk before one final project validation gate.
+
+### What warrants a second pair of eyes
+- Goldmark extension ordering and priority if the upstream GFM bundle changes in a future version.
+
+### What should be done in the future
+- Run the final project validation for this production change, commit it, and finish the goal audit. The vault report remains an accurate account of the architectural implementation; it references the earlier implementation checkpoint rather than this subsequent cleanup.
+
+### Code review instructions
+- Compare `newMarkdown` with Goldmark's GFM extension and run `go test ./internal/parser ./pkg/vault`.
+
+### Technical details
+- The inventory is a content-free count comparison, not an output diff or a proof of all Markdown behavior.
+
+
+**Final validation after deduplication:** `make ci-check > /tmp/pv-markdown-030-ci-final-audit.log 2>&1` passed formatting, backend lint, logcopter, all Go/plugin tests, gosec, govulncheck, frontend type-check and the frontend build. Govulncheck reported zero called vulnerabilities and separately noted uncalled findings in dependencies. `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, an embedded build and help smoke, `docmgr doctor`, and `git diff --check` also passed. The vault's remote main still points to report commit `11a6fa1da29c8cea455c8520382ea56da26507aa` and the vault working tree is clean.
