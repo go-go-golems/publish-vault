@@ -2,10 +2,8 @@
 //
 // Why this exists: goldmark destroys TeX. `a_1 + b_2` pairs the underscores
 // into <em>, `\{` loses its backslash to Markdown's escape rules, `&` (the
-// alignment character in align/matrix environments) becomes &amp;, and the
-// html.WithHardWraps() option the renderer runs with interleaves <br/> between
-// the lines of a multi-line environment. By the time a client-side typesetter
-// sees the HTML there is nothing left to typeset.
+// alignment character in align/matrix environments) becomes &amp;. By the
+// time a client-side typesetter sees the HTML there is nothing left to typeset.
 //
 // So math is lifted out of the source *before* goldmark runs and replaced with
 // an inert HTML placeholder carrying the TeX verbatim — the same pre-pass

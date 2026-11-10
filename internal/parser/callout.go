@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	goldparser "github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
@@ -36,6 +37,18 @@ type calloutTitle struct {
 
 func (n *calloutTitle) Kind() ast.NodeKind            { return kindCalloutTitle }
 func (n *calloutTitle) Dump(source []byte, level int) { ast.DumpHelper(n, source, level, nil, nil) }
+
+// calloutExtension packages the parsing and rendering passes together so a
+// consumer cannot accidentally register only half of the callout feature.
+type calloutExtension struct{}
+
+func (calloutExtension) Extend(md goldmark.Markdown) {
+	md.Parser().AddOptions(
+		goldparser.WithParagraphTransformers(util.Prioritized(calloutParagraphTransformer{}, 50)),
+		goldparser.WithASTTransformers(util.Prioritized(calloutASTTransformer{}, 100)),
+	)
+	md.Renderer().AddOptions(renderer.WithNodeRenderers(util.Prioritized(calloutRenderer{}, 100)))
+}
 
 type calloutParagraphTransformer struct{}
 
@@ -78,18 +91,22 @@ func (calloutParagraphTransformer) Transform(p *ast.Paragraph, reader text.Reade
 type calloutASTTransformer struct{}
 
 func (calloutASTTransformer) Transform(doc *ast.Document, _ text.Reader, _ goldparser.Context) {
+	// Do not replace a node during Walk: detaching it clears NextSibling and
+	// causes Goldmark's walker to skip subsequent siblings. Collect in postorder
+	// first, then replace, so nested callouts are converted before their parents.
+	var quotes []*ast.Blockquote
 	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if entering {
-			return ast.WalkContinue, nil
+		if !entering {
+			if q, ok := node.(*ast.Blockquote); ok {
+				if _, ok := q.FirstChild().(*calloutTitle); ok {
+					quotes = append(quotes, q)
+				}
+			}
 		}
-		q, ok := node.(*ast.Blockquote)
-		if !ok {
-			return ast.WalkContinue, nil
-		}
-		title, ok := q.FirstChild().(*calloutTitle)
-		if !ok {
-			return ast.WalkContinue, nil
-		}
+		return ast.WalkContinue, nil
+	})
+	for _, q := range quotes {
+		title := q.FirstChild().(*calloutTitle)
 		c := &callout{typ: title.typ, fold: title.fold}
 		for q.FirstChild() != nil {
 			child := q.FirstChild()
@@ -98,8 +115,7 @@ func (calloutASTTransformer) Transform(doc *ast.Document, _ text.Reader, _ goldp
 		}
 		parent := q.Parent()
 		parent.ReplaceChild(parent, q, c)
-		return ast.WalkContinue, nil
-	})
+	}
 }
 
 type calloutRenderer struct{}

@@ -26,6 +26,8 @@ WhenToUse: ""
 
 # A composable Markdown rendering pipeline
 
+**Implementation checkpoint:** The current branch implements the callout and soft-break vertical slice in `internal/parser/callout.go` and removes the HTML callout post-pass. The current-state discussion below describes baseline `0c78a5e`; the wider wiki-link, math, and vault-resolution AST migration remains a proposal, not implemented functionality. See the diary for evidence and commits. The copy previously uploaded to reMarkable predates this checkpoint.
+
 ## 1. What the system does and why this change exists
 
 Publish Vault publishes an Obsidian-style vault: a directory of Markdown notes and attachments. A reader opens a URL such as `/note/research/kb/projects/javascript-operating-systems`; the server loads a corresponding note and supplies HTML to the React note view. Notes contain ordinary Markdown as well as vault-specific syntax such as `[[links]]`, `![[embeds]]`, math, and callouts (`> [!note]`). A backlink is a reverse reference: if note A links to B, B can display A among its linked mentions.

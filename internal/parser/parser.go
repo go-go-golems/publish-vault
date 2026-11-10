@@ -15,9 +15,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/util"
 )
 
 // WikiLink represents a parsed [[wiki link]] or ![[embed]].
@@ -81,14 +79,12 @@ func Parse(src []byte) (*ParsedNote, error) {
 			extension.Strikethrough,
 			extension.TaskList,
 			extension.Footnote,
+			calloutExtension{},
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-			parser.WithParagraphTransformers(util.Prioritized(calloutParagraphTransformer{}, 50)),
-			parser.WithASTTransformers(util.Prioritized(calloutASTTransformer{}, 100)),
 		),
 		goldmark.WithRendererOptions(
-			renderer.WithNodeRenderers(util.Prioritized(calloutRenderer{}, 100)),
 			html.WithXHTML(),
 			html.WithUnsafe(), // allow raw HTML for our placeholders
 		),

@@ -2,13 +2,24 @@
 Title: Implementation diary
 Ticket: PV-MARKDOWN-030
 Status: active
-Topics: [markdown, backend]
+Topics:
+    - markdown
+    - backend
 DocType: reference
 Intent: long-term
 Owners: []
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://internal/parser/callout.go
+      Note: Structural callout parsing and rendering
+    - Path: repo://internal/parser/softbreak_test.go
+      Note: Soft and explicit line break regression coverage
+    - Path: repo://pkg/vault/callout_pipeline_test.go
+      Note: Vault resolution integration coverage
 ExternalSources: []
 Summary: Chronological investigation and implementation record
+LastUpdated: 0001-01-01T00:00:00Z
+WhatFor: ""
+WhenToUse: ""
 ---
 
 # Implementation diary
@@ -150,3 +161,50 @@ Let's get going, we can test things properly once the work is done."
 
 ### Technical details
 - The type grammar limits class names to ASCII letters, digits and underscore. Header title children are rendered through Goldmark, not interpolated as attributes. `+` retains the existing always-open behavior and `-` starts collapsed.
+
+## Step 4: Package the extension and validate the vault boundary
+
+I packaged the three callout components as one Goldmark extension and checked that resolved wiki links, heading fragments, math and a list survive inside a callout through the real vault rebuild. A source review caught a subtle traversal bug in the first implementation before release: replacing a blockquote while Goldmark walks its siblings can detach it and prevent later siblings from being visited. The transformer now collects nodes in postorder and replaces them after traversal.
+
+### Prompt Context
+**User prompt:** See Step 3.
+**Assistant interpretation:** Finish the vertical slice and validate meaningful integration once the work is assembled.
+**Inferred user intent:** A composable, robust feature rather than a patch tied to HTML formatting.
+**Commit (code):** 073797d — "feat(parser): render callouts structurally and honor soft breaks".
+
+### What I did
+- Encapsulated paragraph transformer, AST pass and renderer in `calloutExtension.Extend`.
+- Changed AST replacement to collect-first, then mutate in postorder; added a sibling-callout regression.
+- Added `pkg/vault/callout_pipeline_test.go`; checked the guide identifies baseline versus implemented slice.
+- Rendered the actual JavaScript operating systems note with the existing `01-render-note` script.
+
+### Why
+- Registering the extension as a unit makes its passes composable and prevents callers from enabling only half of the feature.
+- `ast.walkHelper` advances with `c.NextSibling()` after visiting each child; `ReplaceChild` detaches the old child. Mutating during traversal could skip a second callout.
+
+### What worked
+- `go test ./internal/parser ./pkg/vault` passed after the fix; sibling and nested callouts and vault resolution are covered.
+- The first code commit's required pre-commit hooks passed `GOWORK=off go test ./...`, the Python plugin unittest, and backend lint with zero issues.
+- `go run ./ttmp/2026/08/09/PV-MATHJAX-018--mathjax-support-for-latex-math-in-published-vault-notes/scripts/01-render-note '/home/manuel/code/wesen/go-go-golems/go-go-parc/Research/KB/Projects/javascript-operating-systems.md'` emitted the affected list item with a newline and no generated `<br />` at the source line ending.
+- `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30` and `git diff --check` passed.
+
+### What didn't work
+- Source review identified the traversal issue in commit 073797d; no failing command was recorded because it was caught before writing the sibling regression. The fix and regression are in the subsequent commit.
+
+### What I learned
+- Postorder traversal alone is insufficient if mutation detaches the node while the walker still needs its sibling pointer.
+
+### What was tricky to build
+- The nested transformation must run before the containing quote, while sibling traversal must remain stable. A postorder collection followed by replacement satisfies both constraints without mutating the traversal.
+
+### What warrants a second pair of eyes
+- Real-world callout syntax beyond the tested subset, `+` fold semantics, trust of raw HTML, and the vault memory cost of a future full-document IR.
+
+### What should be done in the future
+- This checkpoint does not implement AST-based wiki links, math, or vault reference resolution; the guide explicitly marks those as future work. Deploying the backend and live browser validation are also separate and have not been performed.
+
+### Code review instructions
+- Read `calloutExtension.Extend` and `calloutASTTransformer.Transform`, then run `go test ./internal/parser ./pkg/vault` and inspect `pkg/vault/callout_pipeline_test.go`.
+
+### Technical details
+- The user-facing fix applies soft breaks uniformly to paragraph, list and callout body text; explicit hard breaks continue to render as `<br />`.

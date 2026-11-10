@@ -13,6 +13,7 @@ func TestStructuralCalloutComposition(t *testing.T) {
 		{"formatted title", "> [!note] A **bold** title\n> Text with [[Target]] and $x$.\n", []string{"<strong>bold</strong>", "wiki-link", `class="math`}, nil},
 		{"empty title", "> [!warning]\n> Body\n", []string{"Warning</div>", "<p>Body</p>"}, nil},
 		{"nested", "> [!note] Outer\n>\n> > [!tip] Inner\n> > Text\n", []string{`callout-note`, `callout-tip`, "<p>Text</p>"}, nil},
+		{"sibling callouts", "> [!note] First\n> one\n\n> [!warning] Second\n> two\n", []string{`callout-note`, `callout-warning`, "<p>one</p>", "<p>two</p>"}, []string{"<blockquote>"}},
 		{"ordinary quote", "> ordinary\n> quote\n", []string{"<blockquote>", "ordinary\nquote"}, []string{`class="callout`}},
 		{"fenced code", "```\n> [!note] Fake\n```\n", []string{"[!note] Fake"}, []string{`class="callout`}},
 		{"hard break", "> [!note] Title\n> First  \n> Second\n", []string{"First<br />"}, nil},

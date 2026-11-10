@@ -15,3 +15,11 @@ Recorded targeted failing soft-break and malformed callout regression probe; str
 ## 2026-11-09
 
 Implemented AST-backed callouts and ordinary Markdown soft breaks; migrated regression probe into parser tests.
+
+## 2026-11-09
+
+Packaged callout passes as a Goldmark extension and verified vault-level links and actual affected note rendering.
+
+## 2026-11-09
+
+Fixed sibling traversal mutation by collecting callout nodes in postorder before replacement; added sibling regression.
