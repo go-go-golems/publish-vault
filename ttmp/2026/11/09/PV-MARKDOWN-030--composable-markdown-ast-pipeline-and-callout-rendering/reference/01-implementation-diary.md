@@ -208,3 +208,43 @@ I packaged the three callout components as one Goldmark extension and checked th
 
 ### Technical details
 - The user-facing fix applies soft breaks uniformly to paragraph, list and callout body text; explicit hard breaks continue to render as `<br />`.
+
+## Step 5: Record the validated implementation checkpoint
+
+The follow-up code commit packaged the extension and fixed the sibling traversal issue. Its pre-commit checks passed the full Go suite, backend lint, and Python plugin test. No deployment was performed; the broader wiki-link and math AST migration remains future work.
+
+### Prompt Context
+**User prompt:** See Step 3.
+**Assistant interpretation:** Commit and document the completed vertical slice with evidence.
+**Inferred user intent:** Deliver working code with a useful review trail.
+**Commit (code):** 70c126b — "fix(parser): preserve sibling traversal in callout extension".
+
+### What I did
+- Completed task bookkeeping and recorded the checkpoint.
+
+### Why
+- The ticket must distinguish implemented callouts from proposed later AST migrations and deployment.
+
+### What worked
+- Commit 70c126b pre-commit hooks: `GOWORK=off go test ./...`, backend lint (zero issues), and `python3 -m unittest plugins/test_retro_plugin.py` passed.
+
+### What didn't work
+- No failures in this checkpoint.
+
+### What I learned
+- A full passing backend suite does not prove that the deployed server is running this branch.
+
+### What was tricky to build
+- No additional implementation in this checkpoint.
+
+### What warrants a second pair of eyes
+- Review callout source segment handling and security/trust assumptions, plus behavior of existing notes that relied on hard wrapping.
+
+### What should be done in the future
+- Separately deploy and verify the actual page; plan the remaining wiki-link, math and vault-resolution migration if desired.
+
+### Code review instructions
+- Review commits 073797d and 70c126b and run `go test ./...`.
+
+### Technical details
+- Previously requested reMarkable upload was performed before implementation, so the delivered copy is the design baseline rather than the updated checkpoint note.

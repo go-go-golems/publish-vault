@@ -23,3 +23,7 @@ Packaged callout passes as a Goldmark extension and verified vault-level links a
 ## 2026-11-09
 
 Fixed sibling traversal mutation by collecting callout nodes in postorder before replacement; added sibling regression.
+
+## 2026-11-09
+
+Validated structural callout slice with full Go tests, backend lint, plugin test and vault integration; guide previously delivered to reMarkable.
