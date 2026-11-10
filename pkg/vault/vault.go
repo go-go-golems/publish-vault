@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -51,12 +50,11 @@ type Note struct {
 	Dates       NoteDates              `json:"dates"`
 	Publish     bool                   `json:"-"` // false => excluded from publication
 
-	// sourceHTML is the parser output before vault-level link, asset, and embed
-	// resolution. rebuildHTML always renders HTML from it rather than from the
-	// previously rendered HTML, so a resolution that depended on vault state
-	// (e.g. an embed target hidden by publish: false) is re-evaluated instead of
-	// being baked into the note forever.
-	sourceHTML string
+	// Reparse one source at a time during rebuild instead of retaining the
+	// complete vault's syntax trees in memory. Heading indexes do not retain
+	// the syntax tree and can be consulted while rendering other notes.
+	source   []byte
+	headings *parser.HeadingIndex
 }
 
 // WikiLinkRef is the JSON-serialisable form of parser.WikiLink.
@@ -366,7 +364,9 @@ func (v *Vault) LoadAll() error {
 	v.buildBacklinks()
 	v.observeLoad(LoadProgress{Stage: LoadStageBacklinks, ProcessedNotes: 1, TotalNotes: 1})
 	v.observeLoad(LoadProgress{Stage: LoadStageRenderHTML, TotalNotes: uint64(len(v.notes))})
-	v.rebuildHTML()
+	if err := v.rebuildHTML(); err != nil {
+		return err
+	}
 	v.observeLoad(LoadProgress{Stage: LoadStageRenderHTML, ProcessedNotes: uint64(len(v.notes)), TotalNotes: uint64(len(v.notes))})
 	return nil
 }
@@ -378,7 +378,7 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, []DateWarning
 		return nil, nil, err
 	}
 
-	parsed, err := parser.Parse(src)
+	parsed, document, err := parser.ParseDocument(src)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -420,8 +420,8 @@ func (v *Vault) loadNote(absPath string, info os.FileInfo) (*Note, []DateWarning
 		Frontmatter: frontmatter,
 		Tags:        tags,
 		Excerpt:     parsed.Excerpt,
-		HTML:        parsed.HTML,
-		sourceHTML:  parsed.HTML,
+		source:      src,
+		headings:    document.Headings(),
 		WikiLinks:   wikiRefs,
 		ModTime:     info.ModTime(),
 		Dates:       dates,
@@ -478,9 +478,16 @@ func frontmatterBool(fm map[string]interface{}, key string, defaultValue bool) (
 // so "tribal/foo" resolves to "research/kb/tribal/foo".
 func (v *Vault) buildWikiLinkIndex() {
 	v.wikiLinkIndex = make(map[string]string)
-	for _, note := range v.notes {
-		// Register the full slug
-		v.wikiLinkIndex[note.Slug] = note.Slug
+	// Canonical slugs must always win over aliases. For ambiguous aliases,
+	// choose the lexicographically first canonical slug on every rebuild.
+	slugs := make([]string, 0, len(v.notes))
+	for slug := range v.notes {
+		slugs = append(slugs, slug)
+		v.wikiLinkIndex[slug] = slug
+	}
+	sort.Strings(slugs)
+	for _, slug := range slugs {
+		note := v.notes[slug]
 
 		// Register suffix-based short paths
 		// e.g., path "Research/KB/Tribal/App.md" → register:
@@ -602,108 +609,53 @@ func (v *Vault) ResolveWikiLink(target string) (string, bool) {
 	return "", false
 }
 
-// rebuildHTML re-renders all note HTML with wiki links resolved to correct slugs
-// and display text replaced with target note titles.
-// This must be called after buildWikiLinkIndex so links point to actual notes.
-//
-// Rendering always starts from the note's parser output (sourceHTML), never
-// from the previously rendered HTML: every resolution below depends on vault
-// state that changes between reloads, so re-running them over already-rendered
-// HTML would make the first outcome permanent. In particular an embed whose
-// target was hidden or missing would keep its "Note not published" marker after
-// the target became publishable, because the placeholder it was rendered from
-// would be gone.
-func (v *Vault) rebuildHTML() {
-	// Heading indexes are built on demand and cached for the length of the
-	// pass: only notes that are the target of a [[Note#Heading]] link need one,
-	// which is a small minority of the vault, but a popular target is linked
-	// many times. A nil entry caches "this slug is not a published note".
-	headingIndexes := map[string]*parser.HeadingIndex{}
-	headingIndexFor := func(slug string) *parser.HeadingIndex {
-		if idx, seen := headingIndexes[slug]; seen {
-			return idx
-		}
-		var idx *parser.HeadingIndex
-		if target, ok := v.notes[slug]; ok {
-			idx = parser.BuildHeadingIndex(target.sourceOrRenderedHTML())
-		}
-		headingIndexes[slug] = idx
-		return idx
-	}
-
+// rebuildHTML parses and renders one note at a time against the current vault
+// index. Callers hold v.mu or are constructing the vault. Rendering uses callbacks that
+// do not acquire v.mu; applying the resulting HTML only after every render
+// succeeds avoids publishing a partially updated HTML snapshot.
+func (v *Vault) rebuildHTML() error {
+	rendered := make(map[*Note]string, len(v.notes))
 	for _, note := range v.notes {
-		note.HTML = parser.ReplaceWikiLinksString(note.sourceOrRenderedHTML(), func(target string) string {
-			if resolved, ok := v.wikiLinkIndex[target]; ok {
-				return resolved
-			}
-			return ""
-		})
-		// Must follow ReplaceWikiLinksString: the fragment is resolved against
-		// the note the link ends up at, which is only known once the slug has
-		// been. Consults v.notes directly because rebuildHTML runs under v.mu.
-		note.HTML = parser.ResolveWikiLinkHeadings(note.HTML, func(slug, heading string) (string, bool) {
-			return headingIndexFor(slug).Lookup(heading)
-		})
-		note.HTML = parser.ReplaceWikiLinkDisplay(note.HTML, func(slug string) string {
-			if n, ok := v.notes[slug]; ok {
-				return n.Title
-			}
-			return ""
-		})
-		note.HTML = parser.RewriteImageSources(note.HTML, func(src string) string {
-			return v.ResolveAssetURL(note.Path, src)
-		})
-		note.HTML = parser.ReplaceWikiEmbedImages(note.HTML, func(target string) string {
-			if p, ok := v.ResolveAssetEmbed(target); ok {
-				return "/vault-assets/" + escapeAssetPath(p)
-			}
-			return ""
-		})
-		// Render a visible marker for note embeds (![[Note]]) whose target is
-		// not in the index — this covers notes hidden by publish: false as well
-		// as genuinely missing targets, so a hidden note does not render as an
-		// empty embed. Consult v.notes directly (lock-free) because rebuildHTML
-		// runs under v.mu; calling the locking GetNote here would deadlock.
-		note.HTML = replaceUnresolvedNoteEmbeds(note.HTML, func(slug string) bool {
-			_, ok := v.notes[slug]
-			return ok
-		})
+		current := note
+		resolver := &parser.Resolver{
+			Note: func(target string) (string, string, bool) {
+				slug, ok := v.ResolveWikiLink(target)
+				if !ok {
+					return "", "", false
+				}
+				targetNote, ok := v.notes[slug]
+				if !ok {
+					return "", "", false
+				}
+				return slug, targetNote.Title, true
+			},
+			Heading: func(slug, heading string) (string, bool) {
+				target, ok := v.notes[slug]
+				if !ok || target.headings == nil {
+					return "", false
+				}
+				return target.headings.Lookup(heading)
+			},
+			WikiImage: func(target string) (string, bool) {
+				p, ok := v.ResolveAssetEmbed(target)
+				if !ok {
+					return "", false
+				}
+				return "/vault-assets/" + escapeAssetPath(p), true
+			},
+			Image: func(src string) string { return v.ResolveAssetURL(current.Path, src) },
+		}
+		document := parser.ParseForRendering(note.source, note.headings)
+		html, err := document.Render(resolver)
+		if err != nil {
+			return fmt.Errorf("render note %q: %w", note.Path, err)
+		}
+		rendered[note] = html
 	}
-}
-
-// sourceOrRenderedHTML returns the parser output a rebuild should render from,
-// falling back to the current HTML for notes constructed without going through
-// loadNote (test fixtures), so a rebuild never blanks such a note.
-func (n *Note) sourceOrRenderedHTML() string {
-	if n.sourceHTML != "" {
-		return n.sourceHTML
+	for note, html := range rendered {
+		note.HTML = html
 	}
-	return n.HTML
-}
-
-// unresolvedNoteEmbedRe matches the placeholder div emitted by the parser for
-// a note embed (![[Note]]): <div class="wiki-embed" data-target="..." ...>.
-var unresolvedNoteEmbedRe = regexp.MustCompile(`<div class="wiki-embed" data-target="([^"]*)"([^>]*)></div>`)
-
-// replaceUnresolvedNoteEmbeds replaces note-embed placeholders whose target
-// slug is not a published note with a visible broken-embed marker. The isPublished
-// callback reports whether a slug is in the index; callers that already hold
-// v.mu must pass a lock-free lookup to avoid deadlock.
-func replaceUnresolvedNoteEmbeds(html string, isPublished func(slug string) bool) string {
-	return unresolvedNoteEmbedRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := unresolvedNoteEmbedRe.FindStringSubmatch(match)
-		if len(sub) < 3 {
-			return match
-		}
-		target := sub[1]
-		if target == "" {
-			return match
-		}
-		if isPublished(target) {
-			return match
-		}
-		return `<span class="wiki-embed wiki-embed-broken">⚠ Note not published: ` + target + `</span>`
-	})
+	return nil
 }
 
 // ResolveAssetURL maps a Markdown image src to a public /vault-assets URL. Relative
@@ -822,7 +774,9 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	if !note.Publish {
 		// Was published, now hidden by frontmatter: drop it from the index and
 		// signal the watcher to remove it from secondary indexes.
-		v.RemoveNote(absPath)
+		if _, err := v.RemoveNote(absPath); err != nil {
+			return nil, errors.Join(ErrUnpublished, err)
+		}
 		return nil, ErrUnpublished
 	}
 	v.mu.Lock()
@@ -843,8 +797,11 @@ func (v *Vault) ReloadNote(absPath string) (*Note, error) {
 	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
-	v.rebuildHTML()
+	err = v.rebuildHTML()
 	v.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 	return note, nil
 }
 
@@ -926,16 +883,16 @@ func disambiguateSlug(natural, relPath string, taken func(string) bool) string {
 // callers can refresh secondary indexes. Remaining notes are re-rendered so an
 // embed of the removed note (![[Gone]]) falls back to the broken-embed marker
 // instead of keeping a placeholder that no longer resolves to anything.
-func (v *Vault) RemoveNote(absPath string) string {
+func (v *Vault) RemoveNote(absPath string) (string, error) {
 	slug := v.SlugForPath(absPath)
 	v.mu.Lock()
 	delete(v.notes, slug)
 	v.buildNormalizedIndex()
 	v.buildWikiLinkIndex()
 	v.buildBacklinks()
-	v.rebuildHTML()
+	err := v.rebuildHTML()
 	v.mu.Unlock()
-	return slug
+	return slug, err
 }
 
 // IsIgnored reports whether absPath (an absolute, OS-native path inside the

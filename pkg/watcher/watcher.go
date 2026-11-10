@@ -142,7 +142,11 @@ func (vw *VaultWatcher) loop() {
 func (vw *VaultWatcher) apply(path string, op fsnotify.Op) {
 	if op&(fsnotify.Remove|fsnotify.Rename) != 0 {
 		log.Printf("vault: removing %s", path)
-		vw.deleteFromSearch(vw.vault.RemoveNote(path))
+		slug, err := vw.vault.RemoveNote(path)
+		vw.deleteFromSearch(slug)
+		if err != nil {
+			log.Printf("vault: render after removal %s: %v", path, err)
+		}
 		return
 	}
 

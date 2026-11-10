@@ -5,18 +5,9 @@ package parser
 import (
 	"bytes"
 	"fmt"
-	stdhtml "html"
 	"path"
 	"regexp"
 	"strings"
-
-	"github.com/yuin/goldmark"
-	meta "github.com/yuin/goldmark-meta"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/text"
 )
 
 // WikiLink represents a parsed [[wiki link]] or ![[embed]].
@@ -40,9 +31,8 @@ type ParsedNote struct {
 // wikiLinkRegex matches [[Target]], [[Target|Alias]], [[Target#Heading]], ![[embed]]
 var wikiLinkRegex = regexp.MustCompile(`(!?)\[\[([^\[\]]+)\]\]`)
 
-// imageExtensions are the embed targets rendered as <img> instead of note
-// embeds. Obsidian resolves ![[pic.png]] to an attachment anywhere in the
-// vault; the vault layer fills in the src via ReplaceWikiEmbedImages.
+// imageExtensions are embed targets rendered as images rather than note embeds.
+// The vault resolver maps ![[pic.png]] to an attachment URL.
 var imageExtensions = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
 	".svg": true, ".webp": true, ".avif": true, ".bmp": true, ".ico": true,
@@ -55,74 +45,12 @@ func isImageTarget(target string) bool {
 
 // Parse takes raw Markdown bytes and returns a ParsedNote.
 func Parse(src []byte) (*ParsedNote, error) {
-	// --- Lift LaTeX math out before anything else reads or rewrites the source ---
-	// Math runs first because replaceWikiLinks injects raw HTML (quotes,
-	// attributes) into the body; scanning that output for `$` could swallow
-	// markup. The math itself comes back in RestoreMath, after every HTML
-	// post-pass.
-	processed, mathSpans := replaceMathInBody(src)
-
-	// --- Build goldmark with frontmatter ---
-	md := goldmark.New(
-		goldmark.WithExtensions(
-			meta.Meta,
-			extension.GFM,
-			extension.Table,
-			extension.Strikethrough,
-			extension.TaskList,
-			extension.Footnote,
-			calloutExtension{},
-			wikiLinkExtension{math: mathSpans},
-		),
-		goldmark.WithParserOptions(
-			parser.WithAutoHeadingID(),
-		),
-		goldmark.WithRendererOptions(
-			html.WithXHTML(),
-			html.WithUnsafe(), // allow raw HTML for our placeholders
-		),
-	)
-
-	ctx := parser.NewContext()
-	doc := md.Parser().Parse(text.NewReader(processed), parser.WithContext(ctx))
-	wikiLinks := wikiReferences(doc, splitSource(processed).frontmatter, mathSpans)
-	var buf bytes.Buffer
-	if err := md.Renderer().Render(&buf, processed, doc); err != nil {
+	note, document, err := ParseDocument(src)
+	if err != nil {
 		return nil, err
 	}
-
-	frontmatter := normalizeFrontmatter(meta.Get(ctx))
-	htmlOut := buf.String()
-
-	// --- Put math back, before the heading pass and after every other one ---
-	htmlOut = RestoreMath(htmlOut, mathSpans)
-
-	// --- Point [[#Heading]] links at the ids goldmark actually emitted ---
-	// Runs *after* RestoreMath. A heading and a link naming it hold different
-	// sentinels for the same formula (they are separate spans), so the two only
-	// become comparable once the math is back: the heading renders the TeX as an
-	// element's text content, and the link carries the same TeX in data-heading
-	// (see RestoreMathText). Comparing before RestoreMath matched sentinel
-	// indices against each other and never agreed.
-	htmlOut = resolveSelfHeadingLinks(htmlOut)
-
-	// --- Extract title ---
-	title := extractTitle(frontmatter, src)
-
-	// --- Extract tags ---
-	tags := extractTags(frontmatter)
-
-	// --- Extract excerpt ---
-	excerpt := extractExcerpt(src)
-
-	return &ParsedNote{
-		Frontmatter: frontmatter,
-		HTML:        htmlOut,
-		WikiLinks:   wikiLinks,
-		Tags:        tags,
-		Title:       title,
-		Excerpt:     excerpt,
-	}, nil
+	note.HTML, err = document.Render(nil)
+	return note, err
 }
 
 // parseWikiLinkInner parses "Target#Heading|Alias" into its parts.
@@ -174,9 +102,8 @@ func StripNoteExtension(target string) string {
 
 // sourceParts is the result of splitting a Markdown source into an optional
 // leading YAML frontmatter block and the document body. It is the single
-// boundary every parser consumer uses, so math masking, wiki-link
-// replacement/extraction, and plain-text stripping all agree with goldmark-meta
-// about where frontmatter ends.
+// boundary used by metadata-reference extraction and plain-text indexing, so
+// both agree with goldmark-meta about where frontmatter ends.
 //
 // frontmatter is nil when no complete frontmatter block is present; body is
 // then the original source and bodyOffset is 0. When a block is present,
@@ -200,8 +127,8 @@ func (p sourceParts) hasFrontmatter() bool {
 // splitSource separates an initial YAML frontmatter block from the Markdown
 // body. The boundary mirrors goldmark-meta exactly (see isFrontmatterDelimiter)
 // so that any delimiter the metadata parser accepts is also the boundary the
-// pre-passes protect: a four-dash preamble that goldmark-meta parses as
-// metadata is not handed to the math or wiki pre-passes as Markdown body.
+// metadata extraction protects: a four-dash preamble that goldmark-meta parses
+// as metadata is not treated as Markdown body.
 //
 // No frontmatter is returned when the opening line is not a delimiter or when
 // no closing delimiter is ever reached; the source is then returned untouched
@@ -231,105 +158,15 @@ func splitSource(src []byte) sourceParts {
 	return sourceParts{body: src}
 }
 
-func wikiLinkHTML(node *wikiLinkNode, spans []MathSpan) []byte {
-	isEmbed := node.link.IsEmbed
-	target, alias, heading := node.link.Target, node.link.Alias, node.link.Heading
-	// Attribute values must carry TeX rather than math sentinels: RestoreMath
-	// runs over the whole document afterwards and would inject a <span> into the
-	// attribute, whose quotes end it early (see RestoreMathText). display is
-	// deliberately left masked — it is element content, where the math element
-	// belongs and renders.
-	attrTarget := RestoreMathText(target, spans)
-	attrAlias := RestoreMathText(alias, spans)
-	attrHeading := RestoreMathText(heading, spans)
-	slug := slugify(attrTarget)
-	display := alias
-	if display == "" {
-		display = target
-	}
-	if isEmbed {
-		if isImageTarget(target) {
-			// Image embed: rendered as <img>; the vault layer resolves
-			// data-asset to a /vault-assets URL via ReplaceWikiEmbedImages.
-			return []byte(`<img class="wiki-embed-image" data-asset="` + stdhtml.EscapeString(attrTarget) + `" alt="` + stdhtml.EscapeString(display) + `" loading="lazy">`)
-		}
-		return []byte(`<div class="wiki-embed" data-target="` + slug + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `"></div>`)
-	}
-	if target == "" {
-		// [[#Heading]] — a link to a heading in *this* note, not to another
-		// note. It carries no target, so it must not go through the /note/<slug>
-		// path at all: an empty slug produced href="/note/#heading", which sends
-		// the reader to the vault root, and an empty display string, which makes
-		// the link invisible. The real anchor id is only known once goldmark has
-		// rendered the headings, so emit a placeholder for
-		// resolveSelfHeadingLinks to finish.
-		if heading == "" {
-			return []byte(stdhtml.EscapeString(string(node.raw))) // degenerate link remains text
-		}
-		if display == "" {
-			display = heading
-		}
-		return []byte(`<a href="#" class="wiki-link wiki-link-self" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + stdhtml.EscapeString(display) + `</a>`)
-	}
-	href := "/note/" + slug
-	if heading != "" {
-		// A provisional fragment. slugify is not how the target note's heading
-		// ids are made, so the vault replaces this with the id the target
-		// actually rendered (ResolveWikiLinkHeadings); data-heading carries the
-		// heading text that pass needs, since the fragment alone has already
-		// lost it.
-		href += "#" + slugify(attrHeading)
-	}
-	return []byte(`<a href="` + href + `" class="wiki-link" data-target="` + slug + `" data-raw="` + stdhtml.EscapeString(attrTarget) + `" data-heading="` + stdhtml.EscapeString(attrHeading) + `" data-alias="` + stdhtml.EscapeString(attrAlias) + `">` + stdhtml.EscapeString(display) + `</a>`)
-}
+var whitespaceRe = regexp.MustCompile(`\s+`)
 
-var (
-	// selfHeadingLinkRe matches the placeholder emitted by wikiLinkHTML for a
-	// same-note heading link. Attribute order is fixed because we generate it.
-	selfHeadingLinkRe = regexp.MustCompile(`<a href="#" class="wiki-link wiki-link-self" data-heading="([^"]*)" data-alias="([^"]*)">`)
-	// renderedHeadingRe captures the id and inner markup of every rendered
-	// heading that carries an id.
-	renderedHeadingRe = regexp.MustCompile(`(?s)<h[1-6][^>]*\bid="([^"]*)"[^>]*>(.*?)</h[1-6]>`)
-	htmlTagRe         = regexp.MustCompile(`<[^>]*>`)
-	whitespaceRe      = regexp.MustCompile(`\s+`)
-)
-
-// HeadingIndex maps a rendered note's headings to the ids goldmark gave them.
-//
-// It exists because a wiki-link fragment cannot be *computed*: goldmark's auto
-// heading IDs and slugify disagree (goldmark drops "." and "—" outright where
-// slugify turns them into "-", so "9.2 Kernel K0" becomes "92-kernel-k0" rather
-// than "9-2-kernel-k0"), and goldmark additionally suffixes duplicate headings
-// with "-1", "-2". Reading the ids back out of the rendered HTML is exact by
-// construction and cannot drift when goldmark changes its algorithm.
+// HeadingIndex maps normalized heading text and IDs to Goldmark-assigned IDs.
 type HeadingIndex struct {
 	byText map[string]string
 	ids    map[string]bool
 }
 
-// BuildHeadingIndex reads every id-bearing heading out of rendered note HTML.
-func BuildHeadingIndex(htmlIn string) *HeadingIndex {
-	idx := &HeadingIndex{byText: map[string]string{}, ids: map[string]bool{}}
-	for _, m := range renderedHeadingRe.FindAllStringSubmatch(htmlIn, -1) {
-		id, inner := m[1], m[2]
-		idx.ids[id] = true
-		key := normalizeHeadingKey(stdhtml.UnescapeString(htmlTagRe.ReplaceAllString(inner, "")))
-		if key == "" {
-			continue
-		}
-		if _, exists := idx.byText[key]; !exists {
-			idx.byText[key] = id
-		}
-	}
-	return idx
-}
-
-// Lookup resolves a heading as written in a wiki link to the id it must point
-// at. Matching is on heading text, case-insensitively and with runs of
-// whitespace collapsed, which is how Obsidian matches; the first heading with
-// that text wins, again matching Obsidian. A heading that matches no text is
-// tried against the ids themselves, so a link written in the already-slugified
-// form still lands. A nil index resolves nothing, so callers can cache misses.
+// Lookup returns the first heading with the given normalized text or exact ID.
 func (h *HeadingIndex) Lookup(heading string) (string, bool) {
 	if h == nil {
 		return "", false
@@ -343,28 +180,6 @@ func (h *HeadingIndex) Lookup(heading string) (string, bool) {
 	return "", false
 }
 
-// resolveSelfHeadingLinks points [[#Heading]] links at the heading goldmark
-// actually rendered in this very note. Anything it cannot match becomes a
-// visibly unresolved link rather than a silent jump to the top of the page.
-func resolveSelfHeadingLinks(htmlIn string) string {
-	if !strings.Contains(htmlIn, `class="wiki-link wiki-link-self"`) {
-		return htmlIn
-	}
-	idx := BuildHeadingIndex(htmlIn)
-
-	return selfHeadingLinkRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
-		sub := selfHeadingLinkRe.FindStringSubmatch(match)
-		heading := stdhtml.UnescapeString(sub[1])
-		id, ok := idx.Lookup(heading)
-		if !ok {
-			return `<a href="#unresolved-` + stdhtml.EscapeString(slugify(heading)) +
-				`" class="wiki-link wiki-link-self broken" data-heading="` + sub[1] + `" data-alias="` + sub[2] + `">`
-		}
-		return `<a href="#` + stdhtml.EscapeString(id) +
-			`" class="wiki-link wiki-link-self" data-heading="` + sub[1] + `" data-alias="` + sub[2] + `">`
-	})
-}
-
 func normalizeHeadingKey(s string) string {
 	return whitespaceRe.ReplaceAllString(strings.ToLower(strings.TrimSpace(s)), " ")
 }
@@ -375,165 +190,6 @@ func slugify(s string) string {
 	s = regexp.MustCompile(`[^a-z0-9\-_/]`).ReplaceAllString(s, "-")
 	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
 	return strings.Trim(s, "-")
-}
-
-// wikiEmbedImageRe matches the exact placeholder emitted by wikiLinkHTML for
-// image embeds (attribute order is fixed because we generate the tag).
-var wikiEmbedImageRe = regexp.MustCompile(`<img class="wiki-embed-image" data-asset="([^"]*)" alt="([^"]*)" loading="lazy">`)
-
-// ReplaceWikiEmbedImages resolves ![[image.png]] placeholders in pre-rendered
-// HTML. The resolver maps the raw embed target (as written in the note) to a
-// servable URL, or "" when the asset does not exist in the vault; unresolved
-// embeds render as a visible broken-embed marker instead of an empty image.
-func ReplaceWikiEmbedImages(html string, resolver func(target string) string) string {
-	return wikiEmbedImageRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := wikiEmbedImageRe.FindStringSubmatch(match)
-		if len(sub) < 3 {
-			return match
-		}
-		target := stdhtml.UnescapeString(sub[1])
-		src := resolver(target)
-		if src == "" {
-			return `<span class="wiki-embed wiki-embed-broken">⚠ Image not found: ` + stdhtml.EscapeString(target) + `</span>`
-		}
-		return `<img class="wiki-embed-image" src="` + stdhtml.EscapeString(src) + `" alt="` + sub[2] + `" loading="lazy">`
-	})
-}
-
-// ReplaceWikiLinksString resolves wiki-link targets in pre-rendered HTML.
-// The resolver function maps a short slugified target to the full vault slug.
-// It replaces data-target and href attributes in wiki-link anchors and embeds.
-var (
-	dataTargetRe = regexp.MustCompile(`data-target="([^"]+)"`)
-	hrefNoteRe   = regexp.MustCompile(`href="/note/([^"#]+)(#[^"]*)?"`)
-	imgSrcRe     = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)(["'])`)
-)
-
-func ReplaceWikiLinksString(html string, resolver func(string) string) string {
-	html = dataTargetRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := dataTargetRe.FindStringSubmatch(match)
-		if len(sub) < 2 {
-			return match
-		}
-		resolved := resolver(sub[1])
-		if resolved == "" {
-			return match
-		}
-		return `data-target="` + resolved + `"`
-	})
-	html = hrefNoteRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := hrefNoteRe.FindStringSubmatch(match)
-		if len(sub) < 2 {
-			return match
-		}
-		resolved := resolver(sub[1])
-		if resolved == "" {
-			return `href="#unresolved-` + sub[1] + `"`
-		}
-		fragment := ""
-		if len(sub) >= 3 {
-			fragment = sub[2]
-		}
-		return `href="/note/` + resolved + fragment + `"`
-	})
-	return html
-}
-
-// crossNoteHeadingLinkRe matches a resolved wiki-link anchor that carries a
-// heading. The attribute order is fixed because wikiLinkHTML generates it and
-// ReplaceWikiLinksString only rewrites values in place.
-var crossNoteHeadingLinkRe = regexp.MustCompile(
-	`<a href="/note/([^"#]*)(#[^"]*)?" class="wiki-link" data-target="([^"]*)" data-raw="([^"]*)" data-heading="([^"]+)" data-alias="([^"]*)">`)
-
-// ResolveWikiLinkHeadings replaces the provisional slugified fragment of a
-// [[Note#Heading]] link with the id the *target* note actually rendered.
-//
-// The fragment wikiLinkHTML wrote is a guess made with slugify, and the target's
-// heading ids come from goldmark, which does not agree with slugify on any
-// heading containing punctuation (see HeadingIndex). The link therefore opened
-// the right note at the top of the page whenever the two differed.
-//
-// resolver receives the resolved target slug and the heading as written, and
-// returns the real id. When it declines — the target is not a published note,
-// the heading does not exist there, or the link is a block reference
-// ([[Note#^blockid]]) — the fragment is dropped rather than left pointing at an
-// id that is known not to exist. The link still opens the note.
-func ResolveWikiLinkHeadings(html string, resolver func(slug, heading string) (string, bool)) string {
-	// rebuildHTML runs this over every note on every reload, and most notes hold
-	// no heading link at all. A substring scan is far cheaper than the regexp,
-	// and every anchor this pass can act on carries the attribute.
-	if !strings.Contains(html, ` data-heading="`) {
-		return html
-	}
-	return crossNoteHeadingLinkRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := crossNoteHeadingLinkRe.FindStringSubmatch(match)
-		if len(sub) < 7 {
-			return match
-		}
-		slug, target, raw, heading, alias := sub[1], sub[3], sub[4], sub[5], sub[6]
-		fragment := ""
-		if id, ok := resolver(slug, stdhtml.UnescapeString(heading)); ok {
-			fragment = "#" + stdhtml.EscapeString(id)
-		}
-		return `<a href="/note/` + slug + fragment + `" class="wiki-link" data-target="` + target +
-			`" data-raw="` + raw + `" data-heading="` + heading + `" data-alias="` + alias + `">`
-	})
-}
-
-// ReplaceWikiLinkDisplay replaces the display text of wiki links when the
-// resolved target differs from the raw text. The titleResolver maps a
-// resolved slug to its note title (or "" if unknown).
-// RewriteImageSources rewrites image src attributes in rendered HTML.
-// The resolver receives the unescaped src value and returns the desired public
-// URL. Attribute quoting and unrelated attributes are preserved.
-func RewriteImageSources(htmlIn string, resolver func(string) string) string {
-	return imgSrcRe.ReplaceAllStringFunc(htmlIn, func(match string) string {
-		sub := imgSrcRe.FindStringSubmatch(match)
-		if len(sub) < 5 {
-			return match
-		}
-		prefix, quote, src, closingQuote := sub[1], sub[2], sub[3], sub[4]
-		if quote != closingQuote {
-			return match
-		}
-		resolved := resolver(stdhtml.UnescapeString(src))
-		if resolved == "" {
-			resolved = src
-		}
-		return prefix + quote + stdhtml.EscapeString(resolved) + quote
-	})
-}
-
-func ReplaceWikiLinkDisplay(html string, titleResolver func(string) string) string {
-	// Match <a ... data-raw="X" ...>Y</a> — replace Y with the resolved title
-	// We do this by finding each wiki-link anchor and replacing its content.
-	wikiLinkRe := regexp.MustCompile(`<a([^>]*?)class="wiki-link"([^>]*?)data-raw="([^"]*?)"([^>]*?)>([^<]*?)</a>`)
-	html = wikiLinkRe.ReplaceAllStringFunc(html, func(match string) string {
-		sub := wikiLinkRe.FindStringSubmatch(match)
-		if len(sub) < 6 {
-			return match
-		}
-		rawDisplay := sub[5]
-		if strings.Contains(match, `data-alias="`) {
-			aliasSub := regexp.MustCompile(`data-alias="([^"]*)"`).FindStringSubmatch(match)
-			if len(aliasSub) >= 2 && aliasSub[1] != "" {
-				return match
-			}
-		}
-		// Extract data-target to get the resolved slug
-		targetSub := dataTargetRe.FindStringSubmatch(match)
-		if len(targetSub) < 2 {
-			return match
-		}
-		title := titleResolver(targetSub[1])
-		if title == "" || title == rawDisplay {
-			return match
-		}
-		// Rebuild the anchor with the new display text
-		prefix := `<a` + sub[1] + `class="wiki-link"` + sub[2] + `data-raw="` + sub[3] + `"` + sub[4] + ">"
-		return prefix + title + "</a>"
-	})
-	return html
 }
 
 func titleASCII(s string) string {
@@ -735,6 +391,3 @@ func stripMarkdown(src []byte) string {
 func Slugify(s string) string {
 	return slugify(s)
 }
-
-// Ensure ast import is used (goldmark requires it for custom transformers).
-var _ = ast.KindDocument

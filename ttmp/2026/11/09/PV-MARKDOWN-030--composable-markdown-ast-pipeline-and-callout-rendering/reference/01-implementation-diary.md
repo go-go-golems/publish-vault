@@ -11,10 +11,18 @@ Owners: []
 RelatedFiles:
     - Path: repo://internal/parser/callout.go
       Note: Structural callout parsing and rendering
+    - Path: repo://internal/parser/document.go
+      Note: Source ownership and structural renderer
+    - Path: repo://internal/parser/math_ast.go
+      Note: Display and inline math AST
     - Path: repo://internal/parser/softbreak_test.go
       Note: Soft and explicit line break regression coverage
+    - Path: repo://internal/parser/table_ast.go
+      Note: Malformed table data preservation
     - Path: repo://pkg/vault/callout_pipeline_test.go
       Note: Vault resolution integration coverage
+    - Path: repo://pkg/vault/vault.go
+      Note: Deterministic indexing and render-time resolution
 ExternalSources: []
 Summary: Chronological investigation and implementation record
 LastUpdated: 0001-01-01T00:00:00Z
@@ -382,7 +390,7 @@ I tightened the initial wiki-node implementation so parsing the link syntax happ
 The user requested a detailed textbook-style project report in the Obsidian vault after the implementation is finished, followed by a vault commit and push. I inspected the vault Git status before taking any action; existing untracked research and transcript directories must remain untouched. The report is intentionally not written or pushed at this intermediate checkpoint because the broad migration is still in progress.
 
 ### Prompt Context
-**User prompt (verbatim):** "once you're finished,  write a detailed project report for the obsidian vault as a deep dive technical analysis blog post using a textbook writing style (no analogies, see skill).      
+**User prompt (verbatim):** "once you're finished,  write a detailed project report for the obsidian vault as a deep dive technical analysis blog post using a textbook writing style (no analogies, see skill).
  Commit and push the bsidian vault when done (go-go-parc vault)."
 **Assistant interpretation:** After finishing the migration, write an evidence-backed report in a new vault note and commit/push only the intended vault changes.
 **Inferred user intent:** A durable, accurate account of the completed implementation, not a premature success report.
@@ -459,3 +467,249 @@ The user directed that all remaining features be migrated before running validat
 
 ### Technical details
 - No code or vault changes were made and no tests were run in this step.
+
+## Step 11: Connect math and vault resolution through document nodes
+
+Following the user's instruction to migrate all components before the validation gate, I started the integrated replacement without running tests. The work in this step is a working-tree implementation, not a qualified checkpoint: the entire migration and its affected tests must be completed and validated together.
+
+### Prompt Context
+**User prompt:** See Step 10.
+**Assistant interpretation:** Connect structural math and vault resolution before running the full validation gate.
+**Inferred user intent:** Avoid repeated test cycles while the pipeline is intentionally between designs.
+
+### What I did
+- Added `math_ast.go` with Goldmark inline and block math nodes, parsers, a display-block promotion pass, and renderers.
+- Added `document.go` with an immutable source-owned AST, heading index, render-time resolver and structural image rendering; integrated wiki-link rendering with resolver callbacks.
+- Reworked `Vault.rebuildHTML` to render from documents against current note, heading and asset indexes rather than regex-rewriting rendered HTML. Removed the old HTML rewrite and math sentinel implementations.
+- Started migrating tests that targeted removed helper functions to document/resolver behavior; adapted the historical parser probe to the new API.
+
+### Why
+- Cross-note resolution occurs only after indexing, and needs to be re-evaluated after a reload. Source-owned syntax trees retain the information required to do that without serializing and reparsing HTML.
+
+### What worked
+- Source edits and formatting completed; no behavioral claim or passing test is asserted at this intermediate point.
+
+### What didn't work
+- One `edit` call for `document.go` failed before applying changes because its third old-text match was not unique; I retried the two specific edits without the ambiguous replacement.
+
+### What I learned
+- Standard Markdown images and raw HTML image tags have separate Goldmark node types. The latter require tokenizing the raw HTML fragment to change only image source attributes, not regex rewriting the whole page.
+
+### What was tricky to build
+- Goldmark parses block structure before inline nodes; display math requires a block parser for multiline blocks and an AST pass to lift inline display nodes out of paragraphs. Vault rebuild callbacks must not reacquire the lock held by the vault.
+
+### What warrants a second pair of eyes
+- This unvalidated implementation needs especially close review of multiline/unterminated math, nested blockquotes, heading IDs with formatting/math, source lifetime and memory, URL safety, raw HTML and reload failure semantics.
+
+### What should be done in the future
+- Complete all migration edits and test replacements, then run the main validation gate, diagnose and fix failures, update the design and commit. The requested Obsidian report follows a fully verified migration.
+
+### Code review instructions
+- Inspect the current diff in `internal/parser/document.go`, `math_ast.go`, `wikilink_ast.go`, and `pkg/vault/vault.go`. Do not treat this intermediate step as tested.
+
+### Technical details
+- The document retains its owned source bytes and Goldmark nodes; rendering uses a fresh renderer with optional callbacks for note, heading, wiki-image and ordinary image resolution. Existing test baselines are being migrated to the new document API.
+
+
+**Working-tree design refinement:** The initial implementation retained every document AST in the vault. To avoid retaining the entire vault's parse trees, the current work instead keeps each source and compact heading index, then parses and renders one note at a time during rebuild. Rendered HTML is accumulated and published only after all notes render. This remains unvalidated pending the requested integrated gate. The previous statement that vault notes retain the syntax tree describes the discarded intermediate edit; `Document` itself still owns its source and tree while it exists.
+
+
+**Integrated gate failure 1:** `GOWORK=off go test ./...` failed at compile time: `internal/parser/parser.go:396:9: undefined: ast`. A vestigial `var _ = ast.KindDocument` remained after moving AST code into `document.go` and removing the import. Removed that no-longer-needed placeholder before continuing failure triage.
+
+
+**Integrated gate recovery and additional evidence:** After removing the stale AST import placeholder, `GOWORK=off go test ./internal/parser ./pkg/vault ./pkg/watcher` and then `GOWORK=off go test ./...` passed. `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher` passed. Rendering the actual JavaScript operating systems note showed no forced `<br>` at the reported source line. `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30` passed. A combined `docmgr doctor ...; git diff --check` command exited 2 because `internal/parser/parser.go:394: new blank line at EOF`; ran `gofmt -w internal/parser/parser.go` to remove the excess blank line. Additional validation remains before qualification.
+
+
+**Integrated CI gate failure 2:** `make ci-check` passed format checking but stopped at backend lint: `pkg/vault/vault_test.go:1019:15: Error return value of v.rebuildHTML is not checked (errcheck)` and `internal/parser/math_ast.go:112:6: variable close has same name as predeclared identifier (predeclared)`. Updated the test to check the newly returned error and renamed the local variable `closer`. The remaining CI stages were not reached by that attempt and must be run after the fixes.
+
+
+**Integrated CI gate failure 3:** After fixing the lint findings, `make ci-check > /tmp/pv-markdown-030-ci.log 2>&1` passed formatting, lint, logcopter check, all Go/plugin tests and gosec, then failed at `govulncheck ./...` (exit 3): 12 called standard-library vulnerabilities were reported for Go 1.26.6, including GO-2026-6809 fixed in Go 1.26.10, and HTTP/2 findings also identified `golang.org/x/net@v0.57.0`, fixed in v0.60.0. The remaining frontend stages did not run. `GOTOOLCHAIN=go1.26.10 go version` succeeded. Updated the module and Docker builder to Go 1.26.10 and used `GOWORK=off GOTOOLCHAIN=go1.26.10 go get golang.org/x/net@v0.60.0`; Go also upgraded its related x/crypto, x/mod, x/sync, x/sys, x/term, x/text and x/tools dependencies. Revalidation of the dependency changes is required.
+
+
+**Vulnerability-gate recovery:** The first `GOWORK=off govulncheck ./...` after the Go and dependency bump failed to load packages with `go: updates to go.mod needed; to update it: go mod tidy`. Ran `GOWORK=off go mod tidy` (which removed the now-redundant toolchain directive while retaining `go 1.26.10`) and repeated the scan. It reported `No vulnerabilities found. Your code is affected by 0 vulnerabilities.` It also reported two vulnerabilities in imported packages and two in required modules for which it found no called vulnerable symbols; these are not represented as zero dependency findings. Full CI and build still need a fresh pass.
+
+
+**Corpus comparison and table regression:** A 2,372-note inventory comparison found unchanged note, wiki-reference, callout and image counts, but differences in math and backlink totals. Inspection showed the baseline wiki suffix index used randomized map iteration; canonical slugs could also be shadowed by aliases. Changed index construction to reserve canonical slugs first and process alias candidates in sorted order; two full-vault inventory runs then produced identical results. The baseline and new indices can assign different ambiguous aliases, a deliberate deterministic behavior change. Some math count changes came from display nodes inside non-paragraph inline containers, so the inline renderer now retains the `math-display` class in those containers. Inspection also found source tables with one header column and additional body cells: the old math pre-pass accidentally broke such tables and rendered later cells as paragraphs, while unmodified Goldmark silently truncated them. Added a structural paragraph transformer that expands only malformed tables with extra cells, preserving all cell text and alignment, and a code-span escape pass.
+
+**Table implementation diagnostics:** `GOWORK=off go test ./internal/parser ./pkg/vault` first failed to compile `table_ast.go` because chained pointer-receiver calls produced non-addressable `text.Segment` temporaries (`cannot call pointer method TrimRightSpace` and `WithStop`). Split them into named assignments. The next run failed `TestUnevenTableKeepsAllCells`: expected `<code>a|b</code>`, got `<code>a\|b</code>`. The test fixture had authored two backslashes (`a\\|b`), for which retaining one is correct; corrected it to one escaped pipe. The targeted tests then passed. This regression and fix are not yet a full delivery gate.
+
+**Performance experiment:** The ticket's `scripts/02-vault-load` loaded the same real vault (2,372 published notes) with the first structural implementation in 32.064s and 212.2 MiB live heap after GC; a separately archived `HEAD` baseline took 17.439s and 215.4 MiB. Avoiding redundant metadata/reference/excerpt analysis during rebuild using `ParseForRendering` reduced a subsequent run to 17.964s and 212.1 MiB. These are single local observations, not statistically controlled benchmarks or peak-memory measurements.
+
+
+**Unclosed math across containers:** `GOWORK=off go test ./internal/parser -run TestUnclosedMathInQuoteDoesNotConsumeOutsideContent -count=1` first failed because a `$$` in a later container was treated as the closer, producing `<div class="math math-display">unclosed</div>` inside the quote. Restoring unmatched source as a paragraph preserved the delimiter, but a stronger test with a heading inside the quote then failed because the heading was swallowed into the paragraph. Changed lookahead to require the enclosing blockquote markers on every intervening physical line; the targeted test and `TestMathBlockInCalloutAndEscapedCurrency` subsequently passed together. Wider nested-list and quote cases still warrant review and full validation.
+
+## Step 12: Re-read the design and continue the integrated review
+
+The user asked me to read the design and continue with a detailed diary and appropriate commits. I reread the full ticket design, including the explicit distinction between the original baseline, the AST target, resolver/source lifetimes, test matrix and raw-HTML trust policy. The design's implementation-checkpoint banner is now stale relative to the working tree and must be revised after the implementation is qualified.
+
+### Prompt Context
+**User prompt (verbatim):** "read design doc and continue keeping a diary. commit at appropriate intervals, and keep a detailed diary as you work (see the diary skill for the diary format. backfill the diary if you forgot to write it so far)"
+**Assistant interpretation:** Ground the remaining implementation in the full design and keep an accurate chronological record, including missing validation evidence.
+**Inferred user intent:** Complete the migration without losing the architectural rationale or the actual debugging history.
+
+### What I did
+- Read the complete `design-doc/01-markdown-pipeline-architecture-and-implementation-guide.md`.
+- Inspected the current math and table extensions and open ticket tasks; preserved unrelated untracked files.
+- Rechecked the targeted unclosed-quote math test after the container-aware fix; it passed along with the callout/math case.
+
+### Why
+- The design explicitly calls out source ownership, cross-note resolution, math/code precedence and truthful separation of proposal versus tested implementation. Those are the critical remaining review boundaries.
+
+### What worked
+- `GOWORK=off go test ./internal/parser -run 'TestUnclosedMathInQuoteDoesNotConsumeOutsideContent|TestMathBlockInCalloutAndEscapedCurrency' -count=1` passed after the quote fix.
+
+### What didn't work
+- The earlier stronger unclosed-quote test failed before the fix because `## Preserved heading` appeared as paragraph text; its exact diagnostic is in the preceding checkpoint. Current success only covers the named cases, not every nested-list boundary.
+
+### What I learned
+- The original guide remains useful as a baseline and rationale, but its prominent claim that math and resolution have not been implemented must not remain the sole current-state account.
+
+### What was tricky to build
+- Closing-delimiter lookahead is performed on the original bytes before Goldmark finishes container parsing. A delimiter in a different container cannot be treated as the current block's closer without swallowing syntax.
+
+### What warrants a second pair of eyes
+- List-item and nested-quote boundaries, table syntax complexity, new runtime and dependency versions, and the discrepancy between the historical design and actual code.
+
+### What should be done in the future
+- Complete a consolidated review and validation, document the actual pipeline, then commit and write the requested vault report.
+
+### Code review instructions
+- Read the ticket design, then `internal/parser/math_ast.go`, `table_ast.go`, `document.go` and `pkg/vault/vault.go`.
+
+### Technical details
+- The working tree is not yet committed; the active goal and ticket remain open. No deployment or Obsidian report has been performed.
+
+## Step 13: Measure whether cross-container math occurs in the vault
+
+The user asked whether the recently investigated cross-boundary math problem is present in actual notes, and how many documents are affected. I wrote a small lexical source audit and inspected representative matches. It detects potential opener/closer pairs, not Goldmark's complete block structure or the published-note set, so the findings are explicitly bounded.
+
+### Prompt Context
+**User prompt (verbatim):** "is math across boundaries an issue in our documents, or is that a broader valid compelxity? how many documents are affected?"
+**Assistant interpretation:** Distinguish demonstrated vault data from hypothetical Markdown edge cases, with counts and caveats.
+**Inferred user intent:** Decide whether the parser complexity is proportionate to actual needs.
+
+### What I did
+- Added `scripts/04-math-container-audit.py`, which scans Markdown outside `.git` and `node_modules`, skips apparent fenced code, and approximates quote/list scope for multiline display delimiters.
+- Ran it against `/home/manuel/code/wesen/go-go-golems/go-go-parc` and inspected representative quote and list matches.
+
+### Why
+- Real multiline math inside blockquotes is distinct from the malformed case where an opener uses a later container's closer. A lexical scan can bound plausible examples but cannot prove full parser semantics.
+
+### What worked
+- The corrected probe scanned 2,432 Markdown files and found 104 same-quote-scope candidate pairs across 9 files, zero quote crossing candidates, and six list crossing candidates in one file. Manual inspection of the six list candidates shows malformed escaped citation syntax in `Research/Institute/Research/2026/04/16/philosophical-foundations-of-mathematics/sources/web/arxiv-lean-atp-interface.md`, not six confirmed genuine display equations spanning containers.
+
+### What didn't work
+- The first probe reported 77 quote candidates across 9 files because it incorrectly counted a closing delimiter as a new opener. For example, the ordinary quote in `Transcripts/2026/07/22/CHATGPT TRANSCRIPT - Colon in Type Theory.md` lines 157–165 contains valid separately paired quoted equations. Changed the probe to consume the closer before looking for the next pair and reran it. Neither run is a full Markdown parse or proof of absence.
+
+### What I learned
+- Quoted multiline math is a real corpus feature. The specific unclosed-quote/opener-matching-outside-container regression was demonstrated with a synthetic test, not confirmed in a vault file.
+
+### What was tricky to build
+- Raw escaped dollar signs, quoted markers and adjacent formulas can make a regex counter confuse closing delimiters with opening ones. The reported list matches are malformed citation text rather than clear mathematical blocks.
+
+### What warrants a second pair of eyes
+- The audit does not handle every nested list, lazy blockquote continuation, escaped delimiter or publication filter; count actual production impact only after a full parser-based corpus audit.
+
+### What should be done in the future
+- Keep the fix proportionate; avoid further general-purpose parsing machinery solely for a synthetic edge case unless real evidence or a concrete correctness requirement justifies it.
+
+### Code review instructions
+- Run `python3 ttmp/2026/11/09/PV-MARKDOWN-030--composable-markdown-ast-pipeline-and-callout-rendering/scripts/04-math-container-audit.py /home/manuel/code/wesen/go-go-golems/go-go-parc` and inspect reported files around their line numbers.
+
+### Technical details
+- These are physical source files, not deduplicated published notes; the scanner skipped `.git` and `node_modules` and did not apply `.vault-ignore` or `publish: false`.
+
+## Step 14: Qualify the integrated design and document the implementation
+
+I finished the structural renderer integration and added a separate current-state guide, leaving the original design labeled as historical. I also checked the analogous list-container case after the quote failure: an unclosed math opener could swallow a later list heading when its apparent closer was outside the list. The lookahead now checks list indentation as well as quote markers; this remains a scoped container check rather than a new general Markdown parser.
+
+### Prompt Context
+**User prompts:** See Steps 10, 12 and 13. The user explicitly asked whether the edge-case complexity was justified and to avoid repeated broad validation.
+**Assistant interpretation:** Finish the migration, keep the solution proportionate to observed documents, then run a consolidated delivery gate.
+**Inferred user intent:** A coherent implementation with an honest evidence-backed account, not maximum parser complexity.
+**Commit (dependencies):** e4e4b47 — "build: update Go and networking dependencies for security".
+
+### What I did
+- Added the implementation guide `design-doc/02-implemented-markdown-document-pipeline-and-operational-guide.md` and marked the original design as a baseline.
+- Added list-container opener and valid nested-list/quote math cases. Used Goldmark's list offset and indentation helper in the closer guard.
+- Checked the real-vault inventory and runtime behavior; added a deterministic wiki-index collision test and table/data-preservation coverage.
+- Built the embedded backend and inspected a local fixture in Playwright, including the rendered paragraph, callout, link, table and MathJax state.
+
+### Why
+- The original design described a staged proposal; an intern needs the actual implementation, ownership, API, failure semantics, and explicitly documented behavior changes.
+- A matching delimiter in a different list/quote must not cause earlier headings to become paragraph text.
+
+### What worked
+- `make ci-check > /tmp/pv-markdown-030-ci-integrated.log 2>&1` passed on the then-current integrated tree: formatting, backend lint, generated logger check, Go and plugin tests, gosec, govulncheck, web type-check and frontend build. Govulncheck reported zero called vulnerabilities but two vulnerabilities in imported packages and two in required modules without called vulnerable symbols.
+- `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher` passed on that tree. `GOWORK=off go build -tags embed -o /tmp/pv-030-embed ./cmd/retro-obsidian-publish` and its `--help` passed; Docker registry has `golang:1.26.10-alpine`.
+- The embedded server's local fixture had zero hard breaks in the soft-wrapped paragraph, the expected title and `/note/target` link, both table cells, and MathJax state `done` for inline and display math. Screenshot: `reference/assets/embedded-smoke.png`.
+- After the list-container fix, `GOWORK=off go test ./internal/parser -run 'TestDisplayMathInNestedList|TestDisplayMathInListWithinQuote|TestUnclosedMathInListDoesNotConsumeHeading' -count=1` passed.
+
+### What didn't work
+- The first `TestUnclosedMathInListDoesNotConsumeHeading` run failed: `## Preserved heading` was rendered as paragraph text inside the list. Added ancestor-aware list indentation to the quote-boundary check and reran the targeted cases successfully.
+- Playwright refused a screenshot path outside its allowed roots: `File access denied: /tmp/pv-030-smoke.png is outside allowed roots`; saved it under `.playwright-mcp` and copied the final fixture screenshot into the ticket.
+- The fixture had no favicon, so browser console showed 404s for `/favicon.svg` and `/favicon.ico`; no other browser errors were reported. This was not a production-page test.
+- `git diff --check` reported trailing whitespace in this diary; stripped it and reran successfully. A later exact-text edit failed without applying changes because its match did not match current indentation; reread the file and retried.
+
+### What I learned
+- A lexical vault audit found valid multiline quoted math, but did not establish real cross-container mathematical equations. The list guard addresses a concrete synthetic data-loss regression; its test does not prove every possible Markdown nesting pattern.
+- The real-vault load after avoiding repeated metadata analysis was 17.964s/212.1 MiB live heap versus an archived baseline 17.439s/215.4 MiB, each a single local run, not a benchmark distribution or peak-RSS measurement.
+
+### What was tricky to build
+- `mathCloserInContainer` must inspect ancestors in root-to-leaf order. Goldmark list items carry a continuation offset, and a closing delimiter that is not in the same list or quote cannot justify consuming intervening Markdown blocks.
+- `golang.org/x/net/html.Tokenizer.Token()` may mutate its buffer; raw HTML image resolution must copy the token's original bytes before tokenization to avoid changing unrelated HTML attributes.
+
+### What warrants a second pair of eyes
+- Ambiguous source delimiters and atypical nested whitespace; behavior of raw trusted HTML; the deliberate deterministic choice for alias collisions; and maintenance cost of the malformed-table extension.
+
+### What should be done in the future
+- A final validation pass must cover the latest list and image-renderer edits; earlier CI and browser results predate them. Commit the qualified code and docs, then write and push the requested Obsidian report. Production deployment is separate and has not happened.
+
+### Code review instructions
+- Start at the current guide, then `internal/parser/document.go`, `math_ast.go`, `table_ast.go`, `wikilink_ast.go`, and `pkg/vault/vault.go`. Run `make ci-check` and the race tests before qualification.
+
+### Technical details
+- `ParseForRendering` assumes the supplied heading index belongs to the exact same source and parser configuration; the vault stores and replaces the source/index pair together.
+
+## Step 15: Complete the integrated validation boundary
+
+I completed the source-owned document, structural math and vault-resolution migration, then ran the consolidated project gate after the final list-boundary and image-resolution changes. The ticket's current-state guide now documents the implementation separately from the original design. Production deployment and the requested post-implementation vault report are separate remaining actions.
+
+### Prompt Context
+**User prompts:** See Steps 10, 12 and 13.
+**Assistant interpretation:** Qualify the complete implementation once, keep a detailed diary, then publish the separate report.
+**Inferred user intent:** A coherent, maintainable pipeline with evidence proportional to the changed integration boundary.
+
+### What I did
+- Finished quote/list-aware display-math matching and preserved existing image destinations when an image callback returns empty.
+- Updated `design-doc/02-implemented-markdown-document-pipeline-and-operational-guide.md` and marked the earlier proposal historical.
+- Marked math and vault structural-resolution tasks complete; retained report and final bookkeeping tasks open.
+
+### Why
+- The initial input/newline defect affects callouts, while math and wiki resolution have their own source and vault lifetimes. One combined validation boundary checks those interactions rather than qualifying each in isolation.
+
+### What worked
+- `make ci-check > /tmp/pv-markdown-030-ci-qualified.log 2>&1` passed on the final code: format, backend lint (zero issues), logcopter, all Go/plugin tests, gosec, govulncheck, frontend type-check and Vite build. Govulncheck reported zero called vulnerabilities and separately noted two imported-package and two required-module vulnerabilities without called vulnerable symbols.
+- `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher` passed; `GOWORK=off go build -tags embed -o /tmp/pv-030-final ./cmd/retro-obsidian-publish` and `/tmp/pv-030-final --help` passed.
+- `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30` and `git diff --check` passed. The earlier browser fixture screenshot and its favicon-only errors are described in Step 14; it predates the last narrowly scoped list/image changes.
+
+### What didn't work
+- No new validation failures after the fixes; earlier compilation, lint, vulnerability, screenshot path and malformed-container failures are preserved in Steps 11–14.
+
+### What I learned
+- On the real vault, the new pipeline preserved aggregate note, reference, callout and image counts; some math differences came from avoiding previously corrupted raw HTML and preserving inline display semantics. Counts alone do not prove full semantic equivalence.
+
+### What was tricky to build
+- Tests that once asserted regex rewrites were migrated to source-document and resolver behavior. The current rebuild stages all HTML before publication, but an error after note/index mutation is not a full transactional rollback; this is documented in the guide.
+
+### What warrants a second pair of eyes
+- Nested Markdown delimiter boundaries and atypical tabs, trusted raw HTML, the malformed-table extension's maintenance relative to Goldmark, and deliberate alias-collision determinism.
+
+### What should be done in the future
+- Commit this qualified checkpoint, then write and push the requested deep-dive Obsidian report. Deploying to the public site is not part of the local validation and has not occurred.
+
+### Code review instructions
+- Read the implementation guide and the diff; run `make ci-check` and the race command above. The local comparison probes are in the ticket `scripts/` directory.
+
+### Technical details
+- The latest run's full log is `/tmp/pv-markdown-030-ci-qualified.log`; it is local ephemeral evidence rather than a tracked artifact.

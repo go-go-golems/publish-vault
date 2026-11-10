@@ -26,7 +26,7 @@ WhenToUse: ""
 
 # A composable Markdown rendering pipeline
 
-**Implementation checkpoint:** The current branch implements the callout and soft-break vertical slice in `internal/parser/callout.go` and removes the HTML callout post-pass. The current-state discussion below describes baseline `0c78a5e`; the wider wiki-link, math, and vault-resolution AST migration remains a proposal, not implemented functionality. See the diary for evidence and commits. The copy previously uploaded to reMarkable predates this checkpoint.
+**Historical design:** This document preserves the baseline `0c78a5e` investigation and proposed implementation plan, not the current code state. The broad migration is described in [the implementation and operational guide](02-implemented-markdown-document-pipeline-and-operational-guide.md); consult the diary for its validation and commit evidence. The copy previously uploaded to reMarkable is this original design, not the subsequent implementation guide.
 
 ## 1. What the system does and why this change exists
 
@@ -51,7 +51,7 @@ Read these entry points first (paths are repository-relative):
 
 At baseline `0c78a5e`, the code uses Goldmark v1.8.2 and goldmark-meta v1.1.0 (`go.mod`). Before implementing, run `go test ./internal/parser ./pkg/vault` to establish a baseline. The server and frontend have additional tests; a parser-only pass does not prove the live deployment has changed.
 
-## 3. How a note becomes a page today
+## 3. How a note became a page at the baseline
 
 ```text
 Markdown bytes

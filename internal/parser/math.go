@@ -1,14 +1,12 @@
-// Math scanning and placeholder emission for LaTeX regions in Markdown source.
+// Math delimiter scanning shared by search text and structured math parsing.
 //
 // Why this exists: goldmark destroys TeX. `a_1 + b_2` pairs the underscores
 // into <em>, `\{` loses its backslash to Markdown's escape rules, `&` (the
 // alignment character in align/matrix environments) becomes &amp;. By the
 // time a client-side typesetter sees the HTML there is nothing left to typeset.
 //
-// So math is lifted out of the source *before* goldmark runs and replaced with
-// an inert HTML placeholder carrying the TeX verbatim — the same pre-pass
-// idiom replaceWikiLinks uses for [[wiki links]]. The browser reads the TeX
-// back out of the placeholder's text content and hands it to MathJax.
+// The Goldmark math extension in math_ast.go parses math into nodes and emits
+// escaped TeX as element text; the browser hands that text to MathJax.
 //
 // Design: ScanMath is a single left-to-right state machine rather than a
 // regexp. Three of its rules cannot be expressed in RE2 at all: counting
@@ -19,10 +17,6 @@ package parser
 
 import (
 	"bytes"
-	stdhtml "html"
-	"regexp"
-	"strconv"
-	"strings"
 )
 
 // MathSpan describes one math region found in Markdown source.
@@ -37,7 +31,7 @@ type MathSpan struct {
 //
 // body must not include YAML frontmatter — a frontmatter value such as
 // `formula: "$x^2$"` is YAML, not prose, and rewriting it produces invalid
-// YAML. Callers go through replaceMathInBody, which splits it off first.
+// YAML. Callers must split off frontmatter before scanning.
 //
 // Recognised delimiters: $$…$$ and \[…\] (display), $…$ and \(…\) (inline).
 // Regions inside code spans, fenced code blocks, and HTML comments are
@@ -72,47 +66,20 @@ func ScanMath(body []byte) []MathSpan {
 				i = n
 			}
 
-		case c == '\\':
-			// \[ and \( open math. Every other backslash escapes the byte that
-			// follows it, and consuming both bytes here is exactly what makes
-			// `\$` a literal dollar sign: the $ branch below never sees it.
-			if i+1 < n && body[i+1] == '[' {
-				if end, tex, ok := scanUntil(body, i+2, "\\]"); ok {
-					spans = append(spans, MathSpan{Start: i, End: end, TeX: tex, Display: true})
-					i = end
-					continue
-				}
+		case c == '\\' || c == '$':
+			if span, ok := scanMathAt(body, i); ok {
+				spans = append(spans, span)
+				i = span.End
+				continue
 			}
-			if i+1 < n && body[i+1] == '(' {
-				if end, tex, ok := scanUntil(body, i+2, "\\)"); ok {
-					spans = append(spans, MathSpan{Start: i, End: end, TeX: tex, Display: false})
-					i = end
-					continue
-				}
+			if c == '\\' || bytes.HasPrefix(body[i:], []byte("$$")) {
+				i += 2
+			} else {
+				i++
 			}
-			i += 2
 
 		case c == '`':
 			i = skipCodeSpan(body, i)
-
-		case c == '$':
-			if bytes.HasPrefix(body[i:], []byte("$$")) {
-				if end, tex, ok := scanUntil(body, i+2, "$$"); ok {
-					spans = append(spans, MathSpan{Start: i, End: end, TeX: tex, Display: true})
-					i = end
-					continue
-				}
-				i += 2
-				continue
-			}
-			if validInlineOpener(body, i) {
-				if end, tex, ok := scanInlineClose(body, i+1); ok {
-					spans = append(spans, MathSpan{Start: i, End: end, TeX: tex, Display: false})
-					i = end
-					continue
-				}
-			}
-			i++
 
 		default:
 			i++
@@ -122,129 +89,29 @@ func ScanMath(body []byte) []MathSpan {
 	return spans
 }
 
-// Sentinels standing in for math while goldmark runs. They are Unicode
-// Private Use Area code points wrapping a decimal index, chosen because
-// goldmark's text renderer passes arbitrary non-ASCII through untouched, they
-// carry no Markdown meaning, and no real note contains them.
-//
-// Emitting the final <span>/<div> in the pre-pass instead does NOT work, and
-// the reason is subtle enough to be worth recording: goldmark treats an inline
-// <span> as raw inline HTML but still parses the text *between* the tags as
-// Markdown, so `$\{1,2\}$` came back as `{1,2}` — the backslashes eaten by
-// Markdown's escape rules — and `$f *g* h$` would come back with an <em>.
-// Only a token with no Markdown-active characters survives intact.
-const (
-	mathSentinelOpen  = "\uE000"
-	mathSentinelClose = "\uE001"
-)
-
-var (
-	mathSentinelRe = regexp.MustCompile(mathSentinelOpen + `([0-9]+)` + mathSentinelClose)
-	// A display sentinel alone in its paragraph: the <p> goldmark wrapped it in
-	// has to go, because a <div> may not live inside a <p>.
-	mathParagraphRe = regexp.MustCompile(`(?s)<p>\s*` + mathSentinelOpen + `([0-9]+)` + mathSentinelClose + `\s*</p>`)
-)
-
-// ReplaceMath rewrites body, substituting each math region with an opaque
-// sentinel, and returns the spans in the order the sentinels index them.
-// Call RestoreMath on the rendered HTML afterwards.
-//
-// Returns body unchanged when there is no math. Most notes have none and this
-// runs for every note on every vault reload, so the fast path matters.
-func ReplaceMath(body []byte) ([]byte, []MathSpan) {
-	spans := ScanMath(body)
-	if len(spans) == 0 {
-		return body, nil
+// scanMathAt is the common delimiter recognizer for Goldmark inline nodes,
+// table-cell boundaries, wiki labels, and the standalone plain-text scanner.
+// The caller decides which syntactic contexts are eligible for recognition.
+func scanMathAt(body []byte, start int) (MathSpan, bool) {
+	if start < 0 || start >= len(body) {
+		return MathSpan{}, false
 	}
-	i := 0
-	out := replaceMathFunc(body, func(s MathSpan) string {
-		token := mathSentinelOpen + strconv.Itoa(i) + mathSentinelClose
-		i++
-		if s.Display {
-			// Blank lines put the sentinel in a paragraph of its own so
-			// mathParagraphRe can unwrap it into a block-level <div>.
-			return "\n\n" + token + "\n\n"
-		}
-		return token
-	})
-	return out, spans
-}
-
-// RestoreMath swaps the sentinels in rendered HTML for the real math
-// placeholders.
-//
-// The TeX is carried as the placeholder's text content rather than in a data-*
-// attribute so that it survives newlines unmangled, needs only &/</> escaping,
-// and stays legible when JavaScript is unavailable or MathJax fails to load —
-// the same graceful degradation enhanceMermaid gives diagrams.
-//
-// This runs after every other HTML post-pass so the emitted markup is the last
-// thing written and nothing downstream rewrites it.
-func RestoreMath(html string, spans []MathSpan) string {
-	if len(spans) == 0 {
-		return html
+	var end int
+	var tex string
+	var ok, display bool
+	switch {
+	case bytes.HasPrefix(body[start:], []byte("$$")):
+		display = true
+		end, tex, ok = scanUntil(body, start+2, "$$")
+	case bytes.HasPrefix(body[start:], []byte(`\[`)):
+		display = true
+		end, tex, ok = scanUntil(body, start+2, `\]`)
+	case bytes.HasPrefix(body[start:], []byte(`\(`)):
+		end, tex, ok = scanUntil(body, start+2, `\)`)
+	case body[start] == '$' && validInlineOpener(body, start):
+		end, tex, ok = scanInlineClose(body, start+1)
 	}
-	lookup := func(match string, sub []string) (MathSpan, bool) {
-		if len(sub) < 2 {
-			return MathSpan{}, false
-		}
-		idx, err := strconv.Atoi(sub[1])
-		if err != nil || idx < 0 || idx >= len(spans) {
-			return MathSpan{}, false
-		}
-		return spans[idx], true
-	}
-
-	html = mathParagraphRe.ReplaceAllStringFunc(html, func(match string) string {
-		s, ok := lookup(match, mathParagraphRe.FindStringSubmatch(match))
-		if !ok || !s.Display {
-			return match // inline math alone in a paragraph keeps its <p>
-		}
-		return mathElement(s)
-	})
-
-	return mathSentinelRe.ReplaceAllStringFunc(html, func(match string) string {
-		s, ok := lookup(match, mathSentinelRe.FindStringSubmatch(match))
-		if !ok {
-			return ""
-		}
-		return mathElement(s)
-	})
-}
-
-// RestoreMathText replaces math sentinels with the bare TeX they stand for, no
-// markup.
-//
-// It exists for values that end up somewhere markup cannot go: an HTML
-// attribute, or a JSON field. RestoreMath rewrites every sentinel it finds
-// anywhere in the document, and a `<span class="math math-inline">…</span>`
-// landing inside an attribute value terminates that attribute at its first
-// quote, producing garbage. Substituting the TeX keeps the value well-formed —
-// and comparable with the text content of a rendered math element, which is the
-// same TeX once tags are stripped, so a heading carrying math still matches the
-// link that names it.
-func RestoreMathText(s string, spans []MathSpan) string {
-	if len(spans) == 0 || !strings.Contains(s, mathSentinelOpen) {
-		return s
-	}
-	return mathSentinelRe.ReplaceAllStringFunc(s, func(match string) string {
-		sub := mathSentinelRe.FindStringSubmatch(match)
-		if len(sub) < 2 {
-			return match
-		}
-		idx, err := strconv.Atoi(sub[1])
-		if err != nil || idx < 0 || idx >= len(spans) {
-			return ""
-		}
-		return spans[idx].TeX
-	})
-}
-
-func mathElement(s MathSpan) string {
-	if s.Display {
-		return `<div class="math math-display">` + stdhtml.EscapeString(s.TeX) + `</div>`
-	}
-	return `<span class="math math-inline">` + stdhtml.EscapeString(s.TeX) + `</span>`
+	return MathSpan{Start: start, End: end, TeX: tex, Display: display}, ok
 }
 
 // StripMathDelimiters removes math delimiters while keeping the TeX body, for
@@ -273,25 +140,6 @@ func replaceMathFunc(body []byte, fn func(MathSpan) string) []byte {
 	}
 	out.Write(body[prev:])
 	return out.Bytes()
-}
-
-// replaceMathInBody applies ReplaceMath to the Markdown body only, leaving any
-// YAML frontmatter block untouched. Mirrors replaceWikiLinks.
-// replaceMathInBody applies ReplaceMath to the Markdown body only, leaving any
-// YAML frontmatter block untouched. The boundary is splitSource, shared with
-// the wiki pre-passes and StripFrontmatter, so any delimiter goldmark-meta
-// accepts as metadata is also the boundary math is protected behind — a
-// four-dash preamble is not scanned for `$...$`.
-func replaceMathInBody(src []byte) ([]byte, []MathSpan) {
-	parts := splitSource(src)
-	replaced, spans := ReplaceMath(parts.body)
-	if !parts.hasFrontmatter() {
-		return replaced, spans
-	}
-	out := make([]byte, 0, len(parts.frontmatter)+len(replaced))
-	out = append(out, parts.frontmatter...)
-	out = append(out, replaced...)
-	return out, spans
 }
 
 // validInlineOpener reports whether the `$` at i can open inline math.

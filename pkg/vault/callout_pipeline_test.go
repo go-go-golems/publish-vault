@@ -5,6 +5,31 @@ import (
 	"testing"
 )
 
+func TestWikiIndexIsDeterministicAndCanonicalSlugsWin(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Root Target\n")
+	writeVaultTestFile(t, root, "A/Target.md", "# A Target\n")
+	writeVaultTestFile(t, root, "B/Target.md", "# B Target\n")
+	writeVaultTestFile(t, root, "A/Other.md", "# First Common Title\n")
+	writeVaultTestFile(t, root, "B/Other.md", "# First Common Title\n")
+	v, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		v.buildWikiLinkIndex()
+		if got, _ := v.ResolveWikiLink("target"); got != "target" {
+			t.Fatalf("canonical slug lost: %q", got)
+		}
+		if got, _ := v.ResolveWikiLink("other"); got != "a/other" {
+			t.Fatalf("ambiguous alias is unstable: %q", got)
+		}
+		if got, _ := v.ResolveWikiLink("First Common Title"); got != "a/other" {
+			t.Fatalf("title collision is unstable: %q", got)
+		}
+	}
+}
+
 func TestCalloutContentSurvivesVaultResolution(t *testing.T) {
 	root := t.TempDir()
 	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## Details\n")

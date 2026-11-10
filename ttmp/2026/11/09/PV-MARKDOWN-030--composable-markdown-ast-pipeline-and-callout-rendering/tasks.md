@@ -5,7 +5,7 @@
 - [x] Implement composable AST callouts and correct soft breaks <!-- t:fgdq -->
 - [x] Validate integration, commit milestones, and deliver guide to reMarkable <!-- t:of0n -->
 - [x] Migrate wiki link parsing and reference extraction to AST nodes <!-- t:7p9p -->
-- [ ] Migrate math recognition and rendering to AST nodes <!-- t:y78w -->
-- [ ] Migrate vault link, heading and asset resolution to structural rendering <!-- t:favp -->
+- [x] Migrate math recognition and rendering to AST nodes <!-- t:y78w -->
+- [x] Migrate vault link, heading and asset resolution to structural rendering <!-- t:favp -->
 - [ ] Validate broad migration, document changes and commit coherent milestones <!-- t:34vw -->
 - [ ] After migration, write textbook-style deep-dive project report in go-go-parc and commit and push only the report <!-- t:0xra -->
