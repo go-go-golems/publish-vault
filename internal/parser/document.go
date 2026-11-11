@@ -140,6 +140,9 @@ func nodeText(root ast.Node, source []byte) string {
 			}
 		case *ast.String:
 			b.Write(x.Value)
+		case *ast.AutoLink:
+			b.Write(x.Label(source))
+			return ast.WalkSkipChildren, nil
 		case *inlineMath:
 			b.WriteString(x.tex)
 			return ast.WalkSkipChildren, nil

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/yuin/goldmark/text"
 )
 
 func TestWikiLinkMathWithBrackets(t *testing.T) {
@@ -71,6 +73,51 @@ func TestInlineMathMultilineCodeSpanLookahead(t *testing.T) {
 	}
 	if !strings.Contains(n.HTML, "x `code $\ncontinued` y") {
 		t.Fatalf("cross-line code span changed the closing delimiter: %s", n.HTML)
+	}
+}
+
+func TestHeadingAutolinksResolve(t *testing.T) {
+	for _, heading := range []string{"See https://example.com", "Email me@example.com", "See <https://example.com>"} {
+		src := "# " + heading + "\n\n[[#" + strings.ReplaceAll(strings.ReplaceAll(heading, "<", ""), ">", "") + "]]"
+		_, doc, err := ParseDocument([]byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		html, err := doc.Render(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(html, `class="wiki-link wiki-link-self broken"`) || !strings.Contains(html, `class="wiki-link wiki-link-self"`) {
+			t.Fatalf("heading link did not resolve: %s", html)
+		}
+	}
+}
+
+func TestTableSegmentsEmptyCells(t *testing.T) {
+	for _, tc := range []struct {
+		line  string
+		count int
+	}{
+		{"", 0}, {"| A |", 1}, {"A |", 1}, {"| A ||", 2}, {"A ||", 2}, {"| | A |", 2}, {"| | |", 2}, {"| A | | |", 3},
+	} {
+		src := []byte(tc.line)
+		cells, _, _ := tableSegments(text.NewSegment(0, len(src)), src)
+		if len(cells) != tc.count {
+			t.Errorf("%q: got %d cells, want %d", tc.line, len(cells), tc.count)
+		}
+	}
+}
+
+func TestTableEmptyCellsProtectWikiLinks(t *testing.T) {
+	for _, header := range []string{"| A ||", "A ||", "| | A |", "| | |"} {
+		src := header + "\n| --- | --- |\n| [[Target|Alias]] | value |\n"
+		n, err := Parse([]byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(n.WikiLinks) != 1 || n.WikiLinks[0].Target != "Target" || !strings.Contains(n.HTML, `class="wiki-link"`) || strings.Count(n.HTML, "<td>") != 2 || !strings.Contains(n.HTML, "value") {
+			t.Fatalf("header %q: references=%#v HTML=%s", header, n.WikiLinks, n.HTML)
+		}
 	}
 }
 

@@ -179,7 +179,9 @@ func tableSegments(line text.Segment, source []byte) ([]text.Segment, []int, boo
 	var cells []text.Segment
 	var escapes []int
 	hasProtected := false
-	for start < end {
+	// A separator immediately before the closing border denotes a final
+	// empty cell, so start == end must still produce that cell.
+	for start <= end && len(value) > 0 {
 		stop := start
 		for stop < end {
 			if value[stop] == '|' {

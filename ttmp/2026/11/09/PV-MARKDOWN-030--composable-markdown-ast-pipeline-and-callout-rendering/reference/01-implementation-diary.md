@@ -1024,3 +1024,44 @@ The subsequent Codex review identified two more regressions: Markdown image dest
 
 ### Technical details
 - Raw HTML image handling is unchanged. This work does not establish a browser or production deployment check.
+
+## Step 23: Fix autolink heading lookup and empty table cells
+
+The next review identified two concrete regressions. Following the user's request for targeted fixes rather than a larger parser redesign, I updated the existing text projection and table segment scanner, and tested both local and cross-note behavior.
+
+### Prompt Context
+**User prompt (verbatim):** "k, just fix the issues for now"
+**Assistant interpretation:** Fix the two latest PR comments without undertaking the earlier proposed architectural refactor.
+**Inferred user intent:** Correct observed behavior and return the PR for review.
+
+### What I did
+- Added `ast.AutoLink.Label(source)` to `nodeText` so heading indexes include rendered URL and email labels.
+- Updated `tableSegments` to emit a final empty cell when a cell separator precedes the closing border.
+- Added tests for URL and email heading self-links, a cross-note heading link, table cell counts, and protected wiki links in tables with empty header cells.
+
+### Why
+- Goldmark stores autolink labels outside its normal child traversal. The cell loop stopped at `start == end` despite a trailing separator indicating another cell.
+
+### What worked
+- `make ci-check`, `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30`, and `git diff --check` passed. The focused tests also passed after the fix.
+
+### What didn't work
+- Before the fix, `go test ./internal/parser -run 'Test(HeadingAutolinksResolve|TableEmptyCellsProtectWikiLinks)' -count=1` failed: the self-link rendered with `wiki-link-self broken` and the table split `[[Target|Alias]]`, losing the reference.
+
+### What I learned
+- A table with a border and an adjacent internal separator must preserve the otherwise zero-width final cell; the regular single closing border must not add a cell.
+
+### What was tricky to build
+- The loop includes `start == end` only for nonempty input, so it preserves a trailing empty cell without manufacturing one for an empty line.
+
+### What warrants a second pair of eyes
+- Other visible text node kinds and uncommon GFM table shapes remain separate compatibility concerns; this is a targeted patch, not a general parser redesign.
+
+### What should be done in the future
+- Check the refreshed review and CI; no merge or production deployment has been requested.
+
+### Code review instructions
+- Inspect `internal/parser/document.go`, `table_ast.go`, `pr30_review_test.go`, and `pkg/vault/callout_pipeline_test.go`.
+
+### Technical details
+- The raw HTML trust model and table extension architecture are unchanged.

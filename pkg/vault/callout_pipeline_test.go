@@ -30,6 +30,20 @@ func TestWikiIndexIsDeterministicAndCanonicalSlugsWin(t *testing.T) {
 	}
 }
 
+func TestAutolinkHeadingResolvesAcrossNotes(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## See https://example.com\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target#See https://example.com]]\n")
+	v, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, ok := v.GetNote("source")
+	if !ok || !strings.Contains(source.HTML, `href="/note/target#see-httpsexamplecom"`) {
+		t.Fatalf("cross-note heading did not resolve: %#v", source)
+	}
+}
+
 func TestMarkdownImageEntityResolvesInVault(t *testing.T) {
 	root := t.TempDir()
 	writeVaultTestFile(t, root, "Source.md", "# Source\n\n![x](images/a&amp;b.png)\n")

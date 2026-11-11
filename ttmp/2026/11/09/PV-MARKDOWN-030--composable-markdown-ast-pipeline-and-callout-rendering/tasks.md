@@ -15,3 +15,5 @@
 - [x] Fix PR 30 image destination normalization <!-- t:t7pd -->
 - [x] Fix PR 30 dense wiki-link allocation and validate regressions <!-- t:rrtg -->
 - [x] Push changes and respond to rereview threads <!-- t:2peo -->
+- [x] Fix autolink heading text and trailing empty table cells from PR review <!-- t:o3w1 -->
+- [ ] Push targeted fixes and respond to PR review threads <!-- t:s3dk -->
