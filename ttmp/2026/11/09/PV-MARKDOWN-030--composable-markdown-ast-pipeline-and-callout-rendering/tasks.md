@@ -11,4 +11,4 @@
 - [x] After migration, write textbook-style deep-dive project report in go-go-parc and commit and push only the report <!-- t:0xra -->
 - [x] Address PR 30 wiki links containing mathematical brackets <!-- t:jpam -->
 - [x] Address PR 30 quadratic inline math lookahead and validate scaling <!-- t:29bk -->
-- [ ] Push fixes and reply to PR 30 review threads <!-- t:bsfv -->
+- [x] Push fixes and reply to PR 30 review threads <!-- t:bsfv -->

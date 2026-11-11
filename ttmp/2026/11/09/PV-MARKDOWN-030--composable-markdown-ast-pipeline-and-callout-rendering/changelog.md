@@ -63,3 +63,12 @@ Completed requirement-to-evidence audit for the structural pipeline, validation,
 ## 2026-11-10
 
 Unified math element markup and escaping for structural nodes and wiki labels.
+
+## 2026-11-11
+
+Address PR 30 math-aware wiki parsing and inline lookahead review; push 7c525d1 and reply to both review threads.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/math_ast.go — Bounded common-case inline math lookahead
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/wikilink_ast.go — Math-aware wiki recognition
