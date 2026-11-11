@@ -193,62 +193,6 @@ func TestWikiLinkDataRaw(t *testing.T) {
 	}
 }
 
-func TestReplaceWikiLinksStringPreservesHeadingFragment(t *testing.T) {
-	html := `<p><a href="/note/tribal/app-auth#authorization-flow" class="wiki-link" data-target="tribal/app-auth" data-raw="Tribal/App Auth" data-alias="">Tribal/App Auth</a></p>`
-	got := ReplaceWikiLinksString(html, func(target string) string {
-		if target == "tribal/app-auth" {
-			return "research/kb/tribal/app-auth"
-		}
-		return target
-	})
-	if !contains(got, `href="/note/research/kb/tribal/app-auth#authorization-flow"`) {
-		t.Fatalf("heading fragment should be preserved, got: %s", got)
-	}
-	if !contains(got, `data-target="research/kb/tribal/app-auth"`) {
-		t.Fatalf("data-target should resolve without fragment, got: %s", got)
-	}
-}
-
-func TestReplaceWikiLinksStringUnresolvedTargetsAreNotCrawlableNoteLinks(t *testing.T) {
-	html := `<p><a href="/note/gettier-problem" class="wiki-link" data-target="gettier-problem" data-raw="Gettier Problem" data-alias="">Gettier Problem</a></p>`
-	got := ReplaceWikiLinksString(html, func(target string) string { return "" })
-	if contains(got, `href="/note/gettier-problem"`) {
-		t.Fatalf("unresolved wiki link stayed crawlable: %s", got)
-	}
-	if !contains(got, `href="#unresolved-gettier-problem"`) {
-		t.Fatalf("unresolved wiki link did not become same-page anchor: %s", got)
-	}
-}
-
-func TestReplaceWikiLinkDisplayPreservesAlias(t *testing.T) {
-	html := `<p><a href="/note/research/kb/target" class="wiki-link" data-target="research/kb/target" data-raw="Target" data-alias="Custom Alias">Custom Alias</a></p>`
-	got := ReplaceWikiLinkDisplay(html, func(_ string) string { return "Resolved Title" })
-	if !contains(got, `>Custom Alias</a>`) {
-		t.Fatalf("explicit alias should be preserved, got: %s", got)
-	}
-}
-
-func TestRewriteImageSources(t *testing.T) {
-	html := `<p><img src="images/planet.png" alt="Planet" /> <img src='Sketch Folder/m5 dial.png' /></p>`
-	got := RewriteImageSources(html, func(src string) string {
-		return "/assets/" + strings.ReplaceAll(src, " ", "%20")
-	})
-	if !contains(got, `src="/assets/images/planet.png"`) {
-		t.Fatalf("double-quoted image src was not rewritten, got: %s", got)
-	}
-	if !contains(got, `src='/assets/Sketch%20Folder/m5%20dial.png'`) {
-		t.Fatalf("single-quoted image src was not rewritten, got: %s", got)
-	}
-}
-
-func TestRewriteImageSourcesPreservesMismatchedQuote(t *testing.T) {
-	html := `<img src="broken.png' alt="Broken" />`
-	got := RewriteImageSources(html, func(string) string { return "/assets/changed.png" })
-	if got != html {
-		t.Fatalf("mismatched quote should be preserved, got: %s", got)
-	}
-}
-
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
@@ -295,81 +239,6 @@ func TestOpenCallout(t *testing.T) {
 	}
 }
 
-func TestReplaceWikiLinkDisplayPreservesAnchorTag(t *testing.T) {
-	html := `<td><a href="/note/target" class="wiki-link" data-target="target" data-raw="Target" data-alias="">Target</a></td>`
-	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
-		if slug == "target" {
-			return "Resolved Title"
-		}
-		return ""
-	})
-	if !strings.HasPrefix(got, "<td><a ") {
-		t.Fatalf("Missing <a> opening tag, got: %s", got)
-	}
-	if !strings.Contains(got, ">Resolved Title</a>") {
-		t.Fatalf("Display text not replaced, got: %s", got)
-	}
-	// Adjacent td content must not bleed into anchor
-	if strings.Contains(got, "</td></a>") {
-		t.Fatalf("td boundary crossed into anchor: %s", got)
-	}
-}
-
-func TestReplaceWikiLinkDisplayInTable(t *testing.T) {
-	html := `<table><tbody><tr><td><a href="/note/t" class="wiki-link" data-target="t" data-raw="T" data-alias="">T</a></td><td>2026-05-23</td><td>Canonical description</td></tr></tbody></table>`
-	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
-		if slug == "t" {
-			return "DMETA Design System Factory"
-		}
-		return ""
-	})
-	// Adjacent cell content must NOT be inside the anchor
-	if strings.Contains(got, "2026-05-23</a>") {
-		t.Fatalf("Date bled into anchor text: %s", got)
-	}
-	if strings.Contains(got, "Canonical description</a>") {
-		t.Fatalf("Description bled into anchor text: %s", got)
-	}
-	if !strings.Contains(got, ">DMETA Design System Factory</a>") {
-		t.Fatalf("Display not replaced correctly: %s", got)
-	}
-}
-
-func TestReplaceWikiLinkDisplayPreservesExplicitAlias(t *testing.T) {
-	html := `<a href="/note/t" class="wiki-link" data-target="t" data-raw="T" data-alias="My Alias">My Alias</a>`
-	got := ReplaceWikiLinkDisplay(html, func(slug string) string {
-		return "Resolved Title"
-	})
-	if !strings.Contains(got, ">My Alias</a>") {
-		t.Fatalf("Explicit alias was overwritten: %s", got)
-	}
-}
-
-func TestWikiLinkInTableRendersCleanly(t *testing.T) {
-	src := []byte("| Report | Date |\n| --- | --- |\n| [[ARTICLE - DMETA Factory]] | 2026-05-23 |\n")
-	parsed, err := Parse(src)
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-	// The initial parse should produce clean HTML
-	if !contains(parsed.HTML, `<a href="/note/article-dmeta-factory" class="wiki-link"`) {
-		t.Fatalf("Wiki link not rendered correctly, got: %s", parsed.HTML)
-	}
-	// Simulate ReplaceWikiLinkDisplay as rebuildHTML does
-	got := ReplaceWikiLinkDisplay(parsed.HTML, func(slug string) string {
-		if slug == "article-dmeta-factory" {
-			return "DMETA Factory: Full Title"
-		}
-		return ""
-	})
-	if !strings.Contains(got, "<a href") {
-		t.Fatalf("<a> tag missing after display replacement: %s", got)
-	}
-	if strings.Contains(got, "2026-05-23</a>") {
-		t.Fatalf("Table date bled into anchor after display replacement: %s", got)
-	}
-}
-
 func TestImageEmbedRendersImgPlaceholder(t *testing.T) {
 	parsed, err := Parse([]byte("# Doc\n\n![[screen shot.png]]\n\n![[diagram.svg|System diagram]]\n\n![[Regular Note]]\n"))
 	if err != nil {
@@ -392,25 +261,6 @@ func TestImageEmbedRendersImgPlaceholder(t *testing.T) {
 	}
 }
 
-func TestReplaceWikiEmbedImages(t *testing.T) {
-	html := `<img class="wiki-embed-image" data-asset="pic.png" alt="pic.png" loading="lazy"><img class="wiki-embed-image" data-asset="gone.png" alt="gone.png" loading="lazy">`
-	out := ReplaceWikiEmbedImages(html, func(target string) string {
-		if target == "pic.png" {
-			return "/vault-assets/Attachments/pic.png"
-		}
-		return ""
-	})
-	if !strings.Contains(out, `<img class="wiki-embed-image" src="/vault-assets/Attachments/pic.png" alt="pic.png" loading="lazy">`) {
-		t.Fatalf("resolved embed missing src, got: %s", out)
-	}
-	if !strings.Contains(out, `Image not found: gone.png`) {
-		t.Fatalf("unresolved embed should render broken marker, got: %s", out)
-	}
-}
-
-// TestStripFrontmatterOnlyMatchesDelimiterLines pins that the frontmatter block
-// ends at a "---" line, not at the first "---" substring. A scalar containing
-// dashes must not cut the block short and leak the remaining YAML into the body.
 func TestStripFrontmatterOnlyMatchesDelimiterLines(t *testing.T) {
 	tests := []struct {
 		name string
@@ -703,47 +553,8 @@ func TestSelfHeadingLinkDegenerateFormsAreLeftAlone(t *testing.T) {
 	}
 }
 
-// TestResolveWikiLinkHeadings covers the fragment rewrite in isolation: the
-// provisional slugified fragment wikiLinkHTML wrote is replaced with whatever
-// the resolver says the target note actually rendered, and dropped when the
-// resolver declines rather than left pointing at an id known not to exist.
-func TestResolveWikiLinkHeadings(t *testing.T) {
-	html := `<p>` +
-		`<a href="/note/other#9-2-kernel-k0" class="wiki-link" data-target="other" data-raw="Other" data-heading="9.2 Kernel K0" data-alias="">Other</a>` +
-		`<a href="/note/gone#missing" class="wiki-link" data-target="gone" data-raw="Gone" data-heading="missing" data-alias="">Gone</a>` +
-		`<a href="/note/plain" class="wiki-link" data-target="plain" data-raw="Plain" data-heading="" data-alias="">Plain</a>` +
-		`</p>`
-
-	got := ResolveWikiLinkHeadings(html, func(slug, heading string) (string, bool) {
-		if slug == "other" && heading == "9.2 Kernel K0" {
-			return "92-kernel-k0", true
-		}
-		return "", false
-	})
-
-	if !contains(got, `href="/note/other#92-kernel-k0"`) {
-		t.Errorf("fragment not replaced with the real id: %s", got)
-	}
-	if !contains(got, `href="/note/gone"`) || contains(got, `href="/note/gone#missing"`) {
-		t.Errorf("unresolvable fragment should be dropped, not kept: %s", got)
-	}
-	if !contains(got, `href="/note/plain"`) {
-		t.Errorf("link without a heading should be untouched: %s", got)
-	}
-	// The rewrite must preserve every other attribute, since later passes key
-	// off data-raw and data-alias.
-	if !contains(got, `data-raw="Other" data-heading="9.2 Kernel K0" data-alias=""`) {
-		t.Errorf("attributes were not preserved: %s", got)
-	}
-	if !contains(got, `>Other</a>`) {
-		t.Errorf("display text was not preserved: %s", got)
-	}
-}
-
-// TestWikiLinkCarriesHeadingForLaterResolution pins that the parser hands the
-// heading text on in an attribute. The fragment alone cannot be resolved later:
-// slugify is lossy, so "#9-2-kernel-k0" no longer tells anyone that the heading
-// was "9.2 Kernel K0".
+// TestWikiLinkCarriesHeadingForLaterResolution verifies that standalone
+// rendering retains heading information for the structural resolver.
 func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 	parsed, err := Parse([]byte("# T\n\nSee [[Other Note#9.2 Kernel K0: canonical identity]].\n"))
 	if err != nil {
@@ -753,8 +564,8 @@ func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 		t.Fatalf("heading text not carried on the anchor: %s", parsed.HTML)
 	}
 
-	// A link with no heading still carries the attribute, empty — the fragment
-	// pass keys off a non-empty value, so it must be there to be absent.
+	// A headingless link still carries the empty data attribute expected by
+	// frontend consumers.
 	plain, err := Parse([]byte("# T\n\nSee [[Other Note]].\n"))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -764,13 +575,9 @@ func TestWikiLinkCarriesHeadingForLaterResolution(t *testing.T) {
 	}
 }
 
-// TestWikiLinkAttributesCarryTeXNotMathSentinels is the regression test for the
-// second P2 on PR #19. Math is lifted out of the source before wiki links are
-// replaced, so a heading like `$\sigma$ bound` reaches wikiLinkHTML as a
-// sentinel. RestoreMath then rewrites every sentinel in the document — including
-// ones sitting inside an attribute value, where the injected
-// `<span class="math math-inline">` ends the attribute at its first quote and
-// leaves malformed markup behind.
+// TestWikiLinkAttributesCarryTeXNotMathSentinels protects the PR #19
+// regression: math inside a wiki heading or alias must be plain TeX in
+// attributes and rendered math only in element content.
 func TestWikiLinkAttributesCarryTeXNotMathSentinels(t *testing.T) {
 	src := []byte("# T\n\n" +
 		"- self: [[#The $\\sigma$ bound]]\n" +
@@ -1207,7 +1014,7 @@ func TestParseProtectsGoldmarkCompatibleFrontmatter(t *testing.T) {
 			if strings.Contains(fmStr, "<a href=") {
 				t.Errorf("wiki HTML leaked into metadata: %s", fmStr)
 			}
-			if strings.Contains(fmStr, mathSentinelOpen) {
+			if strings.Contains(fmStr, "\uE000") {
 				t.Errorf("math sentinel leaked into metadata: %s", fmStr)
 			}
 

@@ -49,13 +49,16 @@ func main() {
 		fmt.Printf("html=%s\n", strings.TrimSpace(parsed.HTML))
 	}
 
-	fmt.Println("\n=== broad HTML rewrite scope ===")
-	in := `<div data-target="short">unrelated</div><a href="/note/short">plain link</a>`
-	out := parser.ReplaceWikiLinksString(in, func(target string) string {
-		if target == "short" {
-			return "resolved/full"
-		}
-		return ""
-	})
-	fmt.Printf("before=%s\nafter =%s\n", in, out)
+	fmt.Println("\n=== structural resolution scope ===")
+	_, doc, err := parser.ParseDocument([]byte(`Raw <div data-target="short">unrelated</div> and [[Short]]`))
+	if err != nil {
+		panic(err)
+	}
+	out, err := doc.Render(&parser.Resolver{Note: func(target string) (string, string, bool) {
+		return "resolved/full", "Resolved", true
+	}})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("after =%s\n", out)
 }

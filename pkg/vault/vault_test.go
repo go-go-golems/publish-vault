@@ -1016,8 +1016,11 @@ func TestMathPlaceholdersSurviveRebuildHTML(t *testing.T) {
 
 	// A second rebuild (what a live reload triggers) must be a fixed point.
 	v.mu.Lock()
-	v.rebuildHTML()
+	err = v.rebuildHTML()
 	v.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	note, _ = v.GetNote("gaussian")
 	if note.HTML != before {

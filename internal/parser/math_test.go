@@ -85,23 +85,9 @@ func TestScanMathSpans(t *testing.T) {
 	}
 }
 
-// TestReplaceMathIdentityWhenNoMath guards the fast path: ReplaceMath runs for
-// every note on every vault reload and most notes have no math at all.
-func TestReplaceMathIdentityWhenNoMath(t *testing.T) {
-	src := []byte("# Title\n\nJust prose with a price of $10 and $5.\n")
-	got, spans := ReplaceMath(src)
-	if spans != nil {
-		t.Fatalf("ReplaceMath found %d spans in math-free input: %+v", len(spans), spans)
-	}
-	if &got[0] != &src[0] {
-		t.Fatalf("ReplaceMath allocated a new slice for math-free input")
-	}
-}
-
 var mathElemRe = regexp.MustCompile(`<(span|div) class="math math-(inline|display)">([\s\S]*?)</(?:span|div)>`)
 
-// texRoundTrip extracts the TeX carried by each placeholder in rendered HTML,
-// un-escaping it the way the browser does when reading textContent.
+// texRoundTrip reads the TeX text emitted by the structural renderer.
 func texRoundTrip(t *testing.T, html string) []string {
 	t.Helper()
 	var out []string
