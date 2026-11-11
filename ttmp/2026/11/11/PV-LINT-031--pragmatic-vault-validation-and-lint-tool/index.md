@@ -22,10 +22,13 @@ WhenToUse: ""
 
 ## Overview
 
-<!-- Provide a brief overview of the ticket, its goals, and current status -->
+Design a small read-only validator for the published vault view. The intern guide is a proposal, not an implemented command; implementation and tests remain open.
 
 ## Key Links
 
+- [Vault validation design and intern implementation guide](design-doc/01-vault-validation-design-and-intern-implementation-guide.md)
+- [Investigation diary](reference/01-implementation-diary.md)
+- [Author's readability review notes](reference/02-design-readability-review-notes.md)
 - **Related Files**: See frontmatter RelatedFiles field
 - **External Sources**: See frontmatter ExternalSources field
 

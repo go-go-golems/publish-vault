@@ -73,3 +73,45 @@ I created a new ticket for a design-only investigation, leaving tool implementat
 
 ### Technical details
 - `vault.New` runs `LoadAll` and renders all retained notes. `ResolveAssetURL` constructs a URL but does not check that the target file exists. `ResolveAssetEmbed` does report existence for wiki embeds. A successful load is therefore not itself a complete validation result.
+
+## Step 2: Write and review the intern guide
+
+I wrote the design around a small read-only published-view check rather than a generic lint framework. The guide traces a wiki link through parsing and resolution, separates existing APIs from proposed accessors, and gives an implementable set of rules, CLI semantics, tests, and file references.
+
+### Prompt Context
+**User prompt:** See Step 1.
+**Assistant interpretation:** Deliver a technical guide detailed enough for an intern without overengineering the tool.
+**Inferred user intent:** Enable implementation and review as a separate future phase.
+**Commit (research checkpoint):** `92173c3` — "docs(PV-LINT-031): establish vault lint investigation".
+
+### What I did
+- Drafted `design-doc/01-vault-validation-design-and-intern-implementation-guide.md`, including diagrams, examples, proposed API sketches, operator contract, privacy, failure semantics, implementation sequence, and fixture tests.
+- Wrote `reference/02-design-readability-review-notes.md` before revising the draft. Clarified that loaded note bytes are not a whole-filesystem atomic snapshot, JSONL is not an envelope, and compatibility rules are optional and retire with their underlying bugs.
+- Verified the current config loader and root resolution in `pkg/server/runtime.go`, the `AllNotes` pointer behavior, `main.go` exit handling, and Glazed v1.4.1 in `go.mod`.
+
+### Why
+- A line-accurate validator cannot use the current backlink list as if it were a per-occurrence AST: it deduplicates and omits relevant cases. Optional narrow APIs and a short ordered check list address this without building a second parser.
+
+### What worked
+- The design distinguishes the three MVP wiki checks from optional known-compatibility heuristics, defers Markdown image existence until a shared path policy exists, and explicitly keeps the implementation task open.
+
+### What didn't work
+- No additional command failures observed during drafting. The author review is not an independent intern review, and the proposed API has not been implemented or tested.
+
+### What I learned
+- `AllNotes` returns note pointers rather than deep copies; resolving the root once and copying a note's loaded source prevents one mismatch but does not create an atomic filesystem snapshot.
+
+### What was tricky to build
+- The existing loader skips some unreadable entries; a validator must not print a clean result when its scan was incomplete. The proposal adds an optional load-error collection mechanism without changing normal server availability behavior.
+
+### What warrants a second pair of eyes
+- Review the feasibility of Goldmark offsets in nested containers, lock-safe source and heading access, config-error behavior, and Glazed output flushing before returning a strict-findings error.
+
+### What should be done in the future
+- Implement and test the tool separately. Verify ticket metadata, commit the guide, and upload it to reMarkable as requested.
+
+### Code review instructions
+- Read the guide from the concrete example through the implementation plan; then check the stated APIs against `pkg/vault/vault.go`, `internal/parser/document.go`, and `pkg/server/runtime.go`.
+
+### Technical details
+- The document is a design proposal. No lint command, rule engine, parser or vault code was implemented in this step.
