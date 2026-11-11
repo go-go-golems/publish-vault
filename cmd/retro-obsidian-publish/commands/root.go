@@ -8,6 +8,7 @@ import (
 
 	buildcmd "github.com/go-go-golems/publish-vault/cmd/retro-obsidian-publish/commands/build"
 	servecmd "github.com/go-go-golems/publish-vault/cmd/retro-obsidian-publish/commands/serve"
+	validatecmd "github.com/go-go-golems/publish-vault/cmd/retro-obsidian-publish/commands/validate"
 )
 
 // NewRootCommand builds the top-level command tree. Subdirectories mirror the
@@ -40,6 +41,12 @@ func NewRootCommand() (*cobra.Command, error) {
 		return nil, err
 	}
 	rootCmd.AddCommand(buildCommand)
+
+	validateCommand, err := validatecmd.NewCommand()
+	if err != nil {
+		return nil, err
+	}
+	rootCmd.AddCommand(validateCommand)
 
 	return rootCmd, nil
 }

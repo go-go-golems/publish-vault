@@ -660,6 +660,19 @@ behavior.
 
 ---
 
+## Validate a vault
+
+Check wiki links, heading fragments and wiki-image embeds in the published view without changing files:
+
+```bash
+retro-obsidian-publish validate --vault ./vault-example
+retro-obsidian-publish validate --vault ./vault-example --format jsonl --strict
+```
+
+`--vault` falls back to `VAULT_DIR`; `--config` overrides `<vault>/.publish/config.yaml`. The command applies the same published-note exclusions as the server. Warnings normally leave the exit status at zero; `--strict` returns nonzero when warnings exist. Invalid configuration or an incomplete load also returns nonzero. Paths, line numbers, and target names can be sensitive; treat reports as private.
+
+The validator checks body wiki syntax only, not frontmatter references, ordinary Markdown image existence, external links, raw HTML, or every possible Markdown rendering issue. Run it against a stable checkout; it does not create an atomic filesystem snapshot.
+
 ## Validation checklist
 
 Run this before publishing a new build:

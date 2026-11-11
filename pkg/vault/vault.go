@@ -147,6 +147,7 @@ type Vault struct {
 	configMatcher     *vaultconfig.Matcher // compiled .publish/config.yaml blacklist; nil/empty means exclude nothing
 	loadObserver      LoadObserver         // optional bounded lifecycle callback
 	invalidDateCounts map[string]int       // content-free rejected-date counts by "concept:reason"
+	strictLoad        bool                 // fail instead of silently skipping unreadable entries
 }
 
 // Option configures a Vault.
@@ -173,6 +174,12 @@ func WithConfig(cfg *vaultconfig.Config) Option {
 	}
 }
 
+// WithStrictLoad makes incomplete filesystem or note reads fail the load.
+// Normal server loads continue to skip unreadable entries as before.
+func WithStrictLoad() Option {
+	return func(v *Vault) { v.strictLoad = true }
+}
+
 // New creates a Vault and loads all notes from rootDir. If <rootDir>/.vault-ignore
 // exists it is read and used to exclude directories and files from the index, the
 // file tree, search, backlinks, and the raw-source endpoint. A missing ignore
@@ -180,21 +187,24 @@ func WithConfig(cfg *vaultconfig.Config) Option {
 // publishing is not blocked by a bad ignore file. Options may attach a vault
 // config (WithConfig) whose blacklist is applied in addition to .vault-ignore.
 func New(rootDir string, opts ...Option) (*Vault, error) {
-	ig, err := ignore.Load(rootDir)
-	if err != nil {
-		log.Printf("vault: warning reading %s: %v; ignoring no paths", ignore.IgnoreFile, err)
-		ig = &ignore.Ignore{}
-	}
 	v := &Vault{
 		notes:         make(map[string]*Note),
 		wikiLinkIndex: make(map[string]string),
 		assetIndex:    make(map[string]string),
 		root:          rootDir,
-		ignore:        ig,
 	}
 	for _, opt := range opts {
 		opt(v)
 	}
+	ig, err := ignore.Load(rootDir)
+	if err != nil {
+		if v.strictLoad {
+			return nil, fmt.Errorf("read vault ignore: %w", err)
+		}
+		log.Printf("vault: warning reading %s: %v; ignoring no paths", ignore.IgnoreFile, err)
+		ig = &ignore.Ignore{}
+	}
+	v.ignore = ig
 	if err := v.LoadAll(); err != nil {
 		return nil, err
 	}
@@ -264,6 +274,9 @@ func (v *Vault) LoadAll() error {
 
 	err = filepath.Walk(v.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if v.strictLoad {
+				return fmt.Errorf("walk vault: %w", err)
+			}
 			return nil // skip unreadable entries
 		}
 		if info.IsDir() {
@@ -304,6 +317,9 @@ func (v *Vault) LoadAll() error {
 		})
 		note, dateWarnings, err := v.loadNote(path, info)
 		if err != nil {
+			if v.strictLoad {
+				return fmt.Errorf("load published candidate %q: %w", v.relPath(path), err)
+			}
 			// Always individual and always visible: an unparseable note is a
 			// content bug the author needs to know about, and it is the one
 			// exclusion nobody asked for.
@@ -958,6 +974,28 @@ func (v *Vault) isIgnored(absPath string, isDir bool) bool {
 		return false
 	}
 	return v.ignore.MatchAbs(v.root, absPath, isDir)
+}
+
+// SnapshotSource returns a copy of a published note's loaded source.
+func (v *Vault) SnapshotSource(slug string) ([]byte, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	note, ok := v.notes[slug]
+	if !ok {
+		return nil, false
+	}
+	return append([]byte(nil), note.source...), true
+}
+
+// ResolveHeading looks up a heading in a published note's index.
+func (v *Vault) ResolveHeading(slug, heading string) (string, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	note, ok := v.notes[slug]
+	if !ok || note.headings == nil {
+		return "", false
+	}
+	return note.headings.Lookup(heading)
 }
 
 // GetNote returns a note by slug.

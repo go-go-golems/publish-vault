@@ -17,8 +17,9 @@ var kindWikiLink = ast.NewNodeKind("VaultWikiLink")
 
 type wikiLinkNode struct {
 	ast.BaseInline
-	raw  []byte
-	link WikiLink
+	raw    []byte
+	link   WikiLink
+	offset int
 }
 
 func (*wikiLinkNode) Kind() ast.NodeKind              { return kindWikiLink }
@@ -89,10 +90,11 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 	if !bytes.HasPrefix(first, []byte("[[")) && !bytes.HasPrefix(first, []byte("![[")) {
 		return nil
 	}
+	_, position := r.Position()
 	// PeekLine is a view of the remaining line. Most links end on that line,
 	// so scan it directly instead of copying the suffix for every link.
 	if end, ok := scanWikiLinkAt(first, 0); ok {
-		return wikiNodeFromRaw(r, first[:end])
+		return wikiNodeFromRaw(r, first[:end], position.Start)
 	}
 	lineNumber, position := r.Position()
 	var input bytes.Buffer
@@ -114,10 +116,10 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 	if !ok {
 		return nil
 	}
-	return wikiNodeFromRaw(r, input.Bytes()[:end])
+	return wikiNodeFromRaw(r, input.Bytes()[:end], position.Start)
 }
 
-func wikiNodeFromRaw(r text.Reader, source []byte) ast.Node {
+func wikiNodeFromRaw(r text.Reader, source []byte, offset int) ast.Node {
 	raw := bytes.Clone(source)
 	inner := raw
 	embed := raw[0] == '!'
@@ -126,7 +128,7 @@ func wikiNodeFromRaw(r text.Reader, source []byte) ast.Node {
 	}
 	target, alias, heading := parseWikiLinkInner(string(inner[2 : len(inner)-2]))
 	r.Advance(len(raw))
-	return &wikiLinkNode{raw: raw, link: WikiLink{Target: target, Alias: alias, Heading: heading, IsEmbed: embed}}
+	return &wikiLinkNode{raw: raw, offset: offset, link: WikiLink{Target: target, Alias: alias, Heading: heading, IsEmbed: embed}}
 }
 
 type wikiNodeRenderer struct {
