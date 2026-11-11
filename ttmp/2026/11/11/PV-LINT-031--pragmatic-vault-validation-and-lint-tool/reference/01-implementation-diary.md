@@ -241,3 +241,44 @@ I added operator documentation and CLI coverage for environment and configuratio
 
 ### Technical details
 - The filesystem walk is not an atomic snapshot; use a stable checkout. Non-strict exit 0 denotes completed validation, not absence of warnings.
+
+## Step 6: Separate lint work after the Markdown merge
+
+I merged the already-reviewed Markdown PR and preserved the five local lint commits by rebasing them onto the resulting main-branch merge commit on a new `task/vault-lint` branch. The user also requested the corresponding GitOps update; its deployment PR merged after image publication and validation.
+
+### Prompt Context
+**User prompt (verbatim):** "Ok, go ahead. no need for reviewing the PR as release. Just merge it and merge the respective gitops PR once it's ready. \n\nThen create a new branch for the lint work."
+**Assistant interpretation:** Merge the Markdown and target GitOps PRs, retaining the existing lint implementation on a separate branch.
+**Inferred user intent:** Ship the line-break fix without including the validator in that release.
+
+### What I did
+- Tracked the two deferred Markdown review findings in GitHub issue `go-go-golems/publish-vault#31`, then merged PR #30 at merge commit `0b32c52b51abc4f3c9db5f524c271c637fb9f236`.
+- Created `task/vault-lint` and rebased its five local lint commits onto the merged `origin/main`.
+- Watched image workflow run `43091397383`; app and SSR image publication succeeded. Merged GitOps PR `wesen/2026-03-27--hetzner-k3s#433` at `336f0bbceb6cebd49668857b7bfff458309c79c3` after its validation succeeded.
+
+### Why
+- The lint implementation is a separate change and must not be accidentally merged into the Markdown deployment. The sibling GitOps PR #434 targets a different application and was not merged.
+
+### What worked
+- Both PR merges succeeded, and `task/vault-lint` contains the rebased implementation commits. The GitOps PR changed only the app and SSR image tags to `sha-0b32c52`.
+
+### What didn't work
+- No merge or rebase failures observed. At the post-merge check Argo CD reported `Synced` and `Healthy` at older revision `49e86f7cf00df5c7893f740d11df7acc790c325b`, with the deployment still on `sha-0c78a5e`; the new GitOps revision had not yet been observed.
+
+### What I learned
+- A successful GitOps merge is not proof of Argo reconciliation or a live rollout.
+
+### What was tricky to build
+- The lint commits originally sat directly atop the PR branch; `git rebase --onto origin/main 469a4bf...` moved only those five commits onto the merge commit without including lint in #30.
+
+### What warrants a second pair of eyes
+- Verify Argo picks up the merged GitOps revision and that the deployment uses the new tags; review the separate lint branch before publication.
+
+### What should be done in the future
+- Confirm rollout and the live note, and open a separate lint PR when requested.
+
+### Code review instructions
+- Inspect the merged GitHub PRs and the five lint commits on `task/vault-lint`; the two deferred review issues are tracked in #31.
+
+### Technical details
+- The application and SSR images are tagged by merge SHA, not by the original PR-head SHA. Cloud or GitOps success does not independently prove end-user behavior.
