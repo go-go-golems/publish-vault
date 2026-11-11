@@ -72,3 +72,12 @@ Address PR 30 math-aware wiki parsing and inline lookahead review; push 7c525d1 
 
 - /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/math_ast.go — Bounded common-case inline math lookahead
 - /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/wikilink_ast.go — Math-aware wiki recognition
+
+## 2026-11-11
+
+Address PR 30 rereview: normalize Markdown image destinations and avoid copying wiki-link line suffixes; pushed 3d2dd8a and replied to both threads.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/document.go — Normalize image destinations before resolution
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/wikilink_ast.go — Avoid repeated line-suffix copies
