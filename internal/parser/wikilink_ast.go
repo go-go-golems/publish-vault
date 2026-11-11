@@ -34,6 +34,53 @@ func (e wikiLinkExtension) Extend(md goldmark.Markdown) {
 	md.Renderer().AddOptions(renderer.WithNodeRenderers(util.Prioritized(wikiNodeRenderer(e), 100)))
 }
 
+// scanWikiLinkAt recognizes a wiki link while treating complete math spans as
+// atomic. Brackets inside TeX are not wiki delimiters; other nested brackets
+// remain invalid, as in the original wiki-link grammar.
+func scanWikiLinkAt(input []byte, start int) (int, bool) {
+	i := start
+	if i < len(input) && input[i] == '!' {
+		i++
+	}
+	if !bytes.HasPrefix(input[i:], []byte("[[")) {
+		return 0, false
+	}
+	i += 2
+	content := i
+	for i < len(input) {
+		if input[i] == '$' || input[i] == '\\' {
+			if span, ok := scanMathAt(input, i); ok {
+				i = span.End
+				continue
+			}
+		}
+		if bytes.HasPrefix(input[i:], []byte("]]")) {
+			return i + 2, i > content
+		}
+		if input[i] == '[' || input[i] == ']' {
+			return 0, false
+		}
+		i++
+	}
+	return 0, false
+}
+
+// wikiLinkIndexes supplies the same grammar to non-AST consumers such as
+// frontmatter reference collection and table pipe protection.
+func wikiLinkIndexes(input []byte) [][2]int {
+	var indexes [][2]int
+	for i := 0; i < len(input); i++ {
+		if input[i] != '[' && input[i] != '!' {
+			continue
+		}
+		if end, ok := scanWikiLinkAt(input, i); ok {
+			indexes = append(indexes, [2]int{i, end})
+			i = end - 1
+		}
+	}
+	return indexes
+}
+
 type wikiInlineParser struct{}
 
 func (wikiInlineParser) Trigger() []byte { return []byte{'!', '['} }
@@ -51,23 +98,25 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 		}
 		input.Write(line)
 		if bytes.Contains(input.Bytes(), []byte("]]")) {
-			break
+			if _, ok := scanWikiLinkAt(input.Bytes(), 0); ok {
+				break
+			}
 		}
 		r.AdvanceLine()
 	}
 	r.SetPosition(lineNumber, position)
-	loc := wikiLinkRegex.FindIndex(input.Bytes())
-	if loc == nil || loc[0] != 0 {
+	end, ok := scanWikiLinkAt(input.Bytes(), 0)
+	if !ok {
 		return nil
 	}
-	raw := bytes.Clone(input.Bytes()[:loc[1]])
+	raw := bytes.Clone(input.Bytes()[:end])
 	inner := raw
 	embed := raw[0] == '!'
 	if embed {
 		inner = inner[1:]
 	}
 	target, alias, heading := parseWikiLinkInner(string(inner[2 : len(inner)-2]))
-	r.Advance(loc[1])
+	r.Advance(end)
 	return &wikiLinkNode{raw: raw, link: WikiLink{Target: target, Alias: alias, Heading: heading, IsEmbed: embed}}
 }
 
@@ -175,7 +224,8 @@ func wikiReferences(doc ast.Node, frontmatter []byte) []WikiLink {
 			links = append(links, link)
 		}
 	}
-	for _, raw := range wikiLinkRegex.FindAll(frontmatter, -1) {
+	for _, loc := range wikiLinkIndexes(frontmatter) {
+		raw := frontmatter[loc[0]:loc[1]]
 		embed := raw[0] == '!'
 		if embed {
 			raw = raw[1:]

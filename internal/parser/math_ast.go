@@ -48,6 +48,32 @@ func (mathExtension) Extend(md goldmark.Markdown) {
 	md.Renderer().AddOptions(renderer.WithNodeRenderers(util.Prioritized(mathRenderer{}, 100)))
 }
 
+// closedCodeSpans reports whether backtick runs in the scanned prefix have a
+// matching run already present. An unmatched run may close on a later line,
+// changing which math closer scanMathAt is allowed to see.
+func closedCodeSpans(prefix []byte) bool {
+	for i := 0; i < len(prefix); {
+		if prefix[i] == '\\' && i+1 < len(prefix) {
+			i += 2
+			continue
+		}
+		if prefix[i] != '`' {
+			i++
+			continue
+		}
+		runEnd := i
+		for runEnd < len(prefix) && prefix[runEnd] == '`' {
+			runEnd++
+		}
+		end := skipCodeSpan(prefix, i)
+		if end == runEnd {
+			return false
+		}
+		i = end
+	}
+	return true
+}
+
 // mathInlineParser operates only on Goldmark's current inline container. Code
 // spans and blocks are handled by Goldmark before this parser sees their text.
 type mathInlineParser struct{}
@@ -61,22 +87,34 @@ func (mathInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 	if first[0] == '$' && !bytes.HasPrefix(first, []byte("$$")) && !validInlineOpener(first, 0) {
 		return nil
 	}
+	// The common same-line case must not copy the rest of the paragraph for
+	// each formula. An unmatched preceding backtick requires the complete
+	// container: its code span may close on a later line.
+	if span, ok := scanMathAt(first, 0); ok && closedCodeSpans(first[:span.End]) {
+		r.Advance(span.End)
+		return &inlineMath{tex: span.TeX, display: span.Display}
+	}
+
 	line, pos := r.Position()
 	var content bytes.Buffer
+	var span MathSpan
+	var ok bool
 	for {
 		part, _ := r.PeekLine()
 		if part == nil {
 			break
 		}
 		content.Write(part)
+		span, ok = scanMathAt(content.Bytes(), 0)
+		if ok && closedCodeSpans(content.Bytes()[:span.End]) {
+			break
+		}
 		r.AdvanceLine()
 	}
 	r.SetPosition(line, pos)
-	input := content.Bytes()
-	if len(input) < 2 {
-		return nil
-	}
-	span, ok := scanMathAt(input, 0)
+	// At the end of the container, unmatched backticks are literal, so the
+	// scanner's result is final even if closedCodeSpans returned false.
+	span, ok = scanMathAt(content.Bytes(), 0)
 	if !ok {
 		return nil
 	}

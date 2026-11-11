@@ -1,6 +1,6 @@
 module github.com/go-go-golems/publish-vault
 
-go 1.26.10
+go 1.26.11
 
 require (
 	dagger.io/dagger v0.21.7

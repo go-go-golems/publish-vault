@@ -30,6 +30,24 @@ func TestWikiIndexIsDeterministicAndCanonicalSlugsWin(t *testing.T) {
 	}
 }
 
+func TestWikiMathBracketLinkProducesBacklink(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Target.md", "# Target\n")
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n[[Target|$E[X]$]]\n")
+	v, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, ok := v.GetNote("source")
+	if !ok || !strings.Contains(source.HTML, `href="/note/target"`) || !strings.Contains(source.HTML, `E[X]`) {
+		t.Fatalf("link not rendered: %#v", source)
+	}
+	target, ok := v.GetNote("target")
+	if !ok || len(target.Backlinks) != 1 || target.Backlinks[0] != "source" {
+		t.Fatalf("backlink not indexed: %#v", target)
+	}
+}
+
 func TestCalloutContentSurvivesVaultResolution(t *testing.T) {
 	root := t.TempDir()
 	writeVaultTestFile(t, root, "Target.md", "# Target\n\n## Details\n")

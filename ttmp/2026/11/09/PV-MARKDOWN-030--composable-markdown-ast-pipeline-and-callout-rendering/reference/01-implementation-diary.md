@@ -938,3 +938,47 @@ While rechecking the completion contract I found one remaining duplicate renderi
 
 
 **Shared-math final browser check:** Served the freshly built `/tmp/pv-030-shared-math` against the local fixture on loopback port 18201. Playwright reported zero hard breaks in the paragraph, the expected callout and `/note/target` link, both table cells, and `done` for inline and display math. Visually inspected `reference/assets/shared-math-final.png`, then stopped the server. The fixture's absent favicons produce two expected 404s; this is not a live-production check.
+
+## Step 21: Address PR 30 review findings
+
+The review identified wiki links rejected when their math contained brackets, and quadratic copying for many same-line math spans. I reproduced both, then changed wiki recognition and the inline math reader while retaining cross-line code-span behavior.
+
+### Prompt Context
+**User prompt (verbatim):** "Address comments: https://github.com/go-go-golems/publish-vault/pull/30"
+**Assistant interpretation:** Verify and fix both review findings, validate, push and respond on the PR.
+**Inferred user intent:** Make the PR ready for renewed review without merging it.
+
+### What I did
+- Introduced math-aware wiki scanning shared by AST links, table protection and frontmatter references, and preserved math-aware wiki parsing in excerpts. Separators inside math no longer split wiki fields.
+- Short-circuited math scanning on the current line and stopped multiline collection once the closer is unambiguous; unmatched backticks require further lookahead because a code span can close on a subsequent line.
+- Added parser and vault/backlink regressions, a cross-line code-span test and a dense-formula benchmark. Bumped the Go and Docker patch version to 1.26.11 after the security gate detected a newly published standard-library issue.
+
+### Why
+- Regex matching treated TeX brackets as wiki syntax; the former math masking hid them. Copying the remaining inline container for each small formula created quadratic allocation.
+
+### What worked
+- The regression initially failed for inline, display, heading and table cases; the corrected parser and vault tests pass. `make ci-check` passed after the patch-version update; `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30`, and `git diff --check` passed.
+- On the same 11th Gen Intel i7-1165G7 with `-benchtime=100ms`, parsing 5,000 `$x$ ` formulas changed from 24.88 ms and 56,841,449 B/op to 6.20 ms and 4,884,864 B/op in the measured runs. These short runs are directional, not a statistical performance study; multiline ambiguous code spans still require lookahead.
+
+### What didn't work
+- Initial `go test ./internal/parser -run '^TestWikiLinkMathWithBrackets$' -count=1` failed: all four original cases returned no references and rendered literal wiki delimiters; the table case also split the link into cells.
+- A first cross-line test expected an extra source indentation space, but Goldmark's inline container had already removed it; the observed HTML retained the intended later math closer, so the assertion was corrected.
+- The first `make ci-check` failed at `govulncheck` with `GO-2026-6859`, HTTP/1 server crash due to a MaxBytesReader header race, `Found in: net/http@go1.26.10`, `Fixed in: net/http@go1.26.11`, and exit 3. The subsequent gate passed with Go 1.26.11.
+
+### What I learned
+- Wiki parsing has several consumers beyond rendered links, including frontmatter, excerpts and the table pipe splitter; fixing only the AST parser would leave inconsistent output or lost cells.
+
+### What was tricky to build
+- A math closer observed before an unmatched backtick cannot safely terminate early: the backtick can form a code span with a later line, concealing that closer. The reader only stops early when preceding code spans are complete.
+
+### What warrants a second pair of eyes
+- Inspect multiline delimiter/code-span boundary semantics and the shared wiki scanner's handling of unusual math and bracket combinations. The benchmark demonstrates the reported dense same-line case, not a worst-case bound for every ambiguous multiline input.
+
+### What should be done in the future
+- Review the updated PR, CI results, and deployment separately; do not infer production rollout from local tests.
+
+### Code review instructions
+- Start with `internal/parser/wikilink_ast.go`, `math_ast.go`, `table_ast.go` and `pr30_review_test.go`; run `go test ./internal/parser ./pkg/vault`, and the `BenchmarkInlineMathDenseParagraph` benchmark.
+
+### Technical details
+- The corpus smoke and browser checks from prior steps predate this review fix. The new evidence covers parser, vault integration, race checks and the project gate, not a new production or browser deployment check.

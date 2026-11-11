@@ -142,7 +142,7 @@ func tableSegments(line text.Segment, source []byte) ([]text.Segment, []int, boo
 		}
 		i++
 	}
-	for _, loc := range wikiLinkRegex.FindAllIndex(value, -1) {
+	for _, loc := range wikiLinkIndexes(value) {
 		backslashes := 0
 		for i := loc[0] - 1; i >= 0 && value[i] == '\\'; i-- {
 			backslashes++

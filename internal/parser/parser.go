@@ -28,9 +28,6 @@ type ParsedNote struct {
 	Excerpt     string // First non-empty paragraph, plain text
 }
 
-// wikiLinkRegex matches [[Target]], [[Target|Alias]], [[Target#Heading]], ![[embed]]
-var wikiLinkRegex = regexp.MustCompile(`(!?)\[\[([^\[\]]+)\]\]`)
-
 // imageExtensions are embed targets rendered as images rather than note embeds.
 // The vault resolver maps ![[pic.png]] to an attachment URL.
 var imageExtensions = map[string]bool{
@@ -57,13 +54,27 @@ func Parse(src []byte) (*ParsedNote, error) {
 func parseWikiLinkInner(inner string) (string, string, string) {
 	alias := ""
 	heading := ""
-	// Split alias
-	if idx := strings.Index(inner, "|"); idx >= 0 {
+	// Separators inside math belong to TeX, not the wiki-link grammar.
+	outsideMath := func(s string, separator byte) int {
+		input := []byte(s)
+		for i := 0; i < len(input); i++ {
+			if input[i] == '$' || input[i] == '\\' {
+				if span, ok := scanMathAt(input, i); ok {
+					i = span.End - 1
+					continue
+				}
+			}
+			if input[i] == separator {
+				return i
+			}
+		}
+		return -1
+	}
+	if idx := outsideMath(inner, '|'); idx >= 0 {
 		alias = strings.TrimSpace(inner[idx+1:])
 		inner = inner[:idx]
 	}
-	// Split heading
-	if idx := strings.Index(inner, "#"); idx >= 0 {
+	if idx := outsideMath(inner, '#'); idx >= 0 {
 		heading = strings.TrimSpace(inner[idx+1:])
 		inner = inner[:idx]
 	}
@@ -358,19 +369,35 @@ func isFrontmatterDelimiter(line string) bool {
 
 // stripMarkdown removes common Markdown syntax for plain-text excerpt.
 func stripMarkdown(src []byte) string {
-	// Drop math delimiters first, keeping the TeX body, so a note about the
-	// normal distribution is findable by searching "sigma". Running before the
-	// emphasis/link regexes matters: they would otherwise chew through the
-	// underscores and backslashes inside a formula.
-	s := string(StripMathDelimiters(src))
-	// Remove wiki links
-	s = wikiLinkRegex.ReplaceAllStringFunc(s, func(m string) string {
-		_, alias, _ := parseWikiLinkInner(m[2 : len(m)-2])
-		if alias != "" {
-			return alias
+	// Unwrap wiki syntax while delimiters still distinguish math brackets.
+	// A wiki-looking sequence inside math is literal TeX, not a link.
+	math := ScanMath(src)
+	var unwrapped bytes.Buffer
+	prev, mathIndex := 0, 0
+	for _, loc := range wikiLinkIndexes(src) {
+		for mathIndex < len(math) && math[mathIndex].End <= loc[0] {
+			mathIndex++
 		}
-		return m[2 : len(m)-2]
-	})
+		if mathIndex < len(math) && loc[0] >= math[mathIndex].Start {
+			continue
+		}
+		unwrapped.Write(src[prev:loc[0]])
+		raw := src[loc[0]:loc[1]]
+		if raw[0] == '!' {
+			raw = raw[1:]
+		}
+		inner := string(raw[2 : len(raw)-2])
+		_, alias, _ := parseWikiLinkInner(inner)
+		if alias != "" {
+			unwrapped.WriteString(alias)
+		} else {
+			unwrapped.WriteString(inner)
+		}
+		prev = loc[1]
+	}
+	unwrapped.Write(src[prev:])
+	// Remove math delimiters before the emphasis/link regexes, preserving TeX.
+	s := string(StripMathDelimiters(unwrapped.Bytes()))
 	// Remove headings
 	s = regexp.MustCompile(`(?m)^#{1,6}\s+`).ReplaceAllString(s, "")
 	// Remove bold/italic
