@@ -89,6 +89,11 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 	if !bytes.HasPrefix(first, []byte("[[")) && !bytes.HasPrefix(first, []byte("![[")) {
 		return nil
 	}
+	// PeekLine is a view of the remaining line. Most links end on that line,
+	// so scan it directly instead of copying the suffix for every link.
+	if end, ok := scanWikiLinkAt(first, 0); ok {
+		return wikiNodeFromRaw(r, first[:end])
+	}
 	lineNumber, position := r.Position()
 	var input bytes.Buffer
 	for {
@@ -109,14 +114,18 @@ func (wikiInlineParser) Parse(_ ast.Node, r text.Reader, _ goldparser.Context) a
 	if !ok {
 		return nil
 	}
-	raw := bytes.Clone(input.Bytes()[:end])
+	return wikiNodeFromRaw(r, input.Bytes()[:end])
+}
+
+func wikiNodeFromRaw(r text.Reader, source []byte) ast.Node {
+	raw := bytes.Clone(source)
 	inner := raw
 	embed := raw[0] == '!'
 	if embed {
 		inner = inner[1:]
 	}
 	target, alias, heading := parseWikiLinkInner(string(inner[2 : len(inner)-2]))
-	r.Advance(end)
+	r.Advance(len(raw))
 	return &wikiLinkNode{raw: raw, link: WikiLink{Target: target, Alias: alias, Heading: heading, IsEmbed: embed}}
 }
 

@@ -982,3 +982,45 @@ The review identified wiki links rejected when their math contained brackets, an
 
 ### Technical details
 - The corpus smoke and browser checks from prior steps predate this review fix. The new evidence covers parser, vault integration, race checks and the project gate, not a new production or browser deployment check.
+
+## Step 22: Address the PR rereview
+
+The subsequent Codex review identified two more regressions: Markdown image destinations reached asset resolution without Goldmark's normal destination processing, and each wiki link copied the remaining source line. I reproduced both before changing the relevant renderer and inline parser.
+
+### Prompt Context
+**User prompt (verbatim):** "yes" — in response to the offer to address the two findings on PR 30.
+**Assistant interpretation:** Fix both findings, validate the changes, and update the review threads.
+**Inferred user intent:** Continue toward a reviewable PR without merging it.
+
+### What I did
+- Applied Goldmark `util.URLEscape(destination, true)` before invoking the Markdown image resolver, preserving entity and punctuation unescaping, URL encoding and existing percent escapes.
+- Scanned the first wiki-link line without copying it; only multiline fallback buffers input. The AST node still owns its raw link bytes.
+- Added parser regressions for named and numeric entities, escaped parentheses and already-encoded URLs, plus a vault image-resolution check and a dense wiki-link benchmark.
+
+### Why
+- The previous Goldmark renderer normalized the image URL before the vault's HTML pass. The original wiki parser's buffer held the whole remaining line even when the matching `]]` was only a few bytes away.
+
+### What worked
+- `make ci-check`, `GOWORK=off go test -race ./internal/parser ./pkg/vault ./pkg/watcher`, `docmgr doctor --ticket PV-MARKDOWN-030 --stale-after 30`, and `git diff --check` passed.
+- With `-benchtime=100ms` on an 11th Gen Intel i7-1165G7, parsing 5,000 repeated links changed from 90.56 ms and 165,244,936 B/op to 22.19 ms and 16,139,001 B/op. These are short directional measurements, not a worst-case bound on malformed or multiline inputs.
+
+### What didn't work
+- Initial `go test ./internal/parser -run '^TestMarkdownImageDestinationNormalization$' -count=1` failed: the resolver received `images/a&amp;b.png`, `images/a\\(b\\).png`, and `images/a&#32;b.png` without normalization. Named entities were double-escaped in rendered output.
+
+### What I learned
+- Goldmark's URL normalization includes percent encoding as well as Markdown escapes and HTML character references; using the same helper avoids a subtly different resolver input contract.
+
+### What was tricky to build
+- The fast wiki path must copy only the recognized link into the node before advancing the Goldmark reader. The fallback remains necessary for links spanning lines and retains prior recognition behavior.
+
+### What warrants a second pair of eyes
+- Check unusual URI schemes and existing percent escapes against Goldmark behavior, and review malformed or multiline wiki-link performance separately from the benchmarked same-line case.
+
+### What should be done in the future
+- Await refreshed PR checks and review; deployment remains a separate operation.
+
+### Code review instructions
+- Inspect `internal/parser/document.go`, `wikilink_ast.go`, `pr30_review_test.go`, and `pkg/vault/callout_pipeline_test.go`; run parser and vault tests and `BenchmarkWikiLinkDenseParagraph`.
+
+### Technical details
+- Raw HTML image handling is unchanged. This work does not establish a browser or production deployment check.

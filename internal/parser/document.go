@@ -196,7 +196,9 @@ func (r imageRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 			return ast.WalkContinue, nil
 		}
 		n := node.(*ast.Image)
-		dest := string(n.Destination)
+		// Match Goldmark's destination handling before handing the URL to the
+		// resolver: unescape Markdown punctuation/entities and encode the URL.
+		dest := string(util.URLEscape(n.Destination, true))
 		if r.resolver != nil && r.resolver.Image != nil {
 			if resolved := r.resolver.Image(dest); resolved != "" {
 				dest = resolved

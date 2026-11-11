@@ -30,6 +30,20 @@ func TestWikiIndexIsDeterministicAndCanonicalSlugsWin(t *testing.T) {
 	}
 }
 
+func TestMarkdownImageEntityResolvesInVault(t *testing.T) {
+	root := t.TempDir()
+	writeVaultTestFile(t, root, "Source.md", "# Source\n\n![x](images/a&amp;b.png)\n")
+	writeVaultTestFile(t, root, "images/a&b.png", "image")
+	v, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, ok := v.GetNote("source")
+	if !ok || !strings.Contains(note.HTML, `src="/vault-assets/images/a&amp;b.png"`) {
+		t.Fatalf("entity image not resolved: %#v", note)
+	}
+}
+
 func TestWikiMathBracketLinkProducesBacklink(t *testing.T) {
 	root := t.TempDir()
 	writeVaultTestFile(t, root, "Target.md", "# Target\n")

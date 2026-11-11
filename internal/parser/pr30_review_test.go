@@ -74,6 +74,46 @@ func TestInlineMathMultilineCodeSpanLookahead(t *testing.T) {
 	}
 }
 
+func TestMarkdownImageDestinationNormalization(t *testing.T) {
+	cases := []struct{ source, destination, escaped string }{
+		{`![x](images/a&amp;b.png)`, `images/a&b.png`, `images/a&amp;b.png`},
+		{`![x](images/a\(b\).png)`, `images/a(b).png`, `images/a(b).png`},
+		{`![x](images/a&#32;b.png)`, `images/a%20b.png`, `images/a%20b.png`},
+		{`![x](images/a%20b.png)`, `images/a%20b.png`, `images/a%20b.png`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.source, func(t *testing.T) {
+			_, doc, err := ParseDocument([]byte(tc.source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got string
+			html, err := doc.Render(&Resolver{Image: func(s string) string { got = s; return s }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.destination || !strings.Contains(html, `src="`+tc.escaped+`"`) {
+				t.Fatalf("resolver received %q, rendered %s; want %q and %q", got, html, tc.destination, tc.escaped)
+			}
+		})
+	}
+}
+
+func BenchmarkWikiLinkDenseParagraph(b *testing.B) {
+	for _, n := range []int{100, 1000, 5000} {
+		b.Run(fmt.Sprintf("links_%d", n), func(b *testing.B) {
+			src := []byte(strings.Repeat("[[Target]] ", n))
+			b.ReportAllocs()
+			b.SetBytes(int64(len(src)))
+			for i := 0; i < b.N; i++ {
+				if _, err := Parse(src); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkInlineMathDenseParagraph(b *testing.B) {
 	for _, n := range []int{100, 1000, 5000} {
 		b.Run(fmt.Sprintf("formulas_%d", n), func(b *testing.B) {

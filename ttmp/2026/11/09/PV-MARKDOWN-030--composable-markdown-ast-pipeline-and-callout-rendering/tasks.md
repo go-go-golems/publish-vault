@@ -12,3 +12,6 @@
 - [x] Address PR 30 wiki links containing mathematical brackets <!-- t:jpam -->
 - [x] Address PR 30 quadratic inline math lookahead and validate scaling <!-- t:29bk -->
 - [x] Push fixes and reply to PR 30 review threads <!-- t:bsfv -->
+- [x] Fix PR 30 image destination normalization <!-- t:t7pd -->
+- [x] Fix PR 30 dense wiki-link allocation and validate regressions <!-- t:rrtg -->
+- [ ] Push changes and respond to rereview threads <!-- t:2peo -->
