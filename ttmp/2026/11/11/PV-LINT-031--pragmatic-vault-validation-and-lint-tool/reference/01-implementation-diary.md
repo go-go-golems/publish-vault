@@ -115,3 +115,45 @@ I wrote the design around a small read-only published-view check rather than a g
 
 ### Technical details
 - The document is a design proposal. No lint command, rule engine, parser or vault code was implemented in this step.
+
+## Step 3: Validate and deliver the guide
+
+I validated the ticket and committed the completed design, then uploaded the guide to the ticket-specific reMarkable cloud directory. This completes the requested research handoff, not the future tool implementation.
+
+### Prompt Context
+**User prompt:** See Step 1.
+**Assistant interpretation:** Deliver the actual guide and preserve a traceable commit and upload receipt.
+**Inferred user intent:** Make the material available for reading and later implementation.
+**Commit (design):** `05bf76a` — "docs(PV-LINT-031): design practical vault validator".
+
+### What I did
+- Ran `docmgr doctor --ticket PV-LINT-031 --stale-after 30`, validated the guide frontmatter, and checked the staged diff.
+- Ran `remarquee upload bundle ttmp/2026/11/11/PV-LINT-031--pragmatic-vault-validation-and-lint-tool/design-doc/01-vault-validation-design-and-intern-implementation-guide.md --name 'PV LINT 031 Vault Validation Design and Intern Guide' --remote-dir '/ai/2026/11/11/PV-LINT-031' --toc-depth 2 --non-interactive`.
+
+### Why
+- The user requested a reMarkable copy and coherent committed documentation, not implementation of the proposed command.
+
+### What worked
+- `docmgr doctor` reported all checks passed; `docmgr validate frontmatter` reported `Frontmatter OK`; `git diff --check` and the staged diff check passed.
+- The upload returned `OK: uploaded PV LINT 031 Vault Validation Design and Intern Guide.pdf -> /ai/2026/11/11/PV-LINT-031`. This is cloud-delivery evidence, not proof that a physical device synchronized.
+
+### What didn't work
+- No upload or validation failures observed. No independent visual review or device sync check was requested or performed.
+
+### What I learned
+- A successful Markdown upload provides a clear remote destination and document name without overwriting an existing annotation-bearing document.
+
+### What was tricky to build
+- The user requested a complete intern guide but not code; keeping the future implementation task unchecked avoids suggesting that a design artifact is a shipped validator.
+
+### What warrants a second pair of eyes
+- An implementer should validate the proposed source-offset and strict-output contracts against the then-current code; the author readability pass is not an independent intern review.
+
+### What should be done in the future
+- Implement and test the validator under the open task if requested; this diary does not assert it exists.
+
+### Code review instructions
+- Read the design, review notes, task list and cloud destination above. The changes are documentation only.
+
+### Technical details
+- Routine upload followed the reMarkable skill's success-evidence policy; no force overwrite, local PDF render, or additional cloud listing was used.
