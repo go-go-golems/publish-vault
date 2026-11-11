@@ -22,7 +22,7 @@ WhenToUse: ""
 
 ## Overview
 
-Design a small read-only validator for the published vault view. The intern guide is a proposal, not an implemented command; implementation and tests remain open.
+A read-only validator for the published vault view is implemented as `retro-obsidian-publish validate`. The intern guide preserves the original design; consult the README and code for current behavior.
 
 ## Key Links
 

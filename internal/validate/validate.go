@@ -23,6 +23,9 @@ type Diagnostic struct {
 // Run loads one published view and returns diagnostics in stable order.
 // It does not inspect frontmatter references or fetch external resources.
 func Run(ctx context.Context, root, configPath string) ([]Diagnostic, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve vault root: %w", err)
@@ -96,7 +99,8 @@ func Run(ctx context.Context, root, configPath string) ([]Diagnostic, error) {
 				continue
 			}
 			line, col := 0, 0
-			if ref.Offset >= 0 && ref.Offset < len(src) && bytes.HasPrefix(src[ref.Offset:], []byte("[[")) || ref.Offset >= 0 && ref.Offset < len(src) && bytes.HasPrefix(src[ref.Offset:], []byte("![[")) {
+			if ref.Offset >= 0 && ref.Offset < len(src) &&
+				(bytes.HasPrefix(src[ref.Offset:], []byte("[[")) || bytes.HasPrefix(src[ref.Offset:], []byte("![["))) {
 				n := sort.Search(len(starts), func(i int) bool { return starts[i] > ref.Offset })
 				line = n
 				col = ref.Offset - starts[n-1] + 1

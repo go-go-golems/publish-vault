@@ -198,3 +198,46 @@ I resumed the ticket to implement its MVP, adding per-occurrence source position
 
 ### Technical details
 - Lint remains read-only, uses loaded source copies, and does not validate frontmatter references or Markdown image existence. The implementation currently has no optional compatibility heuristics.
+
+## Step 5: Validate integration and exercise the real vault
+
+I added operator documentation and CLI coverage for environment and configuration behavior, then ran the integration gate, race tests, and a private real-vault scan. A missing generated logger caused the first gate to fail; generating the required package files and rerunning fixed it.
+
+### Prompt Context
+**User prompt:** See Step 4.
+**Assistant interpretation:** Complete and validate the requested MVP without extending into optional compatibility checks.
+**Inferred user intent:** A usable, tested validator and a clear handoff.
+**Commit (implementation):** `9a95fef` — "feat(validate): add published vault wiki diagnostics".
+
+### What I did
+- Added README usage and limitations, process-level tests for `VAULT_DIR`, explicit config and invalid configuration, and generated package loggers.
+- Ran the full project gate and race tests, then scanned the local vault using JSONL stored in a mode-0600 temporary file.
+- Added a status note to the historical design, distinguishing its original proposal from the implemented MVP.
+
+### Why
+- CLI output and publication policy must work through the actual binary, not only unit-test helper APIs. The real-vault run provides operational evidence without disclosing private note contents.
+
+### What worked
+- `make ci-check` passed after the logger generation; `GOWORK=off go test -race ./internal/parser ./internal/validate ./pkg/vault ./cmd/retro-obsidian-publish/commands/validate` passed. The targeted tests passed after the final small cancellation/condition cleanup.
+- `go run ./cmd/retro-obsidian-publish validate --vault /home/manuel/code/wesen/go-go-golems/go-go-parc --format jsonl` exited 0 in non-strict mode and produced 813 warnings across 91 source notes: 440 missing wiki targets, 372 missing headings, and 1 missing wiki image. All recorded locations were nonzero. These are tool findings, not individually verified broken links; output is private at `/tmp/pv-lint-031-corpus.jsonl`.
+
+### What didn't work
+- Initial `make ci-check` failed at `logcopter-check` with `logcopter-gen: generated file is not current: .../cmd/retro-obsidian-publish/commands/validate/logcopter.go` and `make: *** [Makefile:92: logcopter-check] Error 1`. `make logcopter-generate && make logcopter-check` generated both new package files and passed; the subsequent full gate passed.
+
+### What I learned
+- A substantial diagnostic count in a real vault does not mean every finding is an actionable defect: intentional unpublished targets and existing heading-lookup limitations require human review.
+
+### What was tricky to build
+- Test and output paths must remain private. The corpus run used `umask 077`, and only aggregate counts are included here.
+
+### What warrants a second pair of eyes
+- Sample diagnostics with the author before enabling `--strict` in CI; the command intentionally does not inspect metadata references, Markdown image existence, raw HTML, external URLs, or optional renderer-compatibility warnings.
+
+### What should be done in the future
+- Review the corpus findings before making strict mode a publishing gate. No automatic corpus edits or reMarkable re-upload were requested for implementation.
+
+### Code review instructions
+- Run `make ci-check` and the targeted race tests; inspect `internal/validate/validate_test.go` and `cmd/retro-obsidian-publish/commands/validate/validate_test.go` for exclusion, repeated occurrence, strict JSONL and config behavior.
+
+### Technical details
+- The filesystem walk is not an atomic snapshot; use a stable checkout. Non-strict exit 0 denotes completed validation, not absence of warnings.

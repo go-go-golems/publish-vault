@@ -13,12 +13,16 @@ Owners: []
 RelatedFiles:
     - Path: repo://cmd/retro-obsidian-publish/commands/serve/serve.go
       Note: Glazed CLI conventions
+    - Path: repo://cmd/retro-obsidian-publish/commands/validate/validate.go
+      Note: Implemented validate command
     - Path: repo://internal/ignore/ignore.go
       Note: Vault ignore semantics
     - Path: repo://internal/parser/document.go
       Note: AST parsing and heading indexes
     - Path: repo://internal/parser/wikilink_ast.go
       Note: Wiki node parsing and references
+    - Path: repo://internal/validate/validate.go
+      Note: Implemented published-view lint rules
     - Path: repo://pkg/server/runtime.go
       Note: Root and config snapshot setup
     - Path: repo://pkg/vault/vault.go
@@ -32,11 +36,15 @@ WhenToUse: ""
 
 # Vault validation: design and implementation guide
 
+## Implementation status
+
+The MVP described here is now implemented as `retro-obsidian-publish validate`: it checks published-body wiki targets, headings and image embeds. The design below is retained as the original intern guide, so proposed names and future-tense statements describe the plan at the time of writing; consult the current code and README for the implemented contract. Optional compatibility heuristics and Markdown-image existence checks remain out of scope.
+
 ## 1. What you are building
 
 Publish Vault turns selected Obsidian Markdown notes into a browsable website. Authors can write wiki links such as `[[Projects/Map#Plan|the plan]]`, embed notes and images, and include headings and tables. A note may look acceptable in the editor while the published site cannot resolve its target, a heading fragment is missing, or an attachment does not exist. The proposed **validator** runs locally before publication and reports such problems with enough context for an author to investigate them.
 
-This document is a design and implementation guide, **not a description of an existing command**. The examples under `validate`, the Go types in Section 6, and the rules in Section 8 are proposed. The existing code was inspected at commit `469a4bf02707d299103de1d1a41df694d75a2e72` on the Markdown AST migration branch; verify the implementation and PR status again before starting work because it may have changed.
+This document records the original design and implementation guide. The examples under `validate`, the Go types in Section 6, and the rules in Section 8 were proposed at design time; the MVP command now exists, but the pseudocode remains illustrative. The existing code was inspected at commit `469a4bf02707d299103de1d1a41df694d75a2e72` on the Markdown AST migration branch; verify the implementation and PR status again before starting work because it may have changed.
 
 The first version should be deliberately modest:
 
