@@ -86,6 +86,33 @@ func (d *Document) Render(r *Resolver) (string, error) {
 	return out.String(), nil
 }
 
+// WikiOccurrence is one body wiki link, including self links and embeds.
+// Offset is the byte offset of the opening marker in the document source.
+type WikiOccurrence struct {
+	Target, Heading, Alias string
+	Embed, Image           bool
+	Offset                 int
+}
+
+// WikiOccurrences returns each parsed body occurrence in document order.
+func (d *Document) WikiOccurrences() []WikiOccurrence {
+	var occurrences []WikiOccurrence
+	_ = ast.Walk(d.root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering {
+			if n, ok := node.(*wikiLinkNode); ok {
+				link := n.link
+				occurrences = append(occurrences, WikiOccurrence{
+					Target: plainMath(link.Target), Heading: plainMath(link.Heading), Alias: plainMath(link.Alias),
+					Embed: link.IsEmbed, Image: link.IsEmbed && isImageTarget(plainMath(link.Target)), Offset: n.offset,
+				})
+				return ast.WalkSkipChildren, nil
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+	return occurrences
+}
+
 // Headings returns the immutable heading index assigned during parsing.
 // The index does not retain the source document or syntax tree.
 func (d *Document) Headings() *HeadingIndex { return d.headings }

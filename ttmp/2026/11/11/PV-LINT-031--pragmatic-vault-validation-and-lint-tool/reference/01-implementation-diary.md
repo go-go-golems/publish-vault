@@ -157,3 +157,44 @@ I validated the ticket and committed the completed design, then uploaded the gui
 
 ### Technical details
 - Routine upload followed the reMarkable skill's success-evidence policy; no force overwrite, local PDF render, or additional cloud listing was used.
+
+## Step 4: Implement the first end-to-end validator
+
+I resumed the ticket to implement its MVP, adding per-occurrence source positions, strict offline vault loading and safe snapshot access, the three wiki diagnostics, and a Glazed command. Focused parser, vault, engine and CLI integration tests pass; broader integration validation remains ahead.
+
+### Prompt Context
+**User prompt (verbatim):** "immplement the ticket!"
+**Assistant interpretation:** Implement the planned published-view lint MVP, with focused commits and a detailed diary as requested earlier.
+**Inferred user intent:** Make the design usable rather than just documented.
+
+### What I did
+- Added source offsets and `Document.WikiOccurrences`, preserving self links, repeated references and wiki embeds without changing the backlink API.
+- Added strict-load opt-in and copied snapshot-source and heading lookup methods; default server loading remains permissive.
+- Added the `internal/validate` engine and a Glazed `validate` command with JSONL and strict modes, plus fixture and process-level tests.
+
+### Why
+- The server's deduplicated reference list omits source positions and several link forms, while silently skipped load failures would make a clean lint result misleading.
+
+### What worked
+- `go test ./internal/validate ./internal/parser ./pkg/vault ./cmd/retro-obsidian-publish/commands/...` passed. A manual strict JSONL run emitted a diagnostic on stdout and returned nonzero with `validation found 1 warning(s)` on stderr.
+
+### What didn't work
+- The first milestone commit failed in the pre-commit hook: `make: *** [Makefile:81: glazed-lint] Error 3`, with `validate.go:43:13: use Glazed config/env middleware or an explicit command field instead of os.Getenv in CLI code`. Switched to the `os.LookupEnv` convention used by the existing serve command and retried. Broader project checks and operational edge cases have not yet been qualified.
+
+### What I learned
+- Goldmark reader positions in the tested nested blockquote and list cases correspond to the original source byte offsets; repeated source links retain independent occurrences.
+
+### What was tricky to build
+- The Glazed processor needs to flush output even on the strict findings error. A real built-binary integration test exercises JSONL output and strict exit behavior, not merely a mock processor.
+
+### What warrants a second pair of eyes
+- Strict load's treatment of inaccessible paths, exclusion handling, location fidelity for less common Markdown containers, and whether config parsing errors are appropriately fatal to validation.
+
+### What should be done in the future
+- Review and extend fixture/CLI edge cases, document the command, run the project integration gate and race tests, and record the final results.
+
+### Code review instructions
+- Review `internal/parser/occurrence_test.go`, `pkg/vault/validation_access_test.go`, `internal/validate/validate.go`, and `cmd/retro-obsidian-publish/commands/validate/validate_test.go`.
+
+### Technical details
+- Lint remains read-only, uses loaded source copies, and does not validate frontmatter references or Markdown image existence. The implementation currently has no optional compatibility heuristics.
