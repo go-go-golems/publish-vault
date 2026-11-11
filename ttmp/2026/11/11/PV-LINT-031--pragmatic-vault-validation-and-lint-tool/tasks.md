@@ -10,4 +10,4 @@
 - [x] Implement validate CLI, integration tests and documentation <!-- t:0sdu -->
 - [x] Validate implementation and commit milestones <!-- t:f5hq -->
 - [x] Group the existing private link-warning report for triage <!-- t:641f -->
-- [ ] Push lint branch and open a separate pull request <!-- t:gap9 -->
+- [x] Push lint branch and open a separate pull request <!-- t:gap9 -->

@@ -324,3 +324,44 @@ I grouped the previously generated local JSONL report by rule, likely cause, and
 
 ### Technical details
 - The grouping script creates a new output file exclusively and fails if it already exists, avoiding silent overwrite. The output is not a fresh scan or a public artifact.
+
+## Step 8: Publish the lint branch for review
+
+I pushed `task/vault-lint` and opened a separate PR against `main`, preserving the Markdown deployment's separation from lint work. The PR describes the grouping heuristics and the validator's limitations without publishing the report.
+
+### Prompt Context
+**User prompt:** See Step 7.
+**Assistant interpretation:** Open the PR without merging or exposing corpus content.
+**Inferred user intent:** Make the implementation available for review.
+**Commit (grouping):** `bff7aa1` — "feat(PV-LINT-031): group private lint warnings for triage".
+
+### What I did
+- Pushed the lint branch and opened https://github.com/go-go-golems/publish-vault/pull/32.
+- Summarized the actual tests and limitations, including block references and metadata, in the PR body.
+
+### Why
+- The lint tool is independent of the merged Markdown fix and must be reviewed as its own change.
+
+### What worked
+- Pre-push hooks passed: tests, gosec, lint, logcopter-check and frontend type-check. PR creation succeeded.
+
+### What didn't work
+- No push or PR-creation failure observed. GitHub warned of four unrelated untracked files; these were not staged.
+
+### What I learned
+- Local grouping and successful push do not establish that all reported links are broken or that PR checks have completed.
+
+### What was tricky to build
+- The grouped report is local and private; the PR includes the grouping script but not the vault paths and targets from its output.
+
+### What warrants a second pair of eyes
+- Review strict loading and output behavior, source offsets, and the precise scope of checks before merging.
+
+### What should be done in the future
+- Watch PR checks and any review comments. No merge was requested.
+
+### Code review instructions
+- Review PR #32, the focused tests and the grouping script unit test; use the ticket's earlier integration and race evidence as context.
+
+### Technical details
+- The validator's corpus report is a historical local scan. CI on the PR is independent of the local pre-push hook.
