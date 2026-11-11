@@ -28,3 +28,11 @@ Implemented and validated published-view wiki lint CLI, strict loading, source p
 
 - /home/manuel/code/wesen/go-go-golems/publish-vault/cmd/retro-obsidian-publish/commands/validate/validate.go — Glazed CLI
 - /home/manuel/code/wesen/go-go-golems/publish-vault/internal/validate/validate.go — Published-view validation rules
+
+## 2026-11-11
+
+Group the existing private validator report by target and heuristic cause without publishing vault content.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/ttmp/2026/11/11/PV-LINT-031--pragmatic-vault-validation-and-lint-tool/scripts/01-group-warnings.py — Private report grouping
