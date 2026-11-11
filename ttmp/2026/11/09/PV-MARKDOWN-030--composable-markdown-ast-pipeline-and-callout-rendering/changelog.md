@@ -81,3 +81,12 @@ Address PR 30 rereview: normalize Markdown image destinations and avoid copying 
 
 - /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/document.go — Normalize image destinations before resolution
 - /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/wikilink_ast.go — Avoid repeated line-suffix copies
+
+## 2026-11-11
+
+Address PR 30 review: preserve autolink heading text and trailing empty table cells; pushed 9b7a262 and replied to both threads.
+
+### Related Files
+
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/document.go — Autolink heading text
+- /home/manuel/code/wesen/go-go-golems/publish-vault/internal/parser/table_ast.go — Trailing empty table cells
